@@ -5,7 +5,24 @@ import torch
 
 def test_configuration(title, device, model, dataloader, learning_rate, batch_size, criterion, optimizer,
                        epochs=30, early_stopping=False, patience=5, visualize=False):
-    
+    # Train model with given configuration 
+    #
+    # Args:
+    # - title: Title of the test configuration (for visualization and logging)
+    # - device: Device to run the model on (CPU or GPU)
+    # - model: The neural network model to be trained and evaluated
+    # - dataloader: [train_data, val_data, test_data]
+    # - learning_rate: Learning rate for the optimizer
+    # - batch_size: Batch size for training and evaluation
+    # - criterion: Loss function
+    # - optimizer: Optimization algorithm
+    # - epochs: Maximum number of training epochs
+    # - early_stopping: If true training stops if there is no improvement
+    # - patience: Number of epochs to wait for improvement before stopping (if early_stopping is true)
+    # - visualize: If true training curves will be plotted at the end of training
+    # Returns:
+    # *none*
+
     # Print test details
     print(f'Using device: {device}\n\n')
 
@@ -13,6 +30,11 @@ def test_configuration(title, device, model, dataloader, learning_rate, batch_si
     print(f" Info:")
     print(f" - Model:")
     print(model)
+    print(f" - Data Split:")
+    print(f"   - Train: {len(dataloader[0].dataset)} samples")
+    print(f"   - Validation: {len(dataloader[1].dataset)} samples")
+    print(f"   - Test: {len(dataloader[2].dataset)} samples")
+    print(f" - Criterion: {criterion}")
     print(f" - Learning Rate: {learning_rate}")
     print(f" - Batch Size: {batch_size}")
     print(f" - Epochs: {epochs}")
@@ -20,7 +42,7 @@ def test_configuration(title, device, model, dataloader, learning_rate, batch_si
     if early_stopping:
         print(f" - Patience: {patience}")
 
-    # initialize data splits
+    # Initialize data splits
     train_data = dataloader[0]
     val_data = dataloader[1]
     test_data = dataloader[2]
