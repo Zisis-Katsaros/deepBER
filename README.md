@@ -31,4 +31,3 @@ Inside the project root:
 
 - Use a Python version supported by the PyTorch build you install. In practice, Python 3.11 or 3.12 is usually the safest choice for this project.
 - `torch` installation depends on your Python version and whether you want CPU or GPU support. If the default install fails, follow the official PyTorch installation instructions for your platform.
-- If PowerShell blocks activation scripts, run `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` once, then activate the venv again.
