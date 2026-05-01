@@ -1,7 +1,7 @@
 import torch
 from torch import nn
 from pathlib import Path
-from load_set import create_dataloader, load_csv_dataset
+from load_set import create_dataloader, load_csv_dataset, extend_features
 from model import DeepBERModel
 from test_config import test_configuration
 
@@ -14,7 +14,17 @@ def main():
 		raise FileNotFoundError(
 			f"Dataset not found at {dataset_path}. Update the path in main.py or move the file."
 		)
-	x_array, y_array, feature_columns = load_csv_dataset(dataset_path, target_column="BER")
+	x_array, y_array, feature_columns = load_csv_dataset(dataset_path, target_column="BER", exclude_columns=["delay"])
+
+	# Extra features
+	# Width to space ratio:
+	x_array, feature_columns = extend_features(x_array, feature_columns, "width", "space", "/", "width_space_ratio")
+	# Cross-sectional area:
+	x_array, feature_columns = extend_features(x_array, feature_columns, "width", "metal_thickness", "*", "cross_sectional_area")
+	# Ground width to signal width ratio:
+	x_array, feature_columns = extend_features(x_array, feature_columns, "gnd_width", "width", "/", "gnd_width_width_ratio")
+	# Trace aspect ratio:
+	# x_array, feature_columns = extend_features(x_array, feature_columns, "metal_thickness", "width", "/", "aspect_ratio")
 
 	batch_size = 16
 	
@@ -32,7 +42,7 @@ def main():
 		activation_fn=nn.ReLU(),
 		logBER=True,
 		batch_norm=True,
-		dropout=0.1,
+		dropout=0.2,
 	).to(device)
 
 	learning_rate = 1e-3
