@@ -66,7 +66,11 @@ def main():
 		epochs=240,
 		early_stopping=True,
 		patience=5,
-		visualize=True,
+		training_curves=True,
+		predicted_vs_actual=True,
+		error_distribution=True,
+		error_vs_feature=feature_columns,
+		feature_columns=feature_columns
 	)
 
 

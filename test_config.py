@@ -1,10 +1,12 @@
 from loops import train_loop, test_loop
-from visualization import plot_training_curves
+from visualization import plot_error_distribution, plot_error_vs_feature, plot_predicted_vs_actual, plot_training_curves
 import model
 import torch
 
 def test_configuration(title, device, model, dataloader, learning_rate, batch_size, criterion, optimizer,
-                       epochs=30, early_stopping=False, patience=5, visualize=False):
+                       epochs=30, early_stopping=False, patience=5, training_curves=False,
+                       predicted_vs_actual=False, error_distribution=False, error_vs_feature=None,
+                       feature_columns=None):
     # Train model with given configuration 
     #
     # Args:
@@ -19,7 +21,11 @@ def test_configuration(title, device, model, dataloader, learning_rate, batch_si
     # - epochs: Maximum number of training epochs
     # - early_stopping: If true training stops if there is no improvement
     # - patience: Number of epochs to wait for improvement before stopping (if early_stopping is true)
-    # - visualize: If true training curves will be plotted at the end of training
+    # - training_curves: If true training curves will be plotted at the end of training
+    # - predicted_vs_actual: If true a plot of predicted vs. actual values will be plotted at the end of training
+    # - error_distribution: If true a histogram of prediction errors will be plotted at the end of training
+    # - error_vs_feature: List of feature names for which to plot error vs. feature
+    # - feature_columns: List of feature names matching the model input columns
     # Returns:
     # *none*
 
@@ -91,10 +97,41 @@ def test_configuration(title, device, model, dataloader, learning_rate, batch_si
 
     print(f"==================== Training complete ====================")
 
-    _, test_mae, _, _ = test_loop(model, test_data, criterion, device)
+    _, test_mae, test_targets, test_preds = test_loop(model, test_data, criterion, device)
     print(f">>> Test MAE: {test_mae:.6f}")
 
     # Visualization
-    if visualize:
+    if training_curves:
         plot_training_curves(train_losses, val_losses, train_maes, val_maes, title=title)
+    
+    if predicted_vs_actual:
+        plot_predicted_vs_actual(test_targets, test_preds, title=title)
+    
+    if error_distribution:
+        plot_error_distribution(test_targets, test_preds, title=title)
+    
+    test_features = test_data.dataset.tensors[0].cpu().numpy()
+    if error_vs_feature:
+        if feature_columns is None:
+            raise ValueError("feature_columns must be provided when error_vs_feature is used.")
+
+        for feature in error_vs_feature:
+            if isinstance(feature, str):
+                if feature not in feature_columns:
+                    raise ValueError(f"Feature '{feature}' was not found in feature_columns.")
+                feature_index = feature_columns.index(feature)
+                feature_name = feature
+            else:
+                feature_index = int(feature)
+                if feature_index < 0 or feature_index >= len(feature_columns):
+                    raise ValueError(f"Feature index {feature_index} is out of range.")
+                feature_name = feature_columns[feature_index]
+
+            plot_error_vs_feature(
+                test_features[:, feature_index],
+                test_targets,
+                test_preds,
+                title=title,
+                feature_name=feature_name,
+            )
         
