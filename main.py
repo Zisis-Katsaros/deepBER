@@ -6,6 +6,7 @@ from classification.classifier import xgb_classifier
 from classification.test_classifier_config import test_classifier_configuration
 from prediction.predictor import DeepBERPredictor
 from prediction.test_predictor_config import test_predictor_configuration
+import numpy as np
 
 def main():
     torch.manual_seed(42)
@@ -36,7 +37,7 @@ def main():
     gray_area_interval = [10**(-5.5), 10**(-2.5)] # BER range where classification is most difficult, used for focused training and evaluation
     
     # Create dataloaders
-    classifier_dataloader = create_dataloader(x_array, y_array, logBER=False, batch_size=batch_size, seed=42, standard_scale=True)
+    classifier_dataloader = create_dataloader(x_array, y_array, logBER=True, batch_size=batch_size, seed=42, standard_scale=True)
     
     predictor_dataloader = create_dataloader(x_array, y_array, ber_interval=gray_area_interval, 
                                     logBER=True, batch_size=batch_size, seed=42, standard_scale=True)
@@ -44,20 +45,26 @@ def main():
     
     # =================================================== Classifier ================================================== #
     classifier = xgb_classifier(
-        n_estimators=350,
-        max_depth=5,
-        learning_rate=0.05,
-        subsample=0.9,
+        n_estimators=800,
+        max_depth=3,
+        learning_rate=0.01,
+        gamma=1.0,
+        subsample=0.8,
         colsample_bytree=0.9,
-        reg_lambda=1.0,
+        reg_lambda=2.0,
         seed=42,
         eval_metric="mlogloss"
     )
-    
+    lower_thres = np.log10(gray_area_interval[0])
+    upper_thres = np.log10(gray_area_interval[1])
+
     test_classifier_configuration(
         title="XGBoost Baseline",
         model=classifier,
-        dataloader=classifier_dataloader
+        dataloader=classifier_dataloader,
+        lower_thres=lower_thres,
+        upper_thres=upper_thres,
+        confusion_matrix=True
     )
 
 

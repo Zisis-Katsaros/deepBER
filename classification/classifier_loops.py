@@ -1,4 +1,5 @@
 import numpy as np
+from sklearn.utils.class_weight import compute_sample_weight
 
 def loader_to_numpy(data_loader):
     # Convert a torch DataLoader into NumPy arrays for non-torch models.
@@ -8,7 +9,15 @@ def loader_to_numpy(data_loader):
     return features, labels
 
 
-def train_xgb_loop(model, train_data, val_data=None, label_transform=None):
+def train_xgb_loop(
+    model,
+    train_data,
+    val_data=None,
+    label_transform=None,
+    lower_thres=10**(-5.5),
+    upper_thres=10**(-2.5),
+    weight=False,
+):
     # Train an XGBoost classifier on train_data and optional validation data.
     #
     # Args:
@@ -22,13 +31,18 @@ def train_xgb_loop(model, train_data, val_data=None, label_transform=None):
     x_train, y_train = loader_to_numpy(train_data)
 
     if label_transform is not None:
-        y_train = label_transform(y_train)
+        y_train = label_transform(y_train, lower_thres=lower_thres, upper_thres=upper_thres)
 
     fit_kwargs = {}
+
+    if weight is True:
+        sample_weight = compute_sample_weight(class_weight="balanced", y=y_train)
+        fit_kwargs["sample_weight"] = sample_weight
+
     if val_data is not None:
         x_val, y_val = loader_to_numpy(val_data)
         if label_transform is not None:
-            y_val = label_transform(y_val)
+            y_val = label_transform(y_val, lower_thres=lower_thres, upper_thres=upper_thres)
         fit_kwargs["eval_set"] = [(x_val, y_val)]
         fit_kwargs["verbose"] = False
 
@@ -36,7 +50,7 @@ def train_xgb_loop(model, train_data, val_data=None, label_transform=None):
     return model
 
 
-def test_xgb_loop(model, data, label_transform=None):
+def test_xgb_loop(model, data, label_transform=None, lower_thres=10**(-5.5), upper_thres=10**(-2.5)):
     # Evaluate an XGBoost classifier.
     #
     # Args:
@@ -51,7 +65,7 @@ def test_xgb_loop(model, data, label_transform=None):
 
     features, labels = loader_to_numpy(data)
     if label_transform is not None:
-        labels = label_transform(labels)
+        labels = label_transform(labels, lower_thres=lower_thres, upper_thres=upper_thres)
 
     preds = model.predict(features)
     accuracy = float(np.mean(preds == labels))
