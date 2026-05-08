@@ -1,5 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
+from sklearn.metrics import confusion_matrix
 
 def plot_training_curves(train_losses, val_losses, train_maes, val_maes, title=None):
     # Plots training curves
@@ -184,5 +185,58 @@ def plot_error_vs_feature(feature, true_labels, predictions, title=None, feature
     ax.set_ylabel("Error")
     ax.legend()
     ax.grid(True)
+    plt.tight_layout()
+    plt.show()
+
+def plot_confusion_matrix(true_labels, predictions, title=None, class_names=None):
+    # Plots a confusion matrix for classification models
+    #
+    # Args:
+    # - true_labels: True class labels
+    # - predictions: Predicted class labels
+    # - title: Optional plot title
+    # - class_names: Optional list of class names (e.g., ["Class A", "Class B", "Class C"])
+    # Returns:
+    # *none*
+
+    true_labels = np.asarray(true_labels).reshape(-1)
+    predictions = np.asarray(predictions).reshape(-1)
+
+    if true_labels.shape != predictions.shape:
+        raise ValueError("true_labels and predictions must have the same shape.")
+
+    cm = confusion_matrix(true_labels, predictions)
+    num_classes = cm.shape[0]
+
+    if class_names is None:
+        class_names = [str(i) for i in range(num_classes)]
+
+    fig, ax = plt.subplots(figsize=(8, 6))
+
+    if title is not None:
+        ax.set_title(title + ": Confusion Matrix", fontsize=16)
+    else:
+        ax.set_title("Confusion Matrix", fontsize=16)
+
+    im = ax.imshow(cm, interpolation='nearest', cmap=plt.cm.Blues)
+    plt.colorbar(im, ax=ax)
+
+    tick_marks = np.arange(num_classes)
+    ax.set_xticks(tick_marks)
+    ax.set_yticks(tick_marks)
+    ax.set_xticklabels(class_names)
+    ax.set_yticklabels(class_names)
+
+    # Add text annotations
+    thresh = cm.max() / 2.
+    for i in range(num_classes):
+        for j in range(num_classes):
+            ax.text(j, i, format(cm[i, j], 'd'),
+                    ha="center", va="center",
+                    color="white" if cm[i, j] > thresh else "black",
+                    fontsize=12)
+
+    ax.set_ylabel("True Label")
+    ax.set_xlabel("Predicted Label")
     plt.tight_layout()
     plt.show()
