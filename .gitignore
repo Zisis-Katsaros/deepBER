@@ -1,4 +1,5 @@
 /.venv
 best_model.pth
 /__pycache__
-/.csv
+.csv
+/csv_files
