@@ -1,3 +1,6 @@
+import os
+from prediction.optuna_tuner import run_optuna
+
 import torch
 from torch import nn
 from pathlib import Path
@@ -79,20 +82,21 @@ def main():
 
     # =================================================== Predictor =================================================== #
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    #"""
+    # """
     model = DeepBERPredictor(
         input_size=len(feature_columns),
-        hidden=[64, 64, 64],
+        hidden=[16, 64, 256, 256],
         activation_fn=nn.ReLU(),
         logBER=True,
-        batch_norm=True,
-        dropout=0.1,
+        batch_norm=False,
+        dropout=0.2961,
     ).to(device)
 
-    learning_rate = 1e-3
+    learning_rate = 0.00991
     criterion = nn.MSELoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=3)
+    # scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=3)
+    # scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=33)
 
     print(f"Loaded dataset from: {dataset_path}")
     print(f"Samples: {len(y_array)} | Features: {len(feature_columns)}")
@@ -106,18 +110,28 @@ def main():
         batch_size=batch_size,
         criterion=criterion,
         optimizer=optimizer,
-        scheduler=scheduler,
+        # scheduler=scheduler,
         epochs=240,
         early_stopping=True,
-        patience=5,
+        patience=7,
         training_curves=True,
         predicted_vs_actual=True,
         # error_distribution=True,
         # error_vs_feature=feature_columns,
         # feature_columns=feature_columns
     )
-    #"""
+    # """
 
 
 if __name__ == "__main__":
     main()
+
+    """
+    # Small smoke test when run directly
+    csv_names = [
+        "delay_snr_csv_database1.csv",
+        "delay_snr_csv_database2.csv",
+    ]
+    csv_paths = [os.path.join(os.getcwd(), "csv_files", n) for n in csv_names]
+    run_optuna(csv_paths, n_trials=800, n_epochs=240, seed=42)
+    """

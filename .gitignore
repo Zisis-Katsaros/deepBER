@@ -1,5 +1,7 @@
 /.venv
 best_model.pth
-/__pycache__
-.csv
+__pycache__/
+*pyc
+*.csv
 /csv_files
+optuna_study_result.json
