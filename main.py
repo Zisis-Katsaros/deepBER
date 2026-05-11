@@ -18,7 +18,7 @@ def main():
     dataset_paths = []
 
     for name in csv_names:
-        dataset_path = Path(__file__).resolve().parent / name
+        dataset_path = Path(__file__).resolve().parent / "csv_files" / name
         if not dataset_path.exists():
             raise FileNotFoundError(
                 f"Dataset not found at {dataset_path}. Update the path in main.py or move the file."
