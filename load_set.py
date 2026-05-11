@@ -4,11 +4,11 @@ import torch
 from torch.utils.data import DataLoader, TensorDataset, random_split
 
 
-def load_csv_dataset(csv_path, target_column="BER", exclude_columns=[]):
+def load_csv_dataset(csv_paths, target_column="BER"):
 	# Loads dataset from CSV file
 	#
 	# Args:
-	# - csv_path: Path to the CSV file
+	# - csv_paths: List of paths to CSV files
 	# - target_column: Name of label column
 	# - exclude_columns: Feature columns to be excluded
 	# Returns:
@@ -16,33 +16,59 @@ def load_csv_dataset(csv_path, target_column="BER", exclude_columns=[]):
 	# - y_array: 1D array of labels
 	# - feature_columns: List of feature column names 
 
-	with open(csv_path, mode="r", newline="") as csv_file:
-		reader = csv.DictReader(csv_file)
-		headers = reader.fieldnames
+	x_array = []
+	y_array = []
+	feature_columns = None
+	
+	for idx, csv_path in enumerate(csv_paths):
+		with open(csv_path, mode="r", newline="") as csv_file:
+			reader = csv.DictReader(csv_file)
+			headers = reader.fieldnames
 
-		if headers is None or target_column not in headers:
-			raise ValueError(f"Target column '{target_column}' was not found in {csv_path}.")
+			if headers is None or target_column not in headers:
+				raise ValueError(f"Target column '{target_column}' was not found in {csv_path}.")
 
-		feature_columns = [column for column in headers if column != target_column and column not in exclude_columns]
+			current_feature_columns = [column for column in headers if column != target_column]
+			
+			# Validate that all CSV files have the same columns
+			if idx == 0:
+				feature_columns = current_feature_columns
+			else:
+				if set(current_feature_columns) != set(feature_columns):
+					missing_in_current = set(feature_columns) - set(current_feature_columns)
+					extra_in_current = set(current_feature_columns) - set(feature_columns)
+					error_msg = f"Column mismatch in {csv_path}.\n"
+					if missing_in_current:
+						error_msg += f"Missing columns: {missing_in_current}\n"
+					if extra_in_current:
+						error_msg += f"Extra columns: {extra_in_current}"
+					raise ValueError(error_msg)
+				
+				# Ensure column order matches the first file
+				if current_feature_columns != feature_columns:
+					raise ValueError(f"Column order mismatch in {csv_path}. Expected order: {feature_columns}, got: {current_feature_columns}")
 
-		features = []
-		targets = []
+			features = []
+			targets = []
 
-		for row in reader:
-			try:
-				x = [float(row[column]) for column in feature_columns]
-				y = float(row[target_column])
-			except (TypeError, ValueError, KeyError):
-				continue
+			for row in reader:
+				try:
+					x = [float(row[column]) for column in feature_columns]
+					y = float(row[target_column])
+				except (TypeError, ValueError, KeyError):
+					continue
 
-			features.append(x)
-			targets.append(y)
+				features.append(x)
+				targets.append(y)
 
-	if not features:
-		raise ValueError("No valid numeric rows were found in the dataset.")
+		if not features:
+			raise ValueError("No valid numeric rows were found in the dataset.")
 
-	x_array = np.asarray(features, dtype=np.float32)
-	y_array = np.asarray(targets, dtype=np.float32)
+		x_batch = np.asarray(features, dtype=np.float32)
+		y_batch = np.asarray(targets, dtype=np.float32)
+
+		x_array.extend(x_batch)
+		y_array.extend(y_batch)
 
 	return x_array, y_array, feature_columns
 
@@ -132,40 +158,3 @@ def create_dataloader(
 	test_data = DataLoader(test_set, batch_size=batch_size, shuffle=False)
 
 	return [train_data, val_data, test_data]
-
-def extend_features(x_array, feature_names, first_column, second_column, operation, new_feature_name):
-	# Extends features by applying an operation to two existing features
-	#
-	# Args:
-	# - x_array: 2D array of features
-	# - feature_names: List of feature column names
-	# - first_column: Name of the first feature column
-	# - second_column: Name of the second feature column
-	# - operation: Function that takes two arrays and returns a new array (e.g. lambda a, b: a * b)
-	# - new_feature_name: Name of the new feature column to be added
-	# Returns:
-	# - x_array: Updated 2D array of features with the new feature added
-	# - feature_names: Updated list of feature column names with the new feature name added
-
-	if first_column not in feature_names or second_column not in feature_names:
-		raise ValueError(f"Both columns must be in feature_names.")
-
-	first_idx = feature_names.index(first_column)
-	second_idx = feature_names.index(second_column)
-
-	if operation == "+":
-		new_feature = (x_array[:, first_idx] + x_array[:, second_idx]).reshape(-1, 1)
-	elif operation == "-":
-		new_feature = (x_array[:, first_idx] - x_array[:, second_idx]).reshape(-1, 1)
-	elif operation == "*":
-		new_feature = (x_array[:, first_idx] * x_array[:, second_idx]).reshape(-1, 1)
-	elif operation == "/":
-		epsilon = 1e-15
-		new_feature = (x_array[:, first_idx] / (x_array[:, second_idx] + epsilon)).reshape(-1, 1)
-	else:
-		raise ValueError("Unsupported operation. Use one of: '+', '-', '*', '/'.")
-
-	x_array = np.hstack((x_array, new_feature))
-	feature_names.append(new_feature_name)
-
-	return x_array, feature_names

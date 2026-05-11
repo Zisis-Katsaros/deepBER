@@ -1,7 +1,8 @@
 import torch
 from torch import nn
 from pathlib import Path
-from load_set import create_dataloader, load_csv_dataset, extend_features
+from load_set import create_dataloader, load_csv_dataset
+from dataset_manipulation import extend_features, exclude_columns
 from classification.classifier import xgb_classifier
 from classification.test_classifier_config import test_classifier_configuration
 from prediction.predictor import DeepBERPredictor
@@ -12,13 +13,18 @@ def main():
     torch.manual_seed(42)
 
     # ============================================= Initializing Dataset ============================================= #
-    # Loading CSV file
-    dataset_path = Path(__file__).resolve().parent / "delay_csv_database2.csv"
-    if not dataset_path.exists():
-        raise FileNotFoundError(
-            f"Dataset not found at {dataset_path}. Update the path in main.py or move the file."
-        )
-    x_array, y_array, feature_columns = load_csv_dataset(dataset_path, target_column="BER", exclude_columns=["delay"])
+    # Loading CSV files
+    csv_names = []
+    dataset_paths = []
+
+    for name in csv_names:
+        dataset_path = Path(__file__).resolve().parent / name
+        if not dataset_path.exists():
+            raise FileNotFoundError(
+                f"Dataset not found at {dataset_path}. Update the path in main.py or move the file."
+            )
+        dataset_paths.append(dataset_path)
+    x_array, y_array, feature_columns = load_csv_dataset(dataset_paths, target_column="BER")
 
     # Extra features
     # Width to space ratio:
@@ -32,6 +38,9 @@ def main():
     
     # Trace aspect ratio:
     # x_array, feature_columns = extend_features(x_array, feature_columns, "metal_thickness", "width", "/", "aspect_ratio")
+
+    # Remove columns
+    x_array, feature_columns = exclude_columns(x_array, feature_columns, columns_to_exclude=["delay"])
 
     batch_size = 16
     gray_area_interval = [10**(-5.5), 10**(-2.5)] # BER range where classification is most difficult, used for focused training and evaluation

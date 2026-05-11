@@ -41,7 +41,7 @@ def test_classifier_configuration(
 
     if confusion_matrix:
         if class_names is None:
-            class_names = ["Class A", "Class B", "Class C"]
+            class_names = ["Feasible", "Uncertain", "Infeasible"]
         plot_confusion_matrix(test_labels, test_preds, title=title, class_names=class_names)
 
     return trained_model, test_acc
