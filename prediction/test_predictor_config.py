@@ -3,7 +3,7 @@ from visualization import plot_error_distribution, plot_error_vs_feature, plot_p
 import prediction.predictor as predictor
 import torch
 
-def test_predictor_configuration(title, device, model, dataloader, learning_rate, batch_size, criterion, optimizer,
+def test_predictor_configuration(title, device, model, dataloader, learning_rate, batch_size, criterion, optimizer, scheduler=None,
                        epochs=30, early_stopping=False, patience=5, training_curves=False,
                        predicted_vs_actual=False, error_distribution=False, error_vs_feature=None,
                        feature_columns=None):
@@ -67,7 +67,11 @@ def test_predictor_configuration(title, device, model, dataloader, learning_rate
     print(f"==================== Starting Training ====================")
     for epoch in range(epochs):
         train_loss, train_mae = train_pred_loop(model, train_data, optimizer, criterion, device)
-        val_loss, val_mae, targets, preds = test_pred_loop(model, val_data, criterion, device)
+        val_loss, val_mae, val_total_mae, _, _ = test_pred_loop(model, val_data, criterion, device)
+
+        # Step scheduler
+        if scheduler is not None:
+            scheduler.step(val_loss)
 
         train_losses.append(train_loss)
         val_losses.append(val_loss)
@@ -97,8 +101,8 @@ def test_predictor_configuration(title, device, model, dataloader, learning_rate
 
     print(f"==================== Training complete ====================")
 
-    _, test_mae, test_targets, test_preds = test_pred_loop(model, test_data, criterion, device)
-    print(f">>> Test MAE: {test_mae:.6f}")
+    _, test_avg_mae, test_total_mae, test_targets, test_preds = test_pred_loop(model, test_data, criterion, device)
+    print(f">>> Test MAE: {test_avg_mae:.6f}")
 
     # Visualization
     if training_curves:

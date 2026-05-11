@@ -83,4 +83,4 @@ def test_pred_loop(model, data, criterion, device):
     avg_loss = total_loss / total_samples
     avg_mae = total_mae / total_samples
     
-    return avg_loss, avg_mae, np.array(all_preds), np.array(all_labels) 
+    return avg_loss, avg_mae, total_mae, np.array(all_preds), np.array(all_labels) 

@@ -70,6 +70,10 @@ def load_csv_dataset(csv_paths, target_column="BER"):
 		x_array.extend(x_batch)
 		y_array.extend(y_batch)
 
+	# Convert lists back to numpy arrays with proper shape
+	x_array = np.asarray(x_array, dtype=np.float32).reshape(-1, len(feature_columns))
+	y_array = np.asarray(y_array, dtype=np.float32)
+	
 	return x_array, y_array, feature_columns
 
 def create_dataloader(

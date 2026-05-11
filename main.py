@@ -14,7 +14,7 @@ def main():
 
     # ============================================= Initializing Dataset ============================================= #
     # Loading CSV files
-    csv_names = []
+    csv_names = ["delay_snr_csv_database1.csv", "delay_snr_csv_database2.csv"]
     dataset_paths = []
 
     for name in csv_names:
@@ -24,7 +24,7 @@ def main():
                 f"Dataset not found at {dataset_path}. Update the path in main.py or move the file."
             )
         dataset_paths.append(dataset_path)
-    x_array, y_array, feature_columns = load_csv_dataset(dataset_paths, target_column="BER")
+    x_array, y_array, feature_columns = load_csv_dataset(dataset_paths, target_column="snr")
 
     # Extra features
     # Width to space ratio:
@@ -42,14 +42,14 @@ def main():
     # Remove columns
     x_array, feature_columns = exclude_columns(x_array, feature_columns, columns_to_exclude=["delay"])
 
-    batch_size = 16
-    gray_area_interval = [10**(-5.5), 10**(-2.5)] # BER range where classification is most difficult, used for focused training and evaluation
+    batch_size = 8
+    gray_area_interval = [9.5, 14.5]
     
     # Create dataloaders
-    classifier_dataloader = create_dataloader(x_array, y_array, logBER=True, batch_size=batch_size, seed=42, standard_scale=True)
+    classifier_dataloader = create_dataloader(x_array, y_array, logBER=False, batch_size=batch_size, seed=42, standard_scale=True)
     
     predictor_dataloader = create_dataloader(x_array, y_array, ber_interval=gray_area_interval, 
-                                    logBER=True, batch_size=batch_size, seed=42, standard_scale=True)
+                                    logBER=False, batch_size=batch_size, seed=42, standard_scale=True)
     
     
     # =================================================== Classifier ================================================== #
@@ -64,9 +64,9 @@ def main():
         seed=42,
         eval_metric="mlogloss"
     )
-    lower_thres = np.log10(gray_area_interval[0])
-    upper_thres = np.log10(gray_area_interval[1])
-
+    lower_thres = gray_area_interval[0]
+    upper_thres = gray_area_interval[1]
+    """
     test_classifier_configuration(
         title="XGBoost Baseline",
         model=classifier,
@@ -75,18 +75,18 @@ def main():
         upper_thres=upper_thres,
         confusion_matrix=True
     )
-
+    """
 
     # =================================================== Predictor =================================================== #
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    """
+    #"""
     model = DeepBERPredictor(
         input_size=len(feature_columns),
-        hidden=[64, 128, 64],
+        hidden=[64, 64, 64],
         activation_fn=nn.ReLU(),
         logBER=True,
         batch_norm=True,
-        dropout=0.2,
+        dropout=0.1,
     ).to(device)
 
     learning_rate = 1e-3
@@ -106,16 +106,17 @@ def main():
         batch_size=batch_size,
         criterion=criterion,
         optimizer=optimizer,
+        scheduler=scheduler,
         epochs=240,
         early_stopping=True,
         patience=5,
         training_curves=True,
         predicted_vs_actual=True,
-        error_distribution=True,
-        error_vs_feature=feature_columns,
-        feature_columns=feature_columns
+        # error_distribution=True,
+        # error_vs_feature=feature_columns,
+        # feature_columns=feature_columns
     )
-    """
+    #"""
 
 
 if __name__ == "__main__":
