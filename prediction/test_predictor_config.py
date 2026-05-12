@@ -67,7 +67,7 @@ def test_predictor_configuration(title, device, model, dataloader, learning_rate
     print(f"==================== Starting Training ====================")
     for epoch in range(epochs):
         train_loss, train_mae = train_pred_loop(model, train_data, optimizer, criterion, device)
-        val_loss, val_mae, val_total_mae, _, _ = test_pred_loop(model, val_data, criterion, device)
+        val_loss, val_mae, _, _ = test_pred_loop(model, val_data, criterion, device)
 
         # Step scheduler
         if scheduler is not None:
@@ -101,8 +101,8 @@ def test_predictor_configuration(title, device, model, dataloader, learning_rate
 
     print(f"==================== Training complete ====================")
 
-    _, test_avg_mae, test_total_mae, test_targets, test_preds = test_pred_loop(model, test_data, criterion, device)
-    print(f">>> Test MAE: {test_avg_mae:.6f}")
+    _, test_mae, test_targets, test_preds = test_pred_loop(model, test_data, criterion, device)
+    print(f">>> Test MAE: {test_mae:.6f}")
 
     # Visualization
     if training_curves:
