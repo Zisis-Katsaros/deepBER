@@ -3,3 +3,4 @@ matplotlib
 torch
 xgboost
 scikit-learn
+optuna

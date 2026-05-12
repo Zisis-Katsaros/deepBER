@@ -80,7 +80,7 @@ def test_pred_loop(model, data, criterion, device):
             all_preds.extend(outputs.cpu().reshape(-1).numpy()) # store all predictions
             all_labels.extend(labels.cpu().reshape(-1).numpy()) # store all true labels
 
-    avg_loss = total_loss / total_samples
-    avg_mae = total_mae / total_samples
+    loss = total_loss / total_samples
+    mae = total_mae / total_samples
     
-    return avg_loss, avg_mae, np.array(all_preds), np.array(all_labels) 
+    return loss, mae, np.array(all_preds), np.array(all_labels) 
