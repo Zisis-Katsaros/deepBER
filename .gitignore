@@ -5,3 +5,5 @@ __pycache__/
 *.csv
 /csv_files
 optuna_study_result.json
+evalutation.py
+ber_snr_conversion.py
