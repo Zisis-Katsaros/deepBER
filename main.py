@@ -42,7 +42,7 @@ def main():
     x_array, feature_columns = exclude_columns(x_array, feature_columns, columns_to_exclude=["delay"])
 
     batch_size = 8
-    gray_area_interval = [9.5, 14.5]
+    gray_area_interval = [5.71, 10.08]
     
     # Create dataloaders
     classifier_dataloader = create_dataloader(x_array, y_array, logBER=False, batch_size=batch_size, seed=42, standard_scale=True)
@@ -117,14 +117,14 @@ def main():
     
     model = DeepBERPredictor(
         input_size=len(feature_columns_prev),
-        hidden=[16, 96, 16, 32, 128],
+        hidden=[128, 16, 96, 48, 256],
         activation_fn=nn.ELU(),
         logBER=True,
         batch_norm=False,
-        dropout=0.4,
+        dropout=0.2514,
     ).to(device)
 
-    learning_rate = 0.01
+    learning_rate = 0.0031
     criterion = nn.MSELoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
     # scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=3)
@@ -132,7 +132,7 @@ def main():
 
     print(f"Loaded dataset from: {dataset_path}")
     print(f"Samples: {len(y_array)} | Features: {len(feature_columns)}")
-    
+    #"""
     test_predictor_configuration(
         title="DeepBER Baseline",
         device=device,
@@ -145,17 +145,17 @@ def main():
         # scheduler=scheduler,
         epochs=240,
         early_stopping=True,
-        patience=5,
+        patience=10,
         training_curves=True,
         predicted_vs_actual=True,
         # error_distribution=True,
         # error_vs_feature=feature_columns,
         # feature_columns=feature_columns
     )
-    
+    #"""
 
     # run_optuna(x_array_prev, y_array_prev, feature_columns_prev, gray_area_interval=gray_area_interval_prev, n_trials=800, n_epochs=240, seed=42, study_name="deepber_optuna", cv_folds=3)
-    # run_optuna(x_array, y_array, feature_columns, gray_area_interval=gray_area_interval, n_trials=800, n_epochs=240, seed=42, study_name="deepber_optuna", cv_folds=3)
+    run_optuna(x_array, y_array, feature_columns, gray_area_interval=gray_area_interval, n_trials=800, n_epochs=240, seed=42, study_name="deepber_optuna", cv_folds=3)
 
 
 if __name__ == "__main__":
