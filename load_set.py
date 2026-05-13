@@ -1,14 +1,15 @@
 import csv
+from pathlib import Path
 import numpy as np
 import torch
 from torch.utils.data import DataLoader, TensorDataset, random_split
 
 
-def load_csv_dataset(csv_paths, target_column="BER"):
+def load_csv_dataset(csv_names, target_column="BER"):
 	# Loads dataset from CSV file
 	#
 	# Args:
-	# - csv_paths: List of paths to CSV files
+	# - csv_names: List of CSV file names
 	# - target_column: Name of label column
 	# - exclude_columns: Feature columns to be excluded
 	# Returns:
@@ -20,13 +21,19 @@ def load_csv_dataset(csv_paths, target_column="BER"):
 	y_array = []
 	feature_columns = None
 	
-	for idx, csv_path in enumerate(csv_paths):
-		with open(csv_path, mode="r", newline="") as csv_file:
+	for idx, name in enumerate(csv_names):
+		dataset_path = Path(__file__).resolve().parent / "csv_files" / name
+		if not dataset_path.exists():
+			raise FileNotFoundError(
+				f"Dataset not found at {dataset_path}. Update the path in main.py or move the file."
+			)
+
+		with open(dataset_path, mode="r", newline="") as csv_file:
 			reader = csv.DictReader(csv_file)
 			headers = reader.fieldnames
 
 			if headers is None or target_column not in headers:
-				raise ValueError(f"Target column '{target_column}' was not found in {csv_path}.")
+				raise ValueError(f"Target column '{target_column}' was not found in {dataset_path}.")
 
 			current_feature_columns = [column for column in headers if column != target_column]
 			
@@ -37,7 +44,7 @@ def load_csv_dataset(csv_paths, target_column="BER"):
 				if set(current_feature_columns) != set(feature_columns):
 					missing_in_current = set(feature_columns) - set(current_feature_columns)
 					extra_in_current = set(current_feature_columns) - set(feature_columns)
-					error_msg = f"Column mismatch in {csv_path}.\n"
+					error_msg = f"Column mismatch in {dataset_path}.\n"
 					if missing_in_current:
 						error_msg += f"Missing columns: {missing_in_current}\n"
 					if extra_in_current:
@@ -46,7 +53,7 @@ def load_csv_dataset(csv_paths, target_column="BER"):
 				
 				# Ensure column order matches the first file
 				if current_feature_columns != feature_columns:
-					raise ValueError(f"Column order mismatch in {csv_path}. Expected order: {feature_columns}, got: {current_feature_columns}")
+					raise ValueError(f"Column order mismatch in {dataset_path}. Expected order: {feature_columns}, got: {current_feature_columns}")
 
 			features = []
 			targets = []

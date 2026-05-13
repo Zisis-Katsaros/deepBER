@@ -7,3 +7,4 @@ __pycache__/
 optuna_study_result.json
 evaluation.py
 ber_snr_conversion.py
+*.db

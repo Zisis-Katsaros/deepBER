@@ -2,7 +2,6 @@ from prediction.optuna_tuner import run_optuna
 
 import torch
 from torch import nn
-from pathlib import Path
 from load_set import create_dataloader, load_csv_dataset
 from dataset_manipulation import extend_features, exclude_columns
 from classification.classifier import xgb_classifier
@@ -15,78 +14,125 @@ def main():
     torch.manual_seed(42)
 
     # ============================================= Initializing Dataset ============================================= #
-    # Loading CSV files
-    csv_names = ["delay_snr_csv_database1.csv", "delay_snr_csv_database2.csv"]
-    dataset_paths = []
 
-    for name in csv_names:
-        dataset_path = Path(__file__).resolve().parent / "csv_files" / name
-        if not dataset_path.exists():
-            raise FileNotFoundError(
-                f"Dataset not found at {dataset_path}. Update the path in main.py or move the file."
-            )
-        dataset_paths.append(dataset_path)
-    x_array, y_array, feature_columns = load_csv_dataset(dataset_paths, target_column="snr")
+    # 1. BER OG ------------------------------------------------------------------------------------
+    ber_og = "ber_og_database.csv"
+    x_array_ber_og, y_array_ber_og, feature_columns_ber_og = load_csv_dataset([ber_og], target_column="BER")
 
-    # Extra features
-    # Width to space ratio:
-    x_array, feature_columns = extend_features(x_array, feature_columns, "width", "space", "/", "width_space_ratio")
-    
-    # Cross-sectional area:
-    x_array, feature_columns = extend_features(x_array, feature_columns, "width", "metal_thickness", "*", "cross_sectional_area")
-    
-    # Ground width to signal width ratio:
-    x_array, feature_columns = extend_features(x_array, feature_columns, "gnd_width", "width", "/", "gnd_width_width_ratio")
+    eps = 1e-15 # To avoid log(0)
+    y_array_ber_og_log = np.log10(np.clip(y_array_ber_og, eps, None)).astype(np.float32)
 
-    # Remove columns
-    x_array, feature_columns = exclude_columns(x_array, feature_columns, columns_to_exclude=["delay"])
+    x_array_ber_og, feature_columns_ber_og = extend_features(x_array_ber_og, feature_columns_ber_og, "width", "space", "/", "width_space_ratio")
+    x_array_ber_og, feature_columns_ber_og = extend_features(x_array_ber_og, feature_columns_ber_og, "width", "metal_thickness", "*", "cross_sectional_area")
+    x_array_ber_og, feature_columns_ber_og = extend_features(x_array_ber_og, feature_columns_ber_og, "gnd_width", "width", "/", "gnd_width_width_ratio")
+    x_array_ber_og, feature_columns_ber_og = exclude_columns(x_array_ber_og, feature_columns_ber_og, columns_to_exclude=["delay"])
 
-    batch_size = 8
-    gray_area_interval = [5.71, 10.08]
-    
-    # Create dataloaders
-    classifier_dataloader = create_dataloader(x_array, y_array, logBER=False, batch_size=batch_size, seed=42, standard_scale=True)
-    
-    predictor_dataloader = create_dataloader(x_array, y_array, ber_interval=gray_area_interval, 
-                                    logBER=False, batch_size=batch_size, seed=42, standard_scale=True)
-    
+    batch_size_ber_og = 32
+    gray_area_interval_ber_og = [10**-5.5, 10**-2.5]
 
-    # Load previous dataset for Optuna tuning
-    previous_dataset_path = Path(__file__).resolve().parent / "csv_files" / "delay_csv_database2.csv"
-    x_array_prev, y_array_prev, feature_columns_prev = load_csv_dataset([previous_dataset_path], target_column="BER")
-
-    gray_area_interval_prev = [10**-5.5, 10**-2.5]
-
-    eps = 1e-15 # To avoid log(0) 
-    # y_array_prev = np.log10(np.clip(y_array_prev, eps, None)).astype(np.float32)
-
-    # Extra features
-    # Width to space ratio:
-    x_array_prev, feature_columns_prev = extend_features(x_array_prev, feature_columns_prev, "width", "space", "/", "width_space_ratio")
-    
-    # Cross-sectional area:
-    x_array_prev, feature_columns_prev = extend_features(x_array_prev, feature_columns_prev, "width", "metal_thickness", "*", "cross_sectional_area")
-    
-    # Ground width to signal width ratio:
-    x_array_prev, feature_columns_prev = extend_features(x_array_prev, feature_columns_prev, "gnd_width", "width", "/", "gnd_width_width_ratio")
-
-    # Remove columns
-    x_array_prev, feature_columns_prev = exclude_columns(x_array_prev, feature_columns_prev, columns_to_exclude=["delay"])
-
-    # Build previous-dataset dataloader after feature engineering so dimensions match model input.
-    predictor_dataloader_prev = create_dataloader(
-        x_array_prev,
-        y_array_prev,
+    pred_dataloader_ber_og = create_dataloader(
+        x_array_ber_og,
+        y_array_ber_og,
         logBER=True,
-        batch_size=batch_size,
+        batch_size=batch_size_ber_og,
         seed=42,
-        ber_interval=gray_area_interval_prev,
-        standard_scale=True,
+        ber_interval=gray_area_interval_ber_og,
+        standard_scale=True
     )
 
+    # 2. WRST CASE SNR --------------------------------------------------------------------------------
+    wrst_case_snr_names = ["wrst_case_snr_database1.csv", "wrst_case_snr_database3.csv"]
+    x_array_wrst_snr, y_array_wrst_snr, feature_columns_wrst_snr = load_csv_dataset(wrst_case_snr_names, target_column="snr")
+
+    x_array_wrst_snr, feature_columns_wrst_snr = extend_features(x_array_wrst_snr, feature_columns_wrst_snr, "width", "space", "/", "width_space_ratio")    
+    x_array_wrst_snr, feature_columns_wrst_snr = extend_features(x_array_wrst_snr, feature_columns_wrst_snr, "width", "metal_thickness", "*", "cross_sectional_area")
+    x_array_wrst_snr, feature_columns_wrst_snr = extend_features(x_array_wrst_snr, feature_columns_wrst_snr, "gnd_width", "width", "/", "gnd_width_width_ratio")
+    x_array_wrst_snr, feature_columns_wrst_snr = exclude_columns(x_array_wrst_snr, feature_columns_wrst_snr, columns_to_exclude=["delay"])
+
+    batch_size_wrst_snr = 8
+    gray_area_interval_wrst_snr = [4.36, 6.55]
+
+    pred_dataloader_wrst_snr = create_dataloader(
+        x_array_wrst_snr,
+        y_array_wrst_snr,
+        logBER=False,
+        batch_size=batch_size_wrst_snr,
+        seed=42,
+        ber_interval=gray_area_interval_wrst_snr,
+        standard_scale=True
+    )
+
+    # 3. WRST CASE BER --------------------------------------------------------------------------------
+    wrst_case_ber_names = ["wrst_case_ber_database1.csv", "wrst_case_ber_database2.csv", "wrst_case_ber_database3.csv"]
+
+    x_array_wrst_ber, y_array_wrst_ber, feature_columns_wrst_ber = load_csv_dataset(wrst_case_ber_names, target_column="BER")
     
-    
-    
+    eps = 1e-15 # To avoid log(0)
+    y_array_wrst_ber_log = np.log10(np.clip(y_array_wrst_ber, eps, None)).astype(np.float32)
+
+    x_array_wrst_ber, feature_columns_wrst_ber = extend_features(x_array_wrst_ber, feature_columns_wrst_ber, "width", "space", "/", "width_space_ratio")
+    x_array_wrst_ber, feature_columns_wrst_ber = extend_features(x_array_wrst_ber, feature_columns_wrst_ber, "width", "metal_thickness", "*", "cross_sectional_area")
+    x_array_wrst_ber, feature_columns_wrst_ber = extend_features(x_array_wrst_ber, feature_columns_wrst_ber, "gnd_width", "width", "/", "gnd_width_width_ratio")
+    x_array_wrst_ber, feature_columns_wrst_ber = exclude_columns(x_array_wrst_ber, feature_columns_wrst_ber, columns_to_exclude=["delay"])
+
+    batch_size_wrst_ber = 16
+    gray_area_interval_wrst_ber = [10**-5.5, 10**-2.5]
+
+    pred_dataloader_wrst_ber = create_dataloader(
+        x_array_wrst_ber,
+        y_array_wrst_ber,
+        logBER=True,
+        batch_size=batch_size_wrst_ber,
+        seed=42,
+        ber_interval=gray_area_interval_wrst_ber,
+        standard_scale=True
+    )
+
+    # 4. PRBS CASE BER --------------------------------------------------------------------------------
+    prbs_case_ber_names = ["prbs_case_database1.csv", "prbs_case_database2.csv"]
+
+    x_array_prbs_ber, y_array_prbs_ber, feature_columns_prbs_ber = load_csv_dataset(prbs_case_ber_names, target_column="BER")
+
+    eps = 1e-15 # To avoid log(0)
+    y_array_prbs_ber_log = np.log10(np.clip(y_array_prbs_ber, eps, None)).astype(np.float32)
+
+    x_array_prbs_ber, feature_columns_prbs_ber = extend_features(x_array_prbs_ber, feature_columns_prbs_ber, "width", "space", "/", "width_space_ratio")
+    x_array_prbs_ber, feature_columns_prbs_ber = extend_features(x_array_prbs_ber, feature_columns_prbs_ber, "width", "metal_thickness", "*", "cross_sectional_area")
+    x_array_prbs_ber, feature_columns_prbs_ber = extend_features(x_array_prbs_ber, feature_columns_prbs_ber, "gnd_width", "width", "/", "gnd_width_width_ratio")
+    x_array_prbs_ber, feature_columns_prbs_ber = exclude_columns(x_array_prbs_ber, feature_columns_prbs_ber, columns_to_exclude=["delay"])
+
+    batch_size_prbs_ber = 32
+    gray_area_interval_prbs_ber = [10**-5.5, 10**-2.5]
+
+    pred_dataloader_prbs_ber = create_dataloader(
+        x_array_prbs_ber,
+        y_array_prbs_ber,
+        logBER=True,
+        batch_size=batch_size_prbs_ber,
+        seed=42,
+        ber_interval=gray_area_interval_prbs_ber,
+        standard_scale=True
+    )
+
+    # 5. WRST + PRBS COMBINED DATASET ---------------------------------------------------------------
+    x_array_combined = np.concatenate([x_array_wrst_ber, x_array_prbs_ber], axis=0)
+    y_array_combined = np.concatenate([y_array_wrst_ber, y_array_prbs_ber], axis=0)
+    y_array_combined_log = np.concatenate([y_array_wrst_ber_log, y_array_prbs_ber_log], axis=0)
+    feature_columns_combined = feature_columns_wrst_ber
+
+    batch_size_combined = 16
+    gray_area_interval_combined = [10**-5.5, 10**-2.5]
+
+    pred_dataloader_combined = create_dataloader(
+        x_array_combined,
+        y_array_combined,
+        logBER=True,
+        batch_size=batch_size_combined,
+        seed=42,
+        ber_interval=gray_area_interval_combined,
+        standard_scale=True
+    )
+
     # =================================================== Classifier ================================================== #
     classifier = xgb_classifier(
         n_estimators=800,
@@ -99,8 +145,8 @@ def main():
         seed=42,
         eval_metric="mlogloss"
     )
-    lower_thres = gray_area_interval[0]
-    upper_thres = gray_area_interval[1]
+    # lower_thres = gray_area_interval[0]
+    # upper_thres = gray_area_interval[1]
     """
     test_classifier_configuration(
         title="XGBoost Baseline",
@@ -116,30 +162,28 @@ def main():
     device = "cuda" if torch.cuda.is_available() else "cpu"
     
     model = DeepBERPredictor(
-        input_size=len(feature_columns_prev),
-        hidden=[128, 16, 96, 48, 256],
+        input_size=len(feature_columns_combined),
+        hidden=[128, 32, 128],
         activation_fn=nn.ELU(),
         logBER=True,
         batch_norm=False,
-        dropout=0.2514,
+        dropout=0.1,
     ).to(device)
 
-    learning_rate = 0.0031
+    learning_rate = 0.008
     criterion = nn.MSELoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
     # scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=3)
-    # scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=41)
+    #scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=39)
 
-    print(f"Loaded dataset from: {dataset_path}")
-    print(f"Samples: {len(y_array)} | Features: {len(feature_columns)}")
     #"""
     test_predictor_configuration(
         title="DeepBER Baseline",
         device=device,
         model=model,
-        dataloader=predictor_dataloader,
+        dataloader=pred_dataloader_prbs_ber,
         learning_rate=learning_rate,
-        batch_size=batch_size,
+        batch_size=batch_size_prbs_ber,
         criterion=criterion,
         optimizer=optimizer,
         # scheduler=scheduler,
@@ -154,8 +198,19 @@ def main():
     )
     #"""
 
-    # run_optuna(x_array_prev, y_array_prev, feature_columns_prev, gray_area_interval=gray_area_interval_prev, n_trials=800, n_epochs=240, seed=42, study_name="deepber_optuna", cv_folds=3)
-    run_optuna(x_array, y_array, feature_columns, gray_area_interval=gray_area_interval, n_trials=800, n_epochs=240, seed=42, study_name="deepber_optuna", cv_folds=3)
+    """
+    run_optuna(
+        x_array_combined, 
+        y_array_combined_log, 
+        feature_columns_combined, 
+        gray_area_interval=[-5.5, -2.5], 
+        n_trials=800, 
+        n_epochs=240, 
+        seed=42, 
+        study_name="deepber_optuna_combined", 
+        cv_folds=3
+    )
+    """
 
 
 if __name__ == "__main__":

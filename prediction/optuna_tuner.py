@@ -85,12 +85,12 @@ def run_optuna(x_array, y_array, feature_columns, gray_area_interval=None, n_tri
 
     print(f"[optuna] Loaded dataset: x_shape={x_array.shape}, y_shape={y_array.shape}, features={len(feature_columns)}")
 
-    # Apply SNR filtering if gray_area_interval is provided
+    # Apply label filtering if gray_area_interval is provided
     if gray_area_interval is not None:
         lower_thres, upper_thres = gray_area_interval
-        snr_mask = (y_array >= lower_thres) & (y_array <= upper_thres)
-        x_array = x_array[snr_mask]
-        y_array = y_array[snr_mask]
+        label_mask = (y_array >= lower_thres) & (y_array <= upper_thres)
+        x_array = x_array[label_mask]
+        y_array = y_array[label_mask]
         print(f"[optuna] Dataset: x_shape={x_array.shape}, features={len(feature_columns)}, samples={len(y_array)}")
 
     input_size = len(feature_columns)
