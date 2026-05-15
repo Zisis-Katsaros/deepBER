@@ -1,6 +1,7 @@
 /.venv
 best_model.pth
 *.pth
+/prediction/__pycache__/
 __pycache__/
 *.pyc
 *.csv
