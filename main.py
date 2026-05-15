@@ -7,7 +7,7 @@ from dataset_manipulation import extend_features, exclude_columns
 from classification.classifier import xgb_classifier
 from classification.test_classifier_config import test_classifier_configuration
 from prediction.predictor import DeepBERPredictor
-from prediction.test_predictor_config import test_predictor_configuration
+from prediction.test_predictor_config import test_predictor_configuration, ber_vs_length_test
 import numpy as np
 
 def main():
@@ -163,14 +163,14 @@ def main():
     
     model = DeepBERPredictor(
         input_size=len(feature_columns_combined),
-        hidden=[128, 32, 128],
-        activation_fn=nn.ELU(),
+        hidden=[32, 16],
+        activation_fn=nn.GELU(),
         logBER=True,
         batch_norm=False,
-        dropout=0.1,
+        dropout=0.42,
     ).to(device)
 
-    learning_rate = 0.008
+    learning_rate = 0.0088
     criterion = nn.MSELoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
     # scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=3)
@@ -181,9 +181,9 @@ def main():
         title="DeepBER Baseline",
         device=device,
         model=model,
-        dataloader=pred_dataloader_prbs_ber,
+        dataloader=pred_dataloader_combined,
         learning_rate=learning_rate,
-        batch_size=batch_size_prbs_ber,
+        batch_size=batch_size_combined,
         criterion=criterion,
         optimizer=optimizer,
         # scheduler=scheduler,
@@ -197,6 +197,28 @@ def main():
         # feature_columns=feature_columns
     )
     #"""
+
+    feature_arrays =[
+        # [1.3, 2.1, 4.9, 415.0, 1.14, 1.6, 1.15, 51.25, 578.75, 16.5, 1.3 / 2.1, 1.3 * 1.6, 4.9 / 1.3],
+        # [1.3, 3.72, 2.25, 388.0, 0.8, 1.28, 0.8, 45.75, 287.75, 63.5, 1.3 / 3.72, 1.3 * 1.28, 2.25 / 1.3],
+        [2.3, 2.7, 1.1, 366.0, 0.46, 2.0, 0.55, 31.75, 534.0, 39.0, 2.3 / 2.7, 2.3 * 2.0, 1.1 / 2.3],
+    ]
+
+    # Compute standardization parameters from combined training data
+    feature_mean = x_array_combined.mean(axis=0)
+    feature_std = x_array_combined.std(axis=0)
+    feature_std = np.where(feature_std == 0.0, 1.0, feature_std)
+
+    ber_vs_length_test(
+        model=model,
+        feature_arrays=feature_arrays,
+        length_interval=[1500, 4900],
+        number_of_points=100,
+        feature_columns=feature_columns_combined,
+        feature_mean=feature_mean,
+        feature_std=feature_std,
+        visualization=True,
+    )
 
     """
     run_optuna(

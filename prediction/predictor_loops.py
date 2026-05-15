@@ -60,6 +60,7 @@ def test_pred_loop(model, data, criterion, device):
 
     total_loss = 0.0
     total_mae = 0.0 
+    total_mape = 0.0
     total_samples = 0
 
     all_preds = []
@@ -75,6 +76,7 @@ def test_pred_loop(model, data, criterion, device):
             total_loss += loss.item() * inputs.size(0) 
 
             total_mae += torch.sum(torch.abs(outputs - labels)).item()
+            total_mape += torch.sum(torch.abs((outputs - labels) / labels)).item()
             total_samples += inputs.size(0)
 
             all_preds.extend(outputs.cpu().reshape(-1).numpy()) # store all predictions
@@ -82,5 +84,6 @@ def test_pred_loop(model, data, criterion, device):
 
     loss = total_loss / total_samples
     mae = total_mae / total_samples
+    mape = total_mape / total_samples
     
-    return loss, mae, np.array(all_preds), np.array(all_labels) 
+    return loss, mae, mape, np.array(all_preds), np.array(all_labels) 
