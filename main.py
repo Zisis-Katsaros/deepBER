@@ -8,8 +8,10 @@ from classification.classifier import DeepBERClassifier
 from classification.test_classifier_config import test_classifier_configuration
 from prediction.predictor import DeepBERPredictor
 from prediction.test_predictor_config import test_predictor_configuration, ber_vs_length_test
+from classification.ber_to_class import ber_to_class
 import numpy as np
 from classification.optuna_tuner import run_optuna_classifier
+from sklearn.utils.class_weight import compute_class_weight
 
 def main():
     torch.manual_seed(42)
@@ -82,6 +84,20 @@ def main():
         dropout=0.08
     )
     lower_thres, upper_thres = -5.5, -2.5
+
+    # Convert BER values to classes for weight computation
+    eps = 10**-15
+    y_array_log = np.log10(np.clip(y_array_combined, eps, None)).astype(np.float32)
+    class_lower_thres = np.log10(np.clip(10**-5.5, eps, None)).astype(np.float32)
+    class_upper_thres = np.log10(np.clip(10**-2.5, eps, None)).astype(np.float32)
+    y_classes = ber_to_class(y_array_log, class_lower_thres, class_upper_thres, logBER=False)
+
+    class_weights = compute_class_weight(
+        class_weight="balanced",
+        classes=np.arange(3),
+        y=y_classes,
+    )
+    criterion = torch.nn.CrossEntropyLoss(weight=torch.tensor(class_weights, dtype=torch.float32, device=device))
 
     criterion = nn.CrossEntropyLoss()
     optimizer = torch.optim.Adam(classifier.parameters(), lr=0.0032, weight_decay=0.0013)
