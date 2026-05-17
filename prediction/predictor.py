@@ -45,7 +45,7 @@ class DeepBERPredictor(nn.Module):
                 nn.Sigmoid()
             ) # sigmoid activation for BER so that output is between 0 and 1
 
-    # Forward pass through
+    # Forward pass
     def forward(self, x):
         for layer in self.layers:
             x = layer(x) # pass through each layer

@@ -4,3 +4,5 @@ torch
 xgboost
 scikit-learn
 optuna
+lightgbm
+catboost

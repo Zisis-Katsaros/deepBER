@@ -3,6 +3,39 @@ from pathlib import Path
 import numpy as np
 import torch
 from torch.utils.data import DataLoader, TensorDataset, random_split
+from dataset_manipulation import extend_features, exclude_columns
+from classification.ber_to_class import ber_to_class
+
+
+def create_arrays(csv_names, target_columns, thresholds, test_names, manipulate_features=[True, True, True, True]):
+	# Creates arrays for each test dataset
+	#
+	# Args:
+	# - csv_names: List of lists of CSV file names for each test
+	# - target_columns: List of target column names for each test
+	# - thresholds: List of tuples (lower_thres, upper_thres) for filtering samples by BER range for each test
+	# - test_names: List of test names for printing results
+	# - manipulate_features: List of booleans indicating whether to apply feature manipulation for each test
+	# Returns:
+	# - test_info_dict: Dictionary with test names as keys and tuples (x_array, y_array, y_array_log, thresholds, 
+	# 					feature_columns) as values
+	
+	test_info_dict = {}
+	for idx, csv_batch in enumerate(csv_names):
+		x_array, y_array, feature_columns = load_csv_dataset(csv_batch, target_column=target_columns[idx])
+        
+		eps = 10**-15 # To avoid log(0)
+		y_array_log = np.log10(np.clip(y_array, eps, None)).astype(np.float32)
+
+		if manipulate_features[idx]:
+			# add derived features
+			x_array, feature_columns = extend_features(x_array, feature_columns, "width", "space", "/", "width_space_ratio")
+			x_array, feature_columns = extend_features(x_array, feature_columns, "width", "metal_thickness", "*", "cross_sectional_area")
+			x_array, feature_columns = extend_features(x_array, feature_columns, "gnd_width", "width", "/", "gnd_width_width_ratio")
+			x_array, feature_columns = exclude_columns(x_array, feature_columns, columns_to_exclude=["delay"])
+
+		test_info_dict[test_names[idx]] = (x_array, y_array, y_array_log, thresholds[idx], feature_columns)
+	return test_info_dict	
 
 
 def load_csv_dataset(csv_names, target_column="BER"):
@@ -83,14 +116,17 @@ def load_csv_dataset(csv_names, target_column="BER"):
 	
 	return x_array, y_array, feature_columns
 
+
 def create_dataloader(
 	x_array,
-	y_array,
-	batch_size=64,
-	seed=42,
-	ber_interval=None,
-	logBER=False,
-	standard_scale=False,
+ 	y_array,
+ 	batch_size=64,
+ 	seed=42,
+ 	ber_interval=None,
+ 	logBER=False,
+ 	standard_scale=False,
+ 	label_to_class=False,
+	class_thresholds=(10**-5.5, 10**-2.5)
 ):
 	# Creates dataloader
 	#
@@ -102,6 +138,8 @@ def create_dataloader(
 	# - ber_interval: Tuple (min_ber, max_ber) to filter samples by BER range
 	# - logBER: If true labels are log10(BER)
 	# - standard_scale: If true standard scaling is applied to features
+	# - label_to_class: If true, labels are converted to classes based on class_thresholds
+	# - class_thresholds: Tuple (lower_thres, upper_thres) for mapping BER to classes if label_to_class is True
 	# Returns:
 	# - dataloader: [train_data, val_data, test_data] 
 
@@ -125,8 +163,19 @@ def create_dataloader(
 
 	# Log10(BER)
 	if logBER:
-		eps = 1e-15 # To avoid log(0) 
+		eps = 1e-15  # To avoid log(0)
 		y_array = np.log10(np.clip(y_array, eps, None)).astype(np.float32)
+
+		class_lower_thres = np.log10(np.clip(class_thresholds[0], eps, None)).astype(np.float32)
+		class_upper_thres = np.log10(np.clip(class_thresholds[1], eps, None)).astype(np.float32)
+	else:
+		class_lower_thres = class_thresholds[0]
+		class_upper_thres = class_thresholds[1]
+
+	if label_to_class:
+		labels = ber_to_class(y_array, class_lower_thres, class_upper_thres, logBER=False)
+		# replace y_array with integer class labels
+		y_array = labels.astype(np.int64)
 
 	# Set split percentages
 	train_percent = 0.8

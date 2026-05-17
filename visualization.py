@@ -256,11 +256,17 @@ def plot_confusion_matrix(true_labels, predictions, title=None, class_names=None
     if true_labels.shape != predictions.shape:
         raise ValueError("true_labels and predictions must have the same shape.")
 
-    cm = confusion_matrix(true_labels, predictions)
-    num_classes = cm.shape[0]
-
-    if class_names is None:
-        class_names = [str(i) for i in range(num_classes)]
+    # If class names are provided, force a matrix for all class indices so the
+    # plot shape stays consistent even when a class is absent in the current split.
+    if class_names is not None:
+        labels = np.arange(len(class_names))
+        cm = confusion_matrix(true_labels, predictions, labels=labels)
+        num_classes = len(class_names)
+    else:
+        labels = np.unique(np.concatenate([true_labels, predictions]))
+        cm = confusion_matrix(true_labels, predictions, labels=labels)
+        num_classes = len(labels)
+        class_names = [str(label) for label in labels]
 
     fig, ax = plt.subplots(figsize=(8, 6))
 
