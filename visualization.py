@@ -2,6 +2,57 @@ import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.metrics import confusion_matrix
 
+def plot_ber_vs_length(length_values, predictions, title=None):
+    # Plots BER predictions as a function of length.
+    #
+    # Args:
+    # - length_values: List of 1D arrays, one per curve (x-axis)
+    # - predictions: List of 1D arrays, one per curve (BER values)
+    # - title: Optional plot title
+    # Returns:
+    # *none*
+
+    if not isinstance(length_values, list) or not isinstance(predictions, list):
+        raise ValueError("length_values and predictions must both be lists of 1D arrays")
+    if len(length_values) != len(predictions):
+        raise ValueError("length_values and predictions must have the same number of curves")
+    if len(length_values) == 0:
+        raise ValueError("No curves to plot")
+    
+    fig, ax = plt.subplots(figsize=(10, 6))
+    
+    if title is not None:
+        ax.set_title(title + ": BER vs. Length", fontsize=16)
+    else:
+        ax.set_title("BER vs. Length", fontsize=16)
+
+    # Plot each curve with a distinct color
+    color_map = plt.get_cmap('tab10')
+    for curve_idx, (x_curve, y_curve) in enumerate(zip(length_values, predictions)):
+        x_curve = np.asarray(x_curve).reshape(-1)
+        y_curve = np.asarray(y_curve).reshape(-1)
+
+        if x_curve.shape[0] != y_curve.shape[0]:
+            raise ValueError(f"Curve {curve_idx} has mismatched lengths for x and y")
+
+        ax.plot(
+            x_curve,
+            y_curve,
+            marker='o',
+            alpha=0.85,
+            color=color_map(curve_idx % 10),
+            label=f"Curve {curve_idx + 1}"
+        )
+    
+    ax.set_xlabel("Length")
+    ax.set_ylabel("BER")
+    # ax.set_yscale('log')  # Use log scale for BER
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+    plt.tight_layout()
+    plt.show()
+
+    
 def plot_training_curves(train_losses, val_losses, train_maes, val_maes, title=None):
     # Plots training curves
     #
@@ -205,11 +256,17 @@ def plot_confusion_matrix(true_labels, predictions, title=None, class_names=None
     if true_labels.shape != predictions.shape:
         raise ValueError("true_labels and predictions must have the same shape.")
 
-    cm = confusion_matrix(true_labels, predictions)
-    num_classes = cm.shape[0]
-
-    if class_names is None:
-        class_names = [str(i) for i in range(num_classes)]
+    # If class names are provided, force a matrix for all class indices so the
+    # plot shape stays consistent even when a class is absent in the current split.
+    if class_names is not None:
+        labels = np.arange(len(class_names))
+        cm = confusion_matrix(true_labels, predictions, labels=labels)
+        num_classes = len(class_names)
+    else:
+        labels = np.unique(np.concatenate([true_labels, predictions]))
+        cm = confusion_matrix(true_labels, predictions, labels=labels)
+        num_classes = len(labels)
+        class_names = [str(label) for label in labels]
 
     fig, ax = plt.subplots(figsize=(8, 6))
 

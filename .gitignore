@@ -1,7 +1,14 @@
 /.venv
 best_model.pth
+*.pth
+prediction/__pycache__/
+classification/__pycache__/
 __pycache__/
 *.pyc
 *.csv
 /csv_files
 optuna_study_result.json
+optuna_classifier_study_result.json
+evaluation.py
+ber_snr_conversion.py
+*.db

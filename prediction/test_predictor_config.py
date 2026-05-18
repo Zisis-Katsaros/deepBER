@@ -1,7 +1,8 @@
 from prediction.predictor_loops import train_pred_loop, test_pred_loop
-from visualization import plot_error_distribution, plot_error_vs_feature, plot_predicted_vs_actual, plot_training_curves
+from visualization import plot_error_distribution, plot_error_vs_feature, plot_predicted_vs_actual, plot_training_curves, plot_ber_vs_length
 import prediction.predictor as predictor
 import torch
+import numpy as np
 
 def test_predictor_configuration(title, device, model, dataloader, learning_rate, batch_size, criterion, optimizer, scheduler=None,
                        epochs=30, early_stopping=False, patience=5, training_curves=False,
@@ -67,7 +68,7 @@ def test_predictor_configuration(title, device, model, dataloader, learning_rate
     print(f"==================== Starting Training ====================")
     for epoch in range(epochs):
         train_loss, train_mae = train_pred_loop(model, train_data, optimizer, criterion, device)
-        val_loss, val_mae, _, _ = test_pred_loop(model, val_data, criterion, device)
+        val_loss, val_mae, _, _, _ = test_pred_loop(model, val_data, criterion, device)
 
         # Step scheduler
         if scheduler is not None:
@@ -101,8 +102,9 @@ def test_predictor_configuration(title, device, model, dataloader, learning_rate
 
     print(f"==================== Training complete ====================")
 
-    _, test_mae, test_targets, test_preds = test_pred_loop(model, test_data, criterion, device)
+    _, test_mae, test_mape, test_targets, test_preds = test_pred_loop(model, test_data, criterion, device)
     print(f">>> Test MAE: {test_mae:.6f}")
+    print(f">>> Test MAPE: {test_mape*100:.4f}%")
 
     # Visualization
     if training_curves:
@@ -138,4 +140,108 @@ def test_predictor_configuration(title, device, model, dataloader, learning_rate
                 title=title,
                 feature_name=feature_name,
             )
-        
+
+def ber_vs_length_test(model, feature_arrays, length_interval, number_of_points, feature_columns,
+                       device='cpu', logBER=True, visualization=False, title=None,
+                       feature_mean=None, feature_std=None):  
+    # Test how BER varies with length by fixing all other features.
+    #
+    # Args:
+    # - model: Trained model to use for prediction
+    # - feature_arrays: List of 1D arrays, one per curve. Each array contains
+    #   all fixed feature values except 'length'.
+    # - length_interval: [min_length, max_length] tuple or list
+    # - number_of_points: Number of length values to test
+    # - feature_columns: List of all feature column names (including 'length')
+    # - device: Device to run inference on ('cpu' or 'cuda')
+    # - logBER: If True, model predicts log10(BER); if False, raw BER
+    # - visualization: If True, plot the results
+    # - title: Title for the visualization
+    # - feature_mean: 1D array of mean values per feature (for standardization)
+    # - feature_std: 1D array of std values per feature (for standardization)
+    # Returns:
+    # - length_values: List of 1D arrays (x values), one per curve
+    # - ber_predictions: List of 1D arrays (predicted BER), one per curve
+
+    # Expect `feature_arrays` to be a list of 1D arrays (one per curve)
+    if not isinstance(feature_arrays, list):
+        raise ValueError("feature_arrays must be a list of 1D arrays (one per curve)")
+
+    # Convert entries to 1D numpy arrays
+    feature_arrays = [np.asarray(arr, dtype=np.float32).reshape(-1) for arr in feature_arrays]
+
+    # Find the index of 'length' in feature_columns
+    if 'length' not in feature_columns:
+        raise ValueError("'length' not found in feature_columns")
+    length_index = feature_columns.index('length')
+
+    # Validate inputs
+    if len(feature_arrays) == 0:
+        raise ValueError("feature_arrays is empty")
+    expected_feature_count = len(feature_columns) - 1
+    for curve_idx, curve_features in enumerate(feature_arrays):
+        if curve_features.shape[0] != expected_feature_count:
+            raise ValueError(
+                f"Curve {curve_idx} must contain exactly {expected_feature_count} values "
+                f"(all features except 'length'); got {curve_features.shape[0]}"
+            )
+    
+    # Create length values to test
+    min_length, max_length = length_interval
+    length_values = np.linspace(min_length, max_length, number_of_points)
+    
+    n_features_total = len(feature_columns)
+    
+    # Validate and normalize scaling parameters
+    if feature_mean is not None:
+        feature_mean = np.asarray(feature_mean, dtype=np.float32)
+        if feature_mean.shape[0] != n_features_total:
+            raise ValueError(f"feature_mean must have {n_features_total} values")
+    if feature_std is not None:
+        feature_std = np.asarray(feature_std, dtype=np.float32)
+        if feature_std.shape[0] != n_features_total:
+            raise ValueError(f"feature_std must have {n_features_total} values")
+        feature_std = np.where(feature_std == 0.0, 1.0, feature_std)
+    
+    # Prepare model for inference
+    model.eval()
+    
+    # Store one length/prediction array pair per curve
+    all_length_values = []
+    all_predictions = []
+    
+    with torch.no_grad():
+        for curve_features in feature_arrays:
+            batch_array = np.zeros((number_of_points, n_features_total), dtype=np.float32)
+
+            # Fill all non-length features for this curve
+            feature_idx = 0
+            for col_idx in range(n_features_total):
+                if col_idx == length_index:
+                    continue
+                batch_array[:, col_idx] = curve_features[feature_idx]
+                feature_idx += 1
+
+            # Sweep length
+            batch_array[:, length_index] = length_values
+
+            # Apply standardization if parameters provided
+            if feature_mean is not None and feature_std is not None:
+                batch_array = (batch_array - feature_mean) / feature_std
+
+            batch_tensor = torch.from_numpy(batch_array).to(device)
+            predictions = model(batch_tensor).cpu().numpy().reshape(-1)
+
+            # Convert from log BER if needed
+            if logBER:
+                predictions = 10 ** predictions
+
+            all_length_values.append(length_values.copy())
+            all_predictions.append(predictions)
+    
+    # Visualization
+    if visualization:
+        plot_ber_vs_length(all_length_values, all_predictions, title=title)
+    
+    return all_length_values, all_predictions
+

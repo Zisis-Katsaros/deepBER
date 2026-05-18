@@ -1,5 +1,7 @@
 import numpy as np
+import torch
 from sklearn.utils.class_weight import compute_sample_weight
+from sklearn.metrics import f1_score
 
 def loader_to_numpy(data_loader):
     # Convert a torch DataLoader into NumPy arrays for non-torch models.
@@ -7,6 +9,105 @@ def loader_to_numpy(data_loader):
     features = tensors[0].cpu().numpy()
     labels = tensors[1].cpu().numpy().reshape(-1)
     return features, labels
+
+def train_classifier_loop(model, data, optimizer, criterion, device):
+    # Loop used for training the model for one epoch
+    #
+    # Args:
+    # - model: The neural network model to be trained
+    # - data: Training data
+    # - optimizer: Optimization algorithm 
+    # - criterion: Loss function 
+    # - device: Device to run the training on (CPU or GPU)
+    # Returns:
+    # - avg_loss: Average loss over the epoch
+    # - avg_acc: Average accuracy over the epoch
+    # - avg_f1: Average F1 score over the epoch
+
+    model.train() # model in training mode
+
+    total_loss = 0.0
+    total_acc = 0.0 
+    total_samples = 0
+    all_preds = []
+    all_labels = []
+    
+    # iterate through training batches
+    for inputs, labels in data:
+        inputs = inputs.to(device) 
+        labels = labels.to(device).view(-1).long()
+
+        outputs = model(inputs) # forward pass
+        loss = criterion(outputs, labels) # loss function
+
+        optimizer.zero_grad() # zero the previous gradients
+        loss.backward() # backpropagation
+        optimizer.step() # update weights
+
+        total_loss += loss.item() * inputs.size(0) # accumulate loss
+        total_acc += torch.sum(torch.argmax(outputs, dim=1) == labels).item() # accumulate accuracy
+        total_samples += inputs.size(0) # accumulate number of samples
+        
+        all_preds.extend(torch.argmax(outputs, dim=1).cpu().numpy())
+        all_labels.extend(labels.view(-1).cpu().numpy())
+
+    avg_loss = total_loss / total_samples
+    avg_acc = total_acc / total_samples
+    avg_f1 = f1_score(all_labels, all_preds, average="macro", zero_division=0)
+
+    return avg_loss, avg_acc, avg_f1 # return loss, accuracy and F1 score
+
+def test_classifier_loop(model, data, criterion, device):
+    # Loop used for evaluating the model
+    # 
+    # Args:
+    # - model: The neural network model to be evaluated
+    # - data: Validation or Test data
+    # - criterion: Loss function
+    # - device: Device to run the evaluation on (CPU or GPU)
+    # Returns:
+    # - avg_loss: Average loss over the evaluation
+    # - avg_acc: Average accuracy over the evaluation
+    # - avg_f1: Average F1 score over the evaluation
+    # - all_preds: All predictions made by the model
+    # - all_labels: All true labels corresponding to the predictions
+
+    model.eval() # model in evaluation mode
+
+    total_loss = 0.0
+    total_acc = 0.0
+    total_samples = 0
+
+    all_preds = []
+    all_labels = []
+
+    with torch.no_grad(): # disable gradient calculation
+        for inputs, labels in data:
+            inputs = inputs.to(device)
+            labels = labels.to(device).view(-1).long()
+
+            outputs = model(inputs) # forward pass
+            loss = criterion(outputs, labels) # loss function
+            total_loss += loss.item() * inputs.size(0) 
+
+            preds = torch.argmax(outputs, dim=1)
+            maks = (preds== 0) & (outputs[:,0] <0.85)
+            preds[maks] = 1
+
+            total_acc += torch.sum(preds == labels).item()
+
+            total_samples += inputs.size(0)
+
+            all_preds.extend(preds.cpu().numpy()) # store all predictions
+            all_labels.extend(labels.cpu().numpy()) # store all true labels
+
+    loss = total_loss / total_samples
+    acc = total_acc / total_samples
+    all_preds = np.array(all_preds)
+    all_labels = np.array(all_labels)
+    f1 = f1_score(all_labels, all_preds, average="macro", zero_division=0)
+    
+    return loss, acc, f1, all_preds, all_labels
 
 
 def train_xgb_loop(

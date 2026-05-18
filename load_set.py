@@ -1,14 +1,53 @@
 import csv
+from pathlib import Path
 import numpy as np
 import torch
 from torch.utils.data import DataLoader, TensorDataset, random_split
+from dataset_manipulation import extend_features, exclude_columns
+from classification.ber_to_class import ber_to_class
 
 
-def load_csv_dataset(csv_paths, target_column="BER"):
+def create_arrays(csv_names, target_columns, thresholds, test_names, manipulate_features=[True, True, True, True]):
+	# Creates arrays for each test dataset
+	#
+	# Args:
+	# - csv_names: List of lists of CSV file names for each test
+	# - target_columns: List of target column names for each test
+	# - thresholds: List of tuples (lower_thres, upper_thres) for filtering samples by BER range for each test
+	# - test_names: List of test names for printing results
+	# - manipulate_features: List of booleans indicating whether to apply feature manipulation for each test
+	# Returns:
+	# - test_info_dict: Dictionary with test names as keys and tuples (x_array, y_array, y_array_log, y_classes, thresholds, 
+	# 					feature_columns) as values
+	
+	test_info_dict = {}
+	for idx, csv_batch in enumerate(csv_names):
+		x_array, y_array, feature_columns = load_csv_dataset(csv_batch, target_column=target_columns[idx])
+        
+		eps = 10**-15 # To avoid log(0)
+		y_array_log = np.log10(np.clip(y_array, eps, None)).astype(np.float32)
+
+		class_lower_thres = np.log10(np.clip(thresholds[idx][0], eps, None)).astype(np.float32)
+		class_upper_thres = np.log10(np.clip(thresholds[idx][1], eps, None)).astype(np.float32)
+
+		y_classes = ber_to_class(y_array_log, class_lower_thres, class_upper_thres, logBER=False)
+
+		if manipulate_features[idx]:
+			# add derived features
+			x_array, feature_columns = extend_features(x_array, feature_columns, "width", "space", "/", "width_space_ratio")
+			x_array, feature_columns = extend_features(x_array, feature_columns, "width", "metal_thickness", "*", "cross_sectional_area")
+			x_array, feature_columns = extend_features(x_array, feature_columns, "gnd_width", "width", "/", "gnd_width_width_ratio")
+			x_array, feature_columns = exclude_columns(x_array, feature_columns, columns_to_exclude=["delay"])
+
+		test_info_dict[test_names[idx]] = (x_array, y_array, y_array_log, y_classes, thresholds[idx], feature_columns)
+	return test_info_dict
+
+
+def load_csv_dataset(csv_names, target_column="BER"):
 	# Loads dataset from CSV file
 	#
 	# Args:
-	# - csv_paths: List of paths to CSV files
+	# - csv_names: List of CSV file names
 	# - target_column: Name of label column
 	# - exclude_columns: Feature columns to be excluded
 	# Returns:
@@ -20,13 +59,19 @@ def load_csv_dataset(csv_paths, target_column="BER"):
 	y_array = []
 	feature_columns = None
 	
-	for idx, csv_path in enumerate(csv_paths):
-		with open(csv_path, mode="r", newline="") as csv_file:
+	for idx, name in enumerate(csv_names):
+		dataset_path = Path(__file__).resolve().parent / "csv_files" / name
+		if not dataset_path.exists():
+			raise FileNotFoundError(
+				f"Dataset not found at {dataset_path}. Update the path in main.py or move the file."
+			)
+
+		with open(dataset_path, mode="r", newline="") as csv_file:
 			reader = csv.DictReader(csv_file)
 			headers = reader.fieldnames
 
 			if headers is None or target_column not in headers:
-				raise ValueError(f"Target column '{target_column}' was not found in {csv_path}.")
+				raise ValueError(f"Target column '{target_column}' was not found in {dataset_path}.")
 
 			current_feature_columns = [column for column in headers if column != target_column]
 			
@@ -37,7 +82,7 @@ def load_csv_dataset(csv_paths, target_column="BER"):
 				if set(current_feature_columns) != set(feature_columns):
 					missing_in_current = set(feature_columns) - set(current_feature_columns)
 					extra_in_current = set(current_feature_columns) - set(feature_columns)
-					error_msg = f"Column mismatch in {csv_path}.\n"
+					error_msg = f"Column mismatch in {dataset_path}.\n"
 					if missing_in_current:
 						error_msg += f"Missing columns: {missing_in_current}\n"
 					if extra_in_current:
@@ -46,7 +91,7 @@ def load_csv_dataset(csv_paths, target_column="BER"):
 				
 				# Ensure column order matches the first file
 				if current_feature_columns != feature_columns:
-					raise ValueError(f"Column order mismatch in {csv_path}. Expected order: {feature_columns}, got: {current_feature_columns}")
+					raise ValueError(f"Column order mismatch in {dataset_path}. Expected order: {feature_columns}, got: {current_feature_columns}")
 
 			features = []
 			targets = []
@@ -76,14 +121,15 @@ def load_csv_dataset(csv_paths, target_column="BER"):
 	
 	return x_array, y_array, feature_columns
 
+
 def create_dataloader(
 	x_array,
-	y_array,
-	batch_size=64,
-	seed=42,
-	ber_interval=None,
-	logBER=False,
-	standard_scale=False,
+ 	y_array,
+ 	batch_size=64,
+ 	seed=42,
+ 	ber_interval=None,
+ 	logBER=False,
+ 	standard_scale=False,
 ):
 	# Creates dataloader
 	#
@@ -118,7 +164,7 @@ def create_dataloader(
 
 	# Log10(BER)
 	if logBER:
-		eps = 1e-15 # To avoid log(0) 
+		eps = 1e-15  # To avoid log(0)
 		y_array = np.log10(np.clip(y_array, eps, None)).astype(np.float32)
 
 	# Set split percentages
