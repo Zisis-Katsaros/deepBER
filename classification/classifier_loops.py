@@ -90,10 +90,15 @@ def test_classifier_loop(model, data, criterion, device):
             loss = criterion(outputs, labels) # loss function
             total_loss += loss.item() * inputs.size(0) 
 
-            total_acc += torch.sum(torch.argmax(outputs, dim=1) == labels).item()
+            preds = torch.argmax(outputs, dim=1)
+            maks = (preds== 0) & (outputs[:,0] <0.85)
+            preds[maks] = 1
+
+            total_acc += torch.sum(preds == labels).item()
+
             total_samples += inputs.size(0)
 
-            all_preds.extend(torch.argmax(outputs, dim=1).cpu().numpy()) # store all predictions
+            all_preds.extend(preds.cpu().numpy()) # store all predictions
             all_labels.extend(labels.cpu().numpy()) # store all true labels
 
     loss = total_loss / total_samples

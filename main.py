@@ -42,7 +42,7 @@ def main():
     dataloader_dict = {}
 
     for test_name, test_info in test_info_dict.items():
-        x_array, y_array, _, thresholds, _ = test_info
+        x_array, y_array, _, _, thresholds, _ = test_info
         batch_size = batch_size_dict[test_name]
 
         dataloader_dict[test_name] = create_dataloader(
@@ -56,18 +56,16 @@ def main():
         )
     
     x_array_combined = test_info_dict["Combined BER Dataset"][0]
-    y_array_combined = test_info_dict["Combined BER Dataset"][1]
-    feature_columns_combined  = test_info_dict["Combined BER Dataset"][4]
+    y_classes = test_info_dict["Combined BER Dataset"][3]
+    feature_columns_combined  = test_info_dict["Combined BER Dataset"][5]
 
     classifier_dataloader = create_dataloader(
         x_array_combined,
-        y_array_combined,
-        logBER=True,
+        y_classes,
+        logBER=False,
         batch_size=16,
         seed=42,
         standard_scale=True,
-        label_to_class=True,
-        class_thresholds=(10**-5.5, 10**-2.5)
     )
 
 
@@ -85,18 +83,14 @@ def main():
     )
     lower_thres, upper_thres = -5.5, -2.5
 
-    # Convert BER values to classes for weight computation
-    eps = 10**-15
-    y_array_log = np.log10(np.clip(y_array_combined, eps, None)).astype(np.float32)
-    class_lower_thres = np.log10(np.clip(10**-5.5, eps, None)).astype(np.float32)
-    class_upper_thres = np.log10(np.clip(10**-2.5, eps, None)).astype(np.float32)
-    y_classes = ber_to_class(y_array_log, class_lower_thres, class_upper_thres, logBER=False)
+    
 
     class_weights = compute_class_weight(
         class_weight="balanced",
         classes=np.arange(3),
         y=y_classes,
     )
+
     criterion = torch.nn.CrossEntropyLoss(weight=torch.tensor(class_weights, dtype=torch.float32, device=device))
 
     criterion = nn.CrossEntropyLoss()
