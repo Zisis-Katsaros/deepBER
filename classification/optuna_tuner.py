@@ -144,7 +144,7 @@ def train_mlp(
     num_layers = trial.suggest_int("mlp_num_layers", 1, 4)
     hidden_sizes = []
     for i in range(num_layers):
-        hidden_sizes.append(trial.suggest_categorical(f"mlp_units_l{i}", [32, 64, 128, 256]))
+        hidden_sizes.append(trial.suggest_categorical(f"mlp_units_l{i}", [32, 48, 64, 96, 128, 256]))
 
     activation = trial.suggest_categorical("mlp_activation", ["relu", "leaky_relu", "elu", "gelu"])
     dropout = trial.suggest_float("mlp_dropout", 0.0, 0.5)
@@ -255,9 +255,6 @@ def run_optuna_classifier(
     x_array,
     y_array,
     feature_columns,
-    lower_thres=-5.5,
-    upper_thres=-2.5,
-    logBER=True,
     n_trials=30,
     seed=42,
     study_name="deepber_classifier_optuna",
@@ -265,21 +262,27 @@ def run_optuna_classifier(
     cv_folds=3,
     mlp_epochs=60,
     mlp_patience=10,
+    mlp_only=False,
+    binary_classification=False,
 ):
     set_seed(seed)
-
-    if lower_thres >= upper_thres:
-        raise ValueError("lower_thres must be smaller than upper_thres.")
 
     print(f"[optuna-classifier] Starting study '{study_name}' with n_trials={n_trials}, seed={seed}")
     print(f"[optuna-classifier] Loaded dataset: x_shape={x_array.shape}, y_shape={y_array.shape}, features={len(feature_columns)}")
 
-    y_labels = ber_to_class(y_array, lower_thres=lower_thres, upper_thres=upper_thres, logBER=logBER)
-    class_counts = np.bincount(y_labels, minlength=3)
-    print(
-        "[optuna-classifier] Class distribution: "
-        f"feasible={class_counts[0]}, uncertain={class_counts[1]}, unfeasible={class_counts[2]}"
-    )
+    class_counts = np.bincount(y_array)
+    if binary_classification:
+        num_classes = 2
+        print(
+            "[optuna-classifier] Class distribution: "
+            f"feasible={class_counts[0]}, unfeasible={class_counts[1]}"
+        )
+    else:
+        num_classes = 3
+        print(
+            "[optuna-classifier] Class distribution: "
+            f"feasible={class_counts[0]}, uncertain={class_counts[1]}, unfeasible={class_counts[2]}"
+        )
 
     min_class_count = int(class_counts[class_counts > 0].min()) if np.any(class_counts > 0) else 0
     if min_class_count < 2:
@@ -301,16 +304,19 @@ def run_optuna_classifier(
     print(f"[optuna-classifier] Using {effective_cv_folds}-fold stratified cross validation")
 
     def objective(trial: optuna.trial.Trial):
-        family = trial.suggest_categorical("model_family", available_families)
+        if not mlp_only:
+            family = trial.suggest_categorical("model_family", available_families)
+        else:
+            family = "mlp"
         print(f"[optuna-classifier] Trial {trial.number}: model_family={family}")
 
         fold_scores = []
 
-        for fold_index, (train_idx, val_idx) in enumerate(skf.split(x_array, y_labels), start=1):
+        for fold_index, (train_idx, val_idx) in enumerate(skf.split(x_array, y_array), start=1):
             x_train = x_array[train_idx]
-            y_train = y_labels[train_idx]
+            y_train = y_array[train_idx]
             x_val = x_array[val_idx]
-            y_val = y_labels[val_idx]
+            y_val = y_array[val_idx]
 
             if family == "mlp":
                 scaler = StandardScaler()
@@ -326,7 +332,7 @@ def run_optuna_classifier(
                     y_val.astype(np.int64),
                     seed,
                     input_size,
-                    num_classes=3,
+                    num_classes=num_classes,
                     batch_size=batch_size,
                     epochs=mlp_epochs,
                     patience=mlp_patience,

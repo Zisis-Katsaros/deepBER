@@ -17,6 +17,8 @@ def main():
     torch.manual_seed(42)
 
     # ============================================= Initializing Dataset ============================================= #
+    bin_classification = True
+
     csv_names = [
      ["ber_og_database.csv"],
      ["wrst_case_ber_database1.csv", "wrst_case_ber_database2.csv", "wrst_case_ber_database3.csv"],
@@ -30,7 +32,7 @@ def main():
 
     test_names = ["BER_OG Dataset", "Worst-Case BER Dataset", "PRBS Case BER Dataset", "Combined BER Dataset"]
 
-    test_info_dict = create_arrays(csv_names, target_columns, thresholds, test_names)
+    test_info_dict = create_arrays(csv_names, target_columns, thresholds, test_names, binary_classification=bin_classification)
 
     batch_size_dict = {
         "BER_OG Dataset": 32,
@@ -72,61 +74,96 @@ def main():
     # =================================================== Classifier ================================================== #
     device = "cuda" if torch.cuda.is_available() else "cpu"
     
-    classifier = DeepBERClassifier(
-        input_size=len(feature_columns_combined), 
-        num_classes=3, 
-        hidden=[128, 256, 32], 
-        activation_fn=nn.GELU(), 
-        logBER=True, 
-        batch_norm=False, 
-        dropout=0.08
-    )
+    num_classes = 2 if bin_classification else 3
+
+    classifier_kwargs = {
+        "input_size": len(feature_columns_combined),
+        "num_classes": num_classes,
+        "hidden": [96, 256, 64, 48],
+        "activation_fn": nn.GELU(),
+        "logBER": True,
+        "batch_norm": False,
+        "dropout": 0.25,
+    }
     lower_thres, upper_thres = -5.5, -2.5
 
     
 
     class_weights = compute_class_weight(
         class_weight="balanced",
-        classes=np.arange(3),
+        classes=np.arange(num_classes),
         y=y_classes,
     )
 
     criterion = torch.nn.CrossEntropyLoss(weight=torch.tensor(class_weights, dtype=torch.float32, device=device))
 
-    criterion = nn.CrossEntropyLoss()
-    optimizer = torch.optim.Adam(classifier.parameters(), lr=0.0032, weight_decay=0.0013)
+    lr = 0.00089
+    weight_decay = 7.7e-6
 
-    test_classifier_configuration(
-        title="MLP Classifier",
-        model=classifier,
-        dataloader=classifier_dataloader,
-        lower_thres=lower_thres,
-        upper_thres=upper_thres,
-        device=device,
-        learning_rate=0.0032,
-        criterion=criterion,
-        optimizer=optimizer,
-        epochs=60,
-        early_stopping=True,
-        patience=10,
-        confusion_matrix=True
-    )
+
+    num_of_runs = 7
+    total_acc = 0.0
+    total_f1 = 0.0
+
+    # """
+    for k in range (num_of_runs):
+        seed = 42 + k
+
+        # Create a fresh model per run so each seed is evaluated independently.
+        classifier = DeepBERClassifier(**classifier_kwargs)
+        optimizer = torch.optim.Adam(classifier.parameters(), lr=lr, weight_decay=weight_decay)
+
+        classifier_dataloader = create_dataloader(
+        x_array_combined,
+        y_classes,
+        logBER=False,
+        batch_size=16,
+        seed=seed,
+        standard_scale=True,
+        )
+        
+        print(f"\n\n--- Run {k+1} with seed {seed} ---\n\n")
+
+        _, test_acc, test_f1 = test_classifier_configuration(
+            title="MLP Classifier",
+            model=classifier,
+            dataloader=classifier_dataloader,
+            lower_thres=lower_thres,
+            upper_thres=upper_thres,
+            device=device,
+            learning_rate=lr,
+            criterion=criterion,
+            optimizer=optimizer,
+            epochs=60,
+            early_stopping=True,
+            patience=10,
+            confusion_matrix=False,
+        )
+
+        total_acc += test_acc
+        total_f1 += test_f1
+
+    avg_acc = total_acc / num_of_runs
+    avg_f1 = total_f1 / num_of_runs
+
+    print(f"\n\nAverage Test Accuracy over {num_of_runs} runs: {avg_acc*100:.2f}%")
+    print(f"Average Test F1 Score over {num_of_runs} runs: {avg_f1:.4f}")
+    # """
     
     """
     run_optuna_classifier(
     x_array_combined,
-    y_array_combined,
+    y_classes,
     feature_columns_combined,
-    lower_thres=-5.5,
-    upper_thres=-2.5,
-    logBER=True,
-    n_trials=300,
+    n_trials=400,
     seed=42,
     study_name="deepber_classifier_optuna",
     storage=None,
     cv_folds=3,
     mlp_epochs=60,
     mlp_patience=10,
+    mlp_only=True,
+    binary_classification=True,
     )
     """
 
