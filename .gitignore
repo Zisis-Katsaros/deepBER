@@ -1,4 +1,5 @@
 /.venv
+best_models/
 best_model.pth
 *.pth
 prediction/__pycache__/

@@ -53,10 +53,7 @@ class DeepBERClassifier(nn.Module):
             current_dim = hidden[layer] # update current dimension for next layer
 
         # Final output layer
-        self.output_layer = nn.Sequential(
-             nn.Linear(current_dim, num_classes),
-             nn.Softmax(dim=1)
-        ) # apply softmax for multi-class classification
+        self.output_layer = nn.Linear(current_dim, num_classes)
 
     # Forward pass
     def forward(self, x):
