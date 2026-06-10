@@ -23,14 +23,17 @@ def main():
      ["ber_og_database.csv"],
      ["wrst_case_ber_database1.csv", "wrst_case_ber_database2.csv", "wrst_case_ber_database3.csv"],
      ["prbs_case_database1.csv", "prbs_case_database2.csv"],
-     ["prbs_case_database1.csv", "prbs_case_database2.csv", "wrst_case_ber_database1.csv", "wrst_case_ber_database2.csv", "wrst_case_ber_database3.csv" ]
+     ["prbs_case_database1.csv", "prbs_case_database2.csv", "wrst_case_ber_database1.csv", "wrst_case_ber_database2.csv", 
+      "wrst_case_ber_database3.csv"],
+     ["prbs_case_database1.csv", "prbs_case_database2.csv", "wrst_case_ber_database1.csv", "wrst_case_ber_database2.csv", 
+      "wrst_case_ber_database3.csv", "delay_csv_database_extnd.csv"]
     ]
 
-    target_columns = ["BER", "BER", "BER", "BER"]
+    target_columns = ["BER", "BER", "BER", "BER", "BER"]
 
-    thresholds = [(10**-5.5, 10**-2.5), (10**-5.5, 10**-2.5), (10**-5.5, 10**-2.5), (10**-5.5, 10**-2.5)]
+    thresholds = [(10**-5.5, 10**-2.5), (10**-5.5, 10**-2.5), (10**-5.5, 10**-2.5), (10**-5.5, 10**-2.5), (10**-5.5, 10**-2.5)]
 
-    test_names = ["BER_OG Dataset", "Worst-Case BER Dataset", "PRBS Case BER Dataset", "Combined BER Dataset"]
+    test_names = ["BER_OG Dataset", "Worst-Case BER Dataset", "PRBS Case BER Dataset", "Combined BER Dataset", "Extended BER Dataset"]
 
     test_info_dict = create_arrays(csv_names, target_columns, thresholds, test_names, binary_classification=bin_classification)
 
@@ -38,7 +41,8 @@ def main():
         "BER_OG Dataset": 32,
         "Worst-Case BER Dataset": 16,
         "PRBS Case BER Dataset": 32,
-        "Combined BER Dataset": 16
+        "Combined BER Dataset": 16,
+        "Extended BER Dataset": 16
     }
 
     dataloader_dict = {}
@@ -57,9 +61,9 @@ def main():
             standard_scale=True
         )
     
-    x_array_combined = test_info_dict["Combined BER Dataset"][0]
-    y_classes = test_info_dict["Combined BER Dataset"][3]
-    feature_columns_combined  = test_info_dict["Combined BER Dataset"][5]
+    x_array_combined = test_info_dict["Extended BER Dataset"][0]
+    y_classes = test_info_dict["Extended BER Dataset"][3]
+    feature_columns_combined  = test_info_dict["Extended BER Dataset"][5]
 
     classifier_dataloader = create_dataloader(
         x_array_combined,
@@ -68,6 +72,7 @@ def main():
         batch_size=16,
         seed=42,
         standard_scale=True,
+        split_method="lhs"
     )
 
 
@@ -79,11 +84,11 @@ def main():
     classifier_kwargs = {
         "input_size": len(feature_columns_combined),
         "num_classes": num_classes,
-        "hidden": [96, 256, 64, 48],
+        "hidden": [64, 32, 64, 48],
         "activation_fn": nn.GELU(),
         "logBER": True,
         "batch_norm": False,
-        "dropout": 0.25,
+        "dropout": 0.241,
     }
     lower_thres, upper_thres = -5.5, -2.5
 
@@ -97,11 +102,11 @@ def main():
 
     criterion = torch.nn.CrossEntropyLoss(weight=torch.tensor(class_weights, dtype=torch.float32, device=device))
 
-    lr = 0.00089
-    weight_decay = 7.7e-6
+    lr = 0.00379
+    weight_decay = 5.045e-5
 
 
-    num_of_runs = 7
+    num_of_runs = 10
     total_acc = 0.0
     total_f1 = 0.0
 
@@ -163,7 +168,7 @@ def main():
     mlp_epochs=60,
     mlp_patience=10,
     mlp_only=True,
-    binary_classification=True,
+    binary_classification=bin_classification,
     )
     """
 
