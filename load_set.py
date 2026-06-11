@@ -67,7 +67,7 @@ def create_arrays(csv_names, target_columns, thresholds, test_names, manipulate_
 	
 	test_info_dict = {}
 	for idx, csv_batch in enumerate(csv_names):
-		x_array, y_array, feature_columns = load_csv_dataset(csv_batch, target_column=target_columns[idx])
+		x_array, y_array, feature_columns = load_csv_dataset(csv_batch, target_columns=target_columns[idx])
 
 		eps = 10**-15 # To avoid log(0)
 		y_array_log = np.log10(np.clip(y_array, eps, None)).astype(np.float32)
@@ -176,10 +176,20 @@ def load_csv_dataset(csv_names, target_columns="BER", subfolder=None):
 	# - y_array: 1D array of labels
 	# - feature_columns: List of feature column names 
 
+			
+	# If target_columns is given as a single string, convert it to a list for consistent processing
+	if not isinstance(target_columns, list):
+		target_columns = [target_columns]
+		single_target = True
+	else:
+		single_target = False
+
+
 	x_array = []
 	y_array = []
 	feature_columns = None
 	
+
 	for idx, name in enumerate(csv_names):
 		if subfolder is not None:
 			dataset_path = Path(__file__).resolve().parent / "csv_files" / subfolder / name
@@ -189,17 +199,14 @@ def load_csv_dataset(csv_names, target_columns="BER", subfolder=None):
 			raise FileNotFoundError(
 				f"Dataset not found at {dataset_path}. Update the path in main.py or move the file."
 			)
-		
-		# If target_columns is given as a single string, convert it to a list for consistent processing
-		if not isinstance(target_columns[idx], list):
-			target_columns[idx] = [target_columns[idx]]
 
 		with open(dataset_path, mode="r", newline="") as csv_file:
 			reader = csv.DictReader(csv_file)
 			headers = reader.fieldnames
 
-			if headers is None or target_columns[idx] not in headers:
-				raise ValueError(f"Target column '{target_columns[idx]}' was not found in {dataset_path}.")
+			for target_column in target_columns:
+				if headers is None or target_column not in headers:
+					raise ValueError(f"Target column '{target_column}' was not found in {dataset_path}.")
 
 			current_feature_columns = [column for column in headers if column not in target_columns]
 			
@@ -224,12 +231,17 @@ def load_csv_dataset(csv_names, target_columns="BER", subfolder=None):
 			features = []
 			targets = []
 
-			y = []
+			if not single_target:
+				y = []
 
 			for row in reader:
 				try:
 					x = [float(row[column]) for column in feature_columns]
-					y = [float(row[target_column]) for target_column in target_columns]
+
+					if single_target:
+						y = float(row[target_columns[0]])
+					else:
+						y = [float(row[target_column]) for target_column in target_columns]
 				except (TypeError, ValueError, KeyError):
 					continue
 
