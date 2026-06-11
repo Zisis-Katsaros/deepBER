@@ -357,3 +357,83 @@ def create_dataloader(
 	test_data = DataLoader(test_set, batch_size=batch_size, shuffle=False)
 
 	return [train_data, val_data, test_data]
+
+
+def create_s_param_dataloader(
+	x_array,
+ 	y_array,
+ 	batch_size=64,
+ 	seed=42,
+ 	standard_scale=False,
+	split_method="random",
+):
+	# Creates dataloader
+	#
+	# Args:
+	# - x_array: 2D array of features
+	# - y_array: 1D array of labels
+	# - batch_size: Batch size for dataloader
+	# - seed: Random seed for reproducibility
+	# - standard_scale: If true standard scaling is applied to features
+	# - split_method: "random" or "lhs" for splitting the dataset
+	# Returns:
+	# - dataloader: [train_data, val_data, test_data] 
+
+
+	if len(y_array) == 0:
+		raise ValueError("No samples found inside the provided ber_interval.")
+
+
+	# Set split percentages
+	train_percent = 0.8
+	val_percent = 0.1
+
+
+	total_size = len(sample_ids)
+	train_size = int(total_size * train_percent)
+	val_size = int(total_size * val_percent)
+
+	sample_ids = list(set(x_array[:,0])) 
+
+	if split_method == "random":
+		generator = torch.Generator().manual_seed(seed)
+		split_sample_ids = torch.randperm(total_size, generator=generator).numpy()
+	elif split_method == "lhs":
+		split_sample_ids = latin_hypercube_order(x_array, total_size, seed=seed)
+	else:
+		raise ValueError("split_method must be 'random' or 'lhs'.")
+
+	train_ids = split_sample_ids[:train_size]
+	val_ids = split_sample_ids[train_size:train_size + val_size]
+	test_ids = split_sample_ids[train_size + val_size:]
+
+	train_idx = np.isin(x_array[:,0], train_ids)
+	val_idx = np.isin(x_array[:,0], val_ids)
+	test_idx = np.isin(x_array[:,0], test_ids)
+	
+	# Standard scaling
+	if standard_scale:
+		# Fit scaling parameters on train split only to avoid leakage.
+		train_mean = x_array[train_idx].mean(axis=0)
+		train_std = x_array[train_idx].std(axis=0)
+		train_std = np.where(train_std == 0.0, 1.0, train_std)
+		x_array = ((x_array - train_mean) / train_std).astype(np.float32)
+
+	train_set = TensorDataset(
+		torch.from_numpy(x_array[train_idx]),
+		torch.from_numpy(y_array[train_idx]),
+	)
+	val_set = TensorDataset(
+		torch.from_numpy(x_array[val_idx]),
+		torch.from_numpy(y_array[val_idx]),
+	)
+	test_set = TensorDataset(
+		torch.from_numpy(x_array[test_idx]),
+		torch.from_numpy(y_array[test_idx]),
+	)
+
+	train_data = DataLoader(train_set, batch_size=batch_size, shuffle=True)
+	val_data = DataLoader(val_set, batch_size=batch_size, shuffle=False)
+	test_data = DataLoader(test_set, batch_size=batch_size, shuffle=False)
+
+	return [train_data, val_data, test_data]
