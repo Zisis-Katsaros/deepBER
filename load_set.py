@@ -109,13 +109,68 @@ def create_arrays(csv_names, target_columns, thresholds, test_names, manipulate_
 	return test_info_dict
 
 
-def load_csv_dataset(csv_names, target_column="BER"):
+def create_s_param_prediction_arrays(csv_names, target_columns, test_names, manipulate_features = None,  
+				  sample_percentage=1.0, seed=42, sampling_method="random", subfolder=None):
+	# Creates arrays for each test dataset
+	#
+	# Args:
+	# - csv_names: List of lists of CSV file names for each test
+	# - target_columns: List of target column names for each test
+	# - test_names: List of test names for printing results
+	# - manipulate_features: List of booleans indicating whether to apply feature manipulation for each test
+	# - sampling_method: "random" or "lhs" for subsampling the loaded dataset
+	# - subfolder: Subfolder in csv_files where the datasets are located
+	# Returns:
+	# - test_info_dict: Dictionary with test names as keys and tuples (x_array, y_array, feature_columns) as values
+	
+	if manipulate_features is None:
+		manipulate_features = [False] * len(csv_names)
+	elif len(manipulate_features) != len(csv_names):
+		raise ValueError("Length of manipulate_features must match length of csv_names.")
+	
+	test_info_dict = {}
+	for idx, csv_batch in enumerate(csv_names):
+		x_array, y_array, feature_columns = load_csv_dataset(csv_batch, target_columns=target_columns[idx], 
+													   subfolder=subfolder)
+
+				
+		if manipulate_features[idx]:
+			# add derived features
+			x_array, feature_columns = extend_features(x_array, feature_columns, "width", "space", "/", "width_space_ratio")
+			x_array, feature_columns = extend_features(x_array, feature_columns, "width", "metal_thickness", "*", "cross_sectional_area")
+			x_array, feature_columns = extend_features(x_array, feature_columns, "gnd_width", "width", "/", "gnd_width_width_ratio")
+	
+
+		if not 0.0 < sample_percentage <= 1.0:
+			raise ValueError("sample_percentage must be within the interval (0.0, 1.0].")
+
+		total_size = len(y_array)
+		sample_size = int(total_size * sample_percentage)
+		sample_size = min(total_size, max(1, sample_size))
+
+		if sampling_method == "random":
+			generator = torch.Generator().manual_seed(seed)
+			sample_indices = torch.randperm(total_size, generator=generator)[:sample_size].numpy()
+		elif sampling_method == "lhs":
+			sample_indices = latin_hypercube_order(x_array, sample_size, seed=seed)
+		else:
+			raise ValueError("sampling_method must be 'random' or 'lhs'.")
+
+		x_array = x_array[sample_indices]
+		y_array = y_array[sample_indices]
+
+
+		test_info_dict[test_names[idx]] = (x_array, y_array, feature_columns)
+	return test_info_dict
+
+
+def load_csv_dataset(csv_names, target_columns="BER", subfolder=None):
 	# Loads dataset from CSV file
 	#
 	# Args:
 	# - csv_names: List of CSV file names
-	# - target_column: Name of label column
-	# - exclude_columns: Feature columns to be excluded
+	# - target_columns: List of target column names
+	# - subfolder: Subfolder in csv_files where the datasets are located 
 	# Returns:
 	# - x_array: 2D array of features
 	# - y_array: 1D array of labels
@@ -126,20 +181,27 @@ def load_csv_dataset(csv_names, target_column="BER"):
 	feature_columns = None
 	
 	for idx, name in enumerate(csv_names):
-		dataset_path = Path(__file__).resolve().parent / "csv_files" / name
+		if subfolder is not None:
+			dataset_path = Path(__file__).resolve().parent / "csv_files" / subfolder / name
+		else:
+			dataset_path = Path(__file__).resolve().parent / "csv_files" / name
 		if not dataset_path.exists():
 			raise FileNotFoundError(
 				f"Dataset not found at {dataset_path}. Update the path in main.py or move the file."
 			)
+		
+		# If target_columns is given as a single string, convert it to a list for consistent processing
+		if not isinstance(target_columns[idx], list):
+			target_columns[idx] = [target_columns[idx]]
 
 		with open(dataset_path, mode="r", newline="") as csv_file:
 			reader = csv.DictReader(csv_file)
 			headers = reader.fieldnames
 
-			if headers is None or target_column not in headers:
-				raise ValueError(f"Target column '{target_column}' was not found in {dataset_path}.")
+			if headers is None or target_columns[idx] not in headers:
+				raise ValueError(f"Target column '{target_columns[idx]}' was not found in {dataset_path}.")
 
-			current_feature_columns = [column for column in headers if column != target_column]
+			current_feature_columns = [column for column in headers if column not in target_columns]
 			
 			# Validate that all CSV files have the same columns
 			if idx == 0:
@@ -162,10 +224,12 @@ def load_csv_dataset(csv_names, target_column="BER"):
 			features = []
 			targets = []
 
+			y = []
+
 			for row in reader:
 				try:
 					x = [float(row[column]) for column in feature_columns]
-					y = float(row[target_column])
+					y = [float(row[target_column]) for target_column in target_columns]
 				except (TypeError, ValueError, KeyError):
 					continue
 
