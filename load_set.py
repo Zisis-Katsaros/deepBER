@@ -5,6 +5,7 @@ import torch
 from torch.utils.data import DataLoader, TensorDataset, random_split
 from dataset_manipulation import extend_features, exclude_columns
 from classification.ber_to_class import ber_to_class
+from prediction.s2abcd import s2generalized_abcd
 
 
 def latin_hypercube_order(x_array, sample_size, seed=42):
@@ -109,31 +110,55 @@ def create_arrays(csv_names, target_columns, thresholds, test_names, manipulate_
 	return test_info_dict
 
 
-def create_s_param_prediction_arrays(csv_names, target_columns, test_names, manipulate_features = None,  
-				  sample_percentage=1.0, seed=42, sampling_method="random", subfolder=None):
+def create_param_prediction_arrays(csv_names, test_names, expected_ports = None, target_columns = None, 
+								   manipulate_features = None, sample_percentage=1.0, seed=42, 
+								   sampling_method="random", subfolder=None):
 	# Creates arrays for each test dataset
 	#
 	# Args:
 	# - csv_names: List of lists of CSV file names for each test
-	# - target_columns: List of target column names for each test
 	# - test_names: List of test names for printing results
+	# - expected_ports: List of expected number of ports for each test
+	# - target_columns: List of target column names for each test
 	# - manipulate_features: List of booleans indicating whether to apply feature manipulation for each test
 	# - sampling_method: "random" or "lhs" for subsampling the loaded dataset
 	# - subfolder: Subfolder in csv_files where the datasets are located
 	# Returns:
-	# - test_info_dict: Dictionary with test names as keys and tuples (x_array, y_array, feature_columns) as values
+	# - test_info_dict: Dictionary with test names as keys and tuples (x_array, s_dict, a_dict, b_dict, c_dict, 
+	# 					d_dict, feature_columns) as values
 	
+	# Setting up default arguments
+	if expected_ports is None:
+		expected_ports = [18] * len(csv_names)
+	elif len(expected_ports) != len(csv_names):
+		raise ValueError("Length of expected_ports must match length of csv_names.")
+
+	if target_columns is None:
+		for pair_idx in range(expected_ports**2):
+
+			j = pair_idx // expected_ports + 1
+			i = pair_idx % expected_ports + 1
+
+			columns_per_test = []
+			
+			if i <= j:
+				columns_per_test.append([f"S{i}{j}_real", f"S{i}{j}_imag"])
+		
+		target_columns = [columns_per_test] * len(csv_names)
+
 	if manipulate_features is None:
 		manipulate_features = [False] * len(csv_names)
 	elif len(manipulate_features) != len(csv_names):
 		raise ValueError("Length of manipulate_features must match length of csv_names.")
 	
+
 	test_info_dict = {}
 	for idx, csv_batch in enumerate(csv_names):
-		x_array, y_array, feature_columns = load_csv_dataset(csv_batch, target_columns=target_columns[idx], 
+		x_array, s_array, feature_columns = load_csv_dataset(csv_batch, target_columns=target_columns[idx], 
 													   subfolder=subfolder)
 
-				
+		num_of_samples = len(s_array)	
+
 		if manipulate_features[idx]:
 			# add derived features
 			x_array, feature_columns = extend_features(x_array, feature_columns, "width", "space", "/", "width_space_ratio")
@@ -141,26 +166,87 @@ def create_s_param_prediction_arrays(csv_names, target_columns, test_names, mani
 			x_array, feature_columns = extend_features(x_array, feature_columns, "gnd_width", "width", "/", "gnd_width_width_ratio")
 	
 
+		s_dict = {}
+		s_dict["all"] = s_array
+
+		# s matrices for calculating abcd parameter matrices
+		s_matrices = np.zeros(num_of_samples, expected_ports[idx], expected_ports[idx])
+
+		col_idx = 0
+		for i in range(expected_ports[idx]):
+			for j in range(i, expected_ports[idx]):
+				Sij_real = s_array[:, col_idx]
+				Sij_imag = s_array[:, col_idx + 1]
+
+				key = f"S{i+1}{j+1}"
+				s_dict[key] = np.stack([Sij_real, Sij_imag], axis=1)
+
+				Sij_complex = Sij_real + 1j * Sij_imag
+
+				s_matrices[:, i, j] = Sij_complex
+				s_matrices[:, j, i] = Sij_complex
+
+				# Move to next column
+				col_idx +=  2
+
+		A, B, C, D = s2generalized_abcd(s_matrices)
+
+
+		a_dict = {}
+		b_dict = {}
+		c_dict = {}
+		d_dict = {}
+		col_idx = 0
+		for submatrices, dict, name in zip([A,B,C,D], [a_dict, b_dict, c_dict, d_dict], ["A", "B", "C", "D"]):
+			# Dictionary entry with all elements of the ABCD matrices together 
+			MATflat = submatrices.reshape(num_of_samples, submatrices.shape[1]**2)
+
+			all_array = np.empty((num_of_samples, 2*submatrices.shape[1]**2))
+			all_array[:, 0::2] = MATflat.real
+			all_array[:, 1::2] = MATflat.imag
+
+			dict["all"] = all_array
+
+			# Dictionary entries for each element of the ABCD matrices
+			for i in range(submatrices.shape[1]):
+				for j in range(submatrices.shape[2]):
+					MATij_real = submatrices[:, i, j].real
+					MATij_imag = submatrices[:, i, j].imag
+
+					key = f"{name}{i+1}{j+1}"
+					dict[key] = np.stack([MATij_real, MATij_imag], axis=1)	
+
+
+		# Selecting a percentage of the total dataset
 		if not 0.0 < sample_percentage <= 1.0:
 			raise ValueError("sample_percentage must be within the interval (0.0, 1.0].")
 
-		total_size = len(y_array)
+		sample_ids = list(set(x_array[:,0]))
+
+		total_size = len(sample_ids)
 		sample_size = int(total_size * sample_percentage)
 		sample_size = min(total_size, max(1, sample_size))
 
 		if sampling_method == "random":
 			generator = torch.Generator().manual_seed(seed)
-			sample_indices = torch.randperm(total_size, generator=generator)[:sample_size].numpy()
+			sampled_idxs = torch.randperm(total_size, generator=generator)[:sample_size].numpy()
+			selected_ids = sample_ids[sampled_idxs]
 		elif sampling_method == "lhs":
-			sample_indices = latin_hypercube_order(x_array, sample_size, seed=seed)
+			selected_ids = latin_hypercube_order(x_array, sample_size, seed=seed)
 		else:
 			raise ValueError("sampling_method must be 'random' or 'lhs'.")
 
-		x_array = x_array[sample_indices]
-		y_array = y_array[sample_indices]
+		mask = np.isin(x_array[:,0], selected_ids)
 
+		x_array = x_array[mask]
 
-		test_info_dict[test_names[idx]] = (x_array, y_array, feature_columns)
+		for dict in [s_dict, a_dict, b_dict, c_dict, d_dict]:
+			for key in dict.keys():
+				dict[key] = dict[key][mask]
+			
+
+		# Return
+		test_info_dict[test_names[idx]] = (x_array, s_dict, a_dict, b_dict, c_dict, d_dict, feature_columns)
 	return test_info_dict
 
 
@@ -359,7 +445,7 @@ def create_dataloader(
 	return [train_data, val_data, test_data]
 
 
-def create_s_param_dataloader(
+def create_param_dataloader(
 	x_array,
  	y_array,
  	batch_size=64,
@@ -381,19 +467,18 @@ def create_s_param_dataloader(
 
 
 	if len(y_array) == 0:
-		raise ValueError("No samples found inside the provided ber_interval.")
+		raise ValueError("No samples found inside the provided label array.")
 
 
 	# Set split percentages
 	train_percent = 0.8
 	val_percent = 0.1
 
+	sample_ids = list(set(x_array[:,0]))
 
 	total_size = len(sample_ids)
 	train_size = int(total_size * train_percent)
 	val_size = int(total_size * val_percent)
-
-	sample_ids = list(set(x_array[:,0])) 
 
 	if split_method == "random":
 		generator = torch.Generator().manual_seed(seed)
