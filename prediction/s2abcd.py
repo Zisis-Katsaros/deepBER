@@ -9,14 +9,14 @@ def s2generalized_abcd(s, z0=50.0):
     # Returns:
     # ABCD matrices
 
-    num_of_ports = s.reshape[-1]
+    num_of_ports = s.shape[-1]
     k = num_of_ports // 2
 
     # Partitioning S matrix to 4 sub-matrices
-    s11 = s[:k, :k]
-    s12 = s[:k, k:]
-    s21 = s[k:, :k]
-    s22 = s[:k, :k]
+    s11 = s[:, :k, :k]
+    s12 = s[:, :k, k:]
+    s21 = s[:, k:, :k]
+    s22 = s[:, :k, :k]
 
     I = np.eye(k)
 

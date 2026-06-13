@@ -5,31 +5,27 @@ from load_set import create_param_prediction_arrays, create_param_dataloader
 torch.manual_seed(42)
 
 csv_names = [
-    ["s_param_dataset_batch1_S12.csv", "s_param_dataset_batch2_S12.csv", "s_param_dataset_batch3_S12.csv"],
+    ["s_param_dataset_batch1.csv"],
 ]
 
-target_columns = [
-    ["S12_real", "S12_imag"]
-]
+test_names = ["param_prediction_test"]
 
-test_names = ["S12"]
-
-test_info_dict = create_param_prediction_arrays(csv_names, target_columns, test_names, sampling_method="lhs", 
+test_info_dict = create_param_prediction_arrays(csv_names, test_names, sampling_method="lhs", 
                                                   subfolder="s_params")
 
 batch_size_dict = {
-        "S12": 32,
+        "param_prediction_test": 32,
     }
 
 dataloader_dict = {}
 
 for test_name, test_info in test_info_dict.items():
-        x_array, y_array, _, _, thresholds, _ = test_info
+        x_array, s_dict, a_dict, b_dict, c_dict, d_dict, feature_columns = test_info
         batch_size = batch_size_dict[test_name]
 
         dataloader_dict[test_name] = create_param_dataloader(
             x_array,
-            y_array,
+            s_dict["S12"],
             batch_size=batch_size,
             seed=42,
             standard_scale=True,

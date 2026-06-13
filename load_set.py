@@ -8,25 +8,49 @@ from classification.ber_to_class import ber_to_class
 from prediction.s2abcd import s2generalized_abcd
 
 
-def latin_hypercube_order(x_array, sample_size, seed=42):
-	# Builds a space-filling ordering of sample indices using Latin Hypercube Sampling.
-	if sample_size <= 0:
-		raise ValueError("sample_size must be greater than 0.")
+def latin_hypercube_order(x_array, sample_size, seed=42, grouped=False):
+	# Builds a space-filling ordering of sample indices using Latin Hypercube Sampling
+	#
+	# Args:
+	# - x_array: samples
+	# - sample_size: number of samples to be selected
+	# - seed: Random seed for reproducibility
+	# - grouped: Whether samples are grouped under sample_ids and either inclusion or exclusion of the whole group is 
+	# 			required  
+	# Returns:
+	# selected_indices: indices of selected samples
 
-	total_size = len(x_array)
+	x_view = np.asarray(x_array)
+
+	if grouped:
+        # Isolate the unique geometry IDs and grab the index of their first occurrence
+		unique_ids, first_indices = np.unique(x_view[:, 0], return_index=True)
+        
+		features_matrix = x_view[first_indices, 1:-1].astype(float)
+		id_mapping = unique_ids
+	else:
+		features_matrix = x_view
+		id_mapping = np.arange(len(x_view))
+
+	total_size = len(features_matrix)
 	if sample_size > total_size:
 		raise ValueError("sample_size cannot exceed the number of available samples.")
 
-	x_view = np.asarray(x_array, dtype=np.float32)
-	x_min = x_view.min(axis=0)
-	x_max = x_view.max(axis=0)
+	if sample_size <= 0:
+		raise ValueError("sample_size must be greater than 0.")
+
+	
+	x_min = features_matrix.min(axis=0)
+	x_max = features_matrix.max(axis=0)
 	x_range = np.where((x_max - x_min) == 0.0, 1.0, x_max - x_min)
-	x_norm = (x_view - x_min) / x_range
+	x_norm = (features_matrix - x_min) / x_range
 
 	# Build LHS points
 	rng = np.random.default_rng(seed)
-	lhs_points = np.empty((sample_size, x_norm.shape[1]), dtype=np.float32)
-	for feature_idx in range(x_norm.shape[1]):
+	num_of_features = x_norm.shape[1]
+	lhs_points = np.empty((sample_size, num_of_features))
+
+	for feature_idx in range(num_of_features):
 		permutation = rng.permutation(sample_size)
 		lhs_points[:, feature_idx] = (permutation + rng.random(sample_size)) / sample_size
 
@@ -37,13 +61,15 @@ def latin_hypercube_order(x_array, sample_size, seed=42):
 	for point in lhs_points:
 		available_indices = np.flatnonzero(available_mask)
 		available_points = x_norm[available_mask]
+
 		distances = np.sum((available_points - point) ** 2, axis=1)
 		chosen_local_index = int(np.argmin(distances))
-		chosen_index = int(available_indices[chosen_local_index])
-		selected_indices.append(chosen_index)
-		available_mask[chosen_index] = False
+		chosen_global_index = int(available_indices[chosen_local_index])
 
-	return np.asarray(selected_indices, dtype=np.int64)
+		selected_indices.append(id_mapping[chosen_global_index])
+		available_mask[chosen_global_index] = False
+
+	return np.asarray(selected_indices)
 
 
 def create_arrays(csv_names, target_columns, thresholds, test_names, manipulate_features = None,  
@@ -134,17 +160,18 @@ def create_param_prediction_arrays(csv_names, test_names, expected_ports = None,
 		raise ValueError("Length of expected_ports must match length of csv_names.")
 
 	if target_columns is None:
-		for pair_idx in range(expected_ports**2):
+		target_columns = []
+		for idx in range(len(expected_ports)):
+			current_test_columns = []
+			for pair_idx in range(expected_ports[idx]**2):
 
-			j = pair_idx // expected_ports + 1
-			i = pair_idx % expected_ports + 1
-
-			columns_per_test = []
+				j = pair_idx // expected_ports[idx] + 1
+				i = pair_idx % expected_ports[idx] + 1
 			
-			if i <= j:
-				columns_per_test.append([f"S{i}{j}_real", f"S{i}{j}_imag"])
-		
-		target_columns = [columns_per_test] * len(csv_names)
+				if i <= j:
+					target_columns.append(f"S{i}{j}_real")
+					target_columns.append(f"S{i}{j}_imag")
+
 
 	if manipulate_features is None:
 		manipulate_features = [False] * len(csv_names)
@@ -154,7 +181,7 @@ def create_param_prediction_arrays(csv_names, test_names, expected_ports = None,
 
 	test_info_dict = {}
 	for idx, csv_batch in enumerate(csv_names):
-		x_array, s_array, feature_columns = load_csv_dataset(csv_batch, target_columns=target_columns[idx], 
+		x_array, s_array, feature_columns = load_csv_dataset(csv_batch, target_columns=target_columns, 
 													   subfolder=subfolder)
 
 		num_of_samples = len(s_array)	
@@ -170,7 +197,7 @@ def create_param_prediction_arrays(csv_names, test_names, expected_ports = None,
 		s_dict["all"] = s_array
 
 		# s matrices for calculating abcd parameter matrices
-		s_matrices = np.zeros(num_of_samples, expected_ports[idx], expected_ports[idx])
+		s_matrices = np.zeros((num_of_samples, expected_ports[idx], expected_ports[idx]), dtype=complex)
 
 		col_idx = 0
 		for i in range(expected_ports[idx]):
@@ -232,7 +259,7 @@ def create_param_prediction_arrays(csv_names, test_names, expected_ports = None,
 			sampled_idxs = torch.randperm(total_size, generator=generator)[:sample_size].numpy()
 			selected_ids = sample_ids[sampled_idxs]
 		elif sampling_method == "lhs":
-			selected_ids = latin_hypercube_order(x_array, sample_size, seed=seed)
+			selected_ids = latin_hypercube_order(x_array, sample_size, seed=seed, grouped=True)
 		else:
 			raise ValueError("sampling_method must be 'random' or 'lhs'.")
 
@@ -291,8 +318,8 @@ def load_csv_dataset(csv_names, target_columns="BER", subfolder=None):
 			headers = reader.fieldnames
 
 			for target_column in target_columns:
-				if headers is None or target_column not in headers:
-					raise ValueError(f"Target column '{target_column}' was not found in {dataset_path}.")
+					if headers is None or target_column not in headers:
+						raise ValueError(f"Target column '{target_column}' was not found in {dataset_path}.")
 
 			current_feature_columns = [column for column in headers if column not in target_columns]
 			
@@ -322,7 +349,7 @@ def load_csv_dataset(csv_names, target_columns="BER", subfolder=None):
 
 			for row in reader:
 				try:
-					x = [float(row[column]) for column in feature_columns]
+					x = [row[column] for column in feature_columns]
 
 					if single_target:
 						y = float(row[target_columns[0]])
@@ -337,14 +364,14 @@ def load_csv_dataset(csv_names, target_columns="BER", subfolder=None):
 		if not features:
 			raise ValueError("No valid numeric rows were found in the dataset.")
 
-		x_batch = np.asarray(features, dtype=np.float32)
+		x_batch = np.asarray(features)
 		y_batch = np.asarray(targets, dtype=np.float32)
 
 		x_array.extend(x_batch)
 		y_array.extend(y_batch)
 
 	# Convert lists back to numpy arrays with proper shape
-	x_array = np.asarray(x_array, dtype=np.float32).reshape(-1, len(feature_columns))
+	x_array = np.asarray(x_array).reshape(-1, len(feature_columns))
 	y_array = np.asarray(y_array, dtype=np.float32)
 	
 	return x_array, y_array, feature_columns
@@ -484,7 +511,7 @@ def create_param_dataloader(
 		generator = torch.Generator().manual_seed(seed)
 		split_sample_ids = torch.randperm(total_size, generator=generator).numpy()
 	elif split_method == "lhs":
-		split_sample_ids = latin_hypercube_order(x_array, total_size, seed=seed)
+		split_sample_ids = latin_hypercube_order(x_array, total_size, seed=seed, grouped=True)
 	else:
 		raise ValueError("split_method must be 'random' or 'lhs'.")
 
@@ -496,24 +523,25 @@ def create_param_dataloader(
 	val_idx = np.isin(x_array[:,0], val_ids)
 	test_idx = np.isin(x_array[:,0], test_ids)
 	
+	x_features = x_array[:, 1:].astype(float)
 	# Standard scaling
 	if standard_scale:
 		# Fit scaling parameters on train split only to avoid leakage.
-		train_mean = x_array[train_idx].mean(axis=0)
-		train_std = x_array[train_idx].std(axis=0)
+		train_mean = x_features[train_idx].mean(axis=0)
+		train_std = x_features[train_idx].std(axis=0)
 		train_std = np.where(train_std == 0.0, 1.0, train_std)
-		x_array = ((x_array - train_mean) / train_std).astype(np.float32)
+		x_features = ((x_features - train_mean) / train_std).astype(np.float32)
 
 	train_set = TensorDataset(
-		torch.from_numpy(x_array[train_idx]),
+		torch.from_numpy(x_features[train_idx]),
 		torch.from_numpy(y_array[train_idx]),
 	)
 	val_set = TensorDataset(
-		torch.from_numpy(x_array[val_idx]),
+		torch.from_numpy(x_features[val_idx]),
 		torch.from_numpy(y_array[val_idx]),
 	)
 	test_set = TensorDataset(
-		torch.from_numpy(x_array[test_idx]),
+		torch.from_numpy(x_features[test_idx]),
 		torch.from_numpy(y_array[test_idx]),
 	)
 
