@@ -19,11 +19,14 @@ def train_pred_loop(model, data, optimizer, criterion, device):
     total_loss = 0.0
     total_mae = 0.0 
     total_samples = 0
+    num_of_outputs = None
     
+    total_mae_per_output = None
+
     # iterate through training batches
     for inputs, labels in data:
         inputs = inputs.to(device) 
-        labels = labels.to(device).view(-1,1)
+        labels = labels.to(device)
 
         outputs = model(inputs) # forward pass
         loss = criterion(outputs, labels) # loss function
@@ -32,14 +35,23 @@ def train_pred_loop(model, data, optimizer, criterion, device):
         loss.backward() # backpropagation
         optimizer.step() # update weights
 
+        # Grab the number of outputs from the first batch
+        if num_of_outputs is None:
+            num_of_outputs = outputs.size(1) if outputs.dim() > 1 else 1
+
+        if total_mae_per_output is None:
+            total_mae_per_output = torch.zeros(outputs.size(1), device=device)
+
         total_loss += loss.item() * inputs.size(0) # accumulate loss
         total_mae += torch.sum(torch.abs(outputs - labels)).item() # accumulate absolute error
+        total_mae_per_output += torch.sum(torch.abs(outputs - labels), dim=0)
         total_samples += inputs.size(0) # accumulate number of samples
 
     avg_loss = total_loss / total_samples
-    avg_mae = total_mae / total_samples
+    avg_mae = total_mae / (total_samples*num_of_outputs)
+    avg_mae_per_output = (total_mae_per_output / total_samples).cpu().tolist()
 
-    return avg_loss, avg_mae # return loss and MAE
+    return avg_loss, avg_mae, avg_mae_per_output # return loss and MAE
 
 # Test Loop:
 def test_pred_loop(model, data, criterion, device):
@@ -62,6 +74,7 @@ def test_pred_loop(model, data, criterion, device):
     total_mae = 0.0 
     total_mape = 0.0
     total_samples = 0
+    num_of_outputs = None
 
     all_preds = []
     all_labels = []
@@ -69,21 +82,29 @@ def test_pred_loop(model, data, criterion, device):
     with torch.no_grad(): # disable gradient calculation
         for inputs, labels in data:
             inputs = inputs.to(device)
-            labels = labels.to(device).view(-1,1)
+            labels = labels.to(device)
 
             outputs = model(inputs) # forward pass
             loss = criterion(outputs, labels) # loss function
             total_loss += loss.item() * inputs.size(0) 
 
+            if num_outputs is None:
+                num_outputs = outputs.size(1) if outputs.dim() > 1 else 1
+
             total_mae += torch.sum(torch.abs(outputs - labels)).item()
             total_mape += torch.sum(torch.abs((outputs - labels) / labels)).item()
             total_samples += inputs.size(0)
 
-            all_preds.extend(outputs.cpu().reshape(-1).numpy()) # store all predictions
-            all_labels.extend(labels.cpu().reshape(-1).numpy()) # store all true labels
+            all_preds.extend(outputs.cpu().numpy()) # store all predictions
+            all_labels.extend(labels.cpu().numpy()) # store all true labels
 
-    loss = total_loss / total_samples
-    mae = total_mae / total_samples
-    mape = total_mape / total_samples
+    avg_loss = total_loss / total_samples
+
+    total_elements = total_samples * num_of_outputs
+    avg_mae = total_mae / total_elements
+    avg_mape = total_mape / total_elements
+
+    final_preds = np.concatenate(all_preds, axis=0)
+    final_labels = np.concatenate(all_labels, axis=0)
     
-    return loss, mae, mape, np.array(all_preds), np.array(all_labels) 
+    return loss, avg_mae, avg_mape, final_preds, final_labels 

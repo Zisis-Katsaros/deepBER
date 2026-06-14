@@ -3,7 +3,6 @@ from prediction.optuna_tuner import run_optuna
 import torch
 from torch import nn
 from load_set import create_dataloader, load_csv_dataset, create_arrays
-from dataset_manipulation import extend_features, exclude_columns
 from classification.classifier import DeepBERClassifier
 from classification.test_classifier_config import test_classifier_configuration
 from prediction.predictor import DeepBERPredictor
