@@ -108,12 +108,24 @@ def test_pred_loop(model, data, criterion, device):
 
     total_loss = 0.0
     total_mae = 0.0 
+    total_mae_real = 0.0
+    total_mae_imag = 0.0
     total_mape = 0.0
+    total_mape_real = 0.0
+    total_mape_imag = 0.0
     total_samples = 0
     num_of_outputs = None
 
+    first_batch = True
+    num_of_outputs = None
+    complex_outputs = None
+    total_mae_per_output = None
+    total_mape_per_output = None
+
     all_preds = []
     all_labels = []
+
+    eps = 1e-15 
 
     with torch.no_grad(): # disable gradient calculation
         for inputs, labels in data:
@@ -124,23 +136,78 @@ def test_pred_loop(model, data, criterion, device):
             loss = criterion(outputs, labels) # loss function
             total_loss += loss.item() * inputs.size(0) 
 
-            if num_outputs is None:
-                num_outputs = outputs.size(1) if outputs.dim() > 1 else 1
+            # Unsqueeze to (batch_size, 1)
+            if outputs.dim() == 1:
+                outputs = outputs.unsqueeze(1)
+            if labels.dim() == 1:
+                labels = labels.unsqueeze(1)
 
-            total_mae += torch.sum(torch.abs(outputs - labels)).item()
-            total_mape += torch.sum(torch.abs((outputs - labels) / labels)).item()
+            if first_batch:
+                num_of_outputs = outputs.size(1)
+                complex_outputs = outputs.is_complex() 
+
+                if complex_outputs:
+                    total_mae_per_output = torch.zeros([num_of_outputs, 2], device=device)
+                    total_mape_per_output = torch.zeros([num_of_outputs, 2], device=device)
+                else:
+                    total_mae_per_output = torch.zeros(num_of_outputs, device=device)
+                    total_mape_per_output = torch.zeros(num_of_outputs, device=device)
+
+                first_batch = False 
+
             total_samples += inputs.size(0)
 
-            all_preds.extend(outputs.cpu().numpy()) # store all predictions
-            all_labels.extend(labels.cpu().numpy()) # store all true labels
+            all_preds.append(outputs.cpu().numpy()) # store all predictions
+            all_labels.append(labels.cpu().numpy()) # store all true labels
+
+            if complex_outputs:
+                # MAE
+                real_error = torch.abs(outputs.real - labels.real)
+                imag_error = torch.abs(outputs.imag - labels.imag)
+
+                total_mae += torch.sum(real_error + imag_error).item()
+                total_mae_real += torch.sum(real_error).item()
+                total_mae_imag += torch.sum(imag_error).item()
+
+                # MAPE
+                mape_real = real_error / (torch.abs(labels.real) + eps)
+                mape_imag = imag_error / (torch.abs(labels.imag) + eps)
+
+                total_mape += torch.sum(mape_real + mape_imag).item()
+                total_mape_real += torch.sum(mape_real).item()
+                total_mape_imag += torch.sum(mape_imag).item()
+
+                total_mae_per_output[:, 0] += torch.sum(real_error, dim=0)
+                total_mae_per_output[:, 1] += torch.sum(imag_error, dim=0)
+                total_mape_per_output[:, 0] += torch.sum(mape_real, dim=0)
+                total_mape_per_output[:, 1] += torch.sum(mape_imag, dim=0)
+            else:
+                error = torch.abs(outputs - labels)
+                
+                total_mae += torch.sum(error).item()
+                total_mae_real += torch.sum(error).item()
+                total_mape += torch.sum(error / (torch.abs(labels) + eps)).item()
+
+                total_mae_per_output += torch.sum(error, dim=0)
+
+
 
     avg_loss = total_loss / total_samples
 
     total_elements = total_samples * num_of_outputs
+
     avg_mae = total_mae / total_elements
+    avg_mae_real = total_mae_real / total_elements
+    avg_mae_imag = total_mae_imag / total_elements
+    avg_mae_per_output = (total_mae_per_output / total_samples).cpu().tolist()
+    
     avg_mape = total_mape / total_elements
+    avg_mape_real = total_mape_real / total_elements
+    avg_mape_imag = total_mape_imag / total_elements
+    avg_mape_per_output = (total_mape_per_output / total_samples).cpu().tolist()
 
     final_preds = np.concatenate(all_preds, axis=0)
     final_labels = np.concatenate(all_labels, axis=0)
     
-    return loss, avg_mae, avg_mape, final_preds, final_labels 
+    return avg_loss, avg_mae, avg_mape, final_preds, final_labels, avg_mae_per_output, avg_mape_per_output, avg_mae_real, \
+        avg_mae_imag, avg_mape_real, avg_mape_imag
