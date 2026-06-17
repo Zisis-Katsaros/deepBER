@@ -6,3 +6,4 @@ scikit-learn
 optuna
 lightgbm
 catboost
+complexNN
