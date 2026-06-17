@@ -205,10 +205,10 @@ def create_param_prediction_arrays(csv_names, test_names, expected_ports = None,
 				Sij_real = s_array[:, col_idx]
 				Sij_imag = s_array[:, col_idx + 1]
 
-				key = f"S{i+1}{j+1}"
-				s_dict[key] = np.stack([Sij_real, Sij_imag], axis=1)
-
 				Sij_complex = Sij_real + 1j * Sij_imag
+
+				key = f"S{i+1}{j+1}"
+				s_dict[key] = Sij_complex
 
 				s_matrices[:, i, j] = Sij_complex
 				s_matrices[:, j, i] = Sij_complex
@@ -237,12 +237,10 @@ def create_param_prediction_arrays(csv_names, test_names, expected_ports = None,
 			# Dictionary entries for each element of the ABCD matrices
 			for i in range(submatrices.shape[1]):
 				for j in range(submatrices.shape[2]):
-					MATij_real = submatrices[:, i, j].real
-					MATij_imag = submatrices[:, i, j].imag
+					MATij = submatrices[:, i, j].real
 
 					key = f"{name}{i+1}{j+1}"
-					dict[key] = np.stack([MATij_real, MATij_imag], axis=1)	
-
+					dict[key] = MATij	
 
 		# Selecting a percentage of the total dataset
 		if not 0.0 < sample_percentage <= 1.0:
