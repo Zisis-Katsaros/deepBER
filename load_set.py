@@ -163,14 +163,10 @@ def create_param_prediction_arrays(csv_names, test_names, expected_ports = None,
 		target_columns = []
 		for idx in range(len(expected_ports)):
 			current_test_columns = []
-			for pair_idx in range(expected_ports[idx]**2):
-
-				j = pair_idx // expected_ports[idx] + 1
-				i = pair_idx % expected_ports[idx] + 1
-			
-				if i <= j:
-					target_columns.append(f"S{i}{j}_real")
-					target_columns.append(f"S{i}{j}_imag")
+			for i in range(expected_ports[idx]):
+				for j in range(i, expected_ports[idx]):
+					target_columns.append(f"S{i+1}{j+1}_real")
+					target_columns.append(f"S{i+1}{j+1}_imag")
 
 
 	if manipulate_features is None:
@@ -237,7 +233,7 @@ def create_param_prediction_arrays(csv_names, test_names, expected_ports = None,
 			# Dictionary entries for each element of the ABCD matrices
 			for i in range(submatrices.shape[1]):
 				for j in range(submatrices.shape[2]):
-					MATij = submatrices[:, i, j].real
+					MATij = submatrices[:, i, j]
 
 					key = f"{name}{i+1}{j+1}"
 					dict[key] = MATij	
@@ -494,6 +490,7 @@ def create_param_dataloader(
 	if len(y_array) == 0:
 		raise ValueError("No samples found inside the provided label array.")
 
+	y_array = np.asarray(y_array, dtype=np.float32).reshape(-1, 1)
 
 	# Set split percentages
 	train_percent = 0.8

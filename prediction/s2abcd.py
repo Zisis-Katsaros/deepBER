@@ -16,11 +16,11 @@ def s2generalized_abcd(s, z0=50.0):
     s11 = s[:, :k, :k]
     s12 = s[:, :k, k:]
     s21 = s[:, k:, :k]
-    s22 = s[:, :k, :k]
+    s22 = s[:, k:, k:]
 
     I = np.eye(k)
 
-    s21_inv = np.linalg.inv(s21)
+    s21_inv = np.linalg.pinv(s21)
 
     # Calculation of ABCD matrices
 

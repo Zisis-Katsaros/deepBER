@@ -88,7 +88,7 @@ class DeepBER_Param_Predictor(nn.Module):
             current_dim = hidden[layer] # update current dimension for next layer
 
         # Final output layer 
-        self.output_layer = nn.Linear(current_dim, 2) # linear layer with 2 outputs [S**_real, S**_imag]
+        self.output_layer = nn.Linear(current_dim, 1) # linear layer with 2 outputs [S**_real, S**_imag]
         
     # Forward pass
     def forward(self, x):
