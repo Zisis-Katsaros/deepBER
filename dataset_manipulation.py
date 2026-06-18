@@ -62,3 +62,17 @@ def extend_features(x_array, feature_names, first_column, second_column, operati
 	feature_names.append(new_feature_name)
 
 	return x_array, feature_names
+
+
+def mock_pki(x_array, feature_names, y_array, noise_factor=0.2):
+	y_std = np.std(y_array)
+	noise_std = noise_factor * y_std
+
+	noise = np.random.normal(0, noise_std, y_array.shape)
+	pki = y_array + noise
+	pki = np.clip(pki).reshape(-1,1)
+
+	x_array = np.hstack((x_array, pki))
+	feature_names.append("pki")
+
+	return x_array, feature_names

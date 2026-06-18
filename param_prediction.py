@@ -5,6 +5,7 @@ from prediction.predictor import DeepBER_Param_Predictor
 from complexNN import nn as cvnn
 from prediction.test_predictor_config import test_predictor_configuration
 from rmse import RMSELoss
+from dataset_manipulation import mock_pki
 
 # ============================================= Initializing Dataset ============================================= #
 torch.manual_seed(42)
@@ -19,27 +20,23 @@ test_names = ["param_prediction_test"]
 test_info_dict = create_param_prediction_arrays(csv_names, test_names, sampling_method="lhs", 
                                                   subfolder="s_params")
 
-batch_size_dict = {
-        "param_prediction_test": 16,
-    }
 
-dataloader_dict = {}
-
-for test_name, test_info in test_info_dict.items():
-        x_array, s_dict, a_dict, b_dict, c_dict, d_dict, feature_columns = test_info
-        batch_size = batch_size_dict[test_name]
-
-        dataloader_dict[test_name] = create_param_dataloader(
-            x_array,
-            a_dict["A12"].real,
-            batch_size=batch_size,
-            seed=42,
-            standard_scale=True,
-            split_method="lhs"
-        )
-
+x_array = test_info_dict["param_prediction_test"][0]
+s_dict = test_info_dict["param_prediction_test"][1]
+s12real = s_dict["S12"].real
 feature_columns = test_info_dict["param_prediction_test"][6]
-A12_dataloader = dataloader_dict["param_prediction_test"]
+
+x_array, feature_columns = mock_pki(x_array, feature_columns, s12real)
+
+
+S12_dataloader = create_param_dataloader(
+    x_array,
+    s12real,
+    batch_size=16,
+    seed=42,
+    standard_scale=True,
+    split_method="lhs"
+    )
 
 predictor = DeepBER_Param_Predictor(
     input_size=len(feature_columns) - 1, 
@@ -57,7 +54,7 @@ test_predictor_configuration(
         title="DeepBER A12 Parameter Prediction",
         device=device,
         model=predictor,
-        dataloader=A12_dataloader,
+        dataloader=S12_dataloader,
         learning_rate=learning_rate,
         batch_size=16,
         criterion=criterion,
