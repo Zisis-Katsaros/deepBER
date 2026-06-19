@@ -6,6 +6,7 @@ from complexNN import nn as cvnn
 from prediction.test_predictor_config import test_predictor_configuration
 from rmse import RMSELoss
 from dataset_manipulation import mock_pki
+from prediction.param_pred_optuna import run_optuna
 
 # ============================================= Initializing Dataset ============================================= #
 torch.manual_seed(42)
@@ -26,8 +27,7 @@ s_dict = test_info_dict["param_prediction_test"][1]
 s12real = s_dict["S12"].real
 feature_columns = test_info_dict["param_prediction_test"][6]
 
-x_array, feature_columns = mock_pki(x_array, feature_columns, s12real)
-
+# x_array, feature_columns = mock_pki(x_array, feature_columns, s12real)
 
 S12_dataloader = create_param_dataloader(
     x_array,
@@ -49,7 +49,8 @@ learning_rate = 0.001
 criterion = RMSELoss()
 optimizer = torch.optim.Adam(predictor.parameters(), lr=learning_rate)
 scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=3)
-        
+
+"""        
 test_predictor_configuration(
         title="DeepBER A12 Parameter Prediction",
         device=device,
@@ -66,3 +67,7 @@ test_predictor_configuration(
         training_curves=True,
         predicted_vs_actual=True
     )
+"""
+
+run_optuna(x_array, s_dict, feature_columns, selected_elements=None,n_trials=2, n_epochs=5, seed=42)
+
