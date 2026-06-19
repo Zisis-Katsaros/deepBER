@@ -93,8 +93,8 @@ def run_optuna(x_array, s_dict, feature_columns, selected_elements=None,n_trials
     # print(f"[optuna] Loaded dataset: x_shape={x_array.shape}, y_shape={y_array.shape}, features={len(feature_columns)}")
 
     input_size = len(feature_columns)
-    if cv_folds < 2:
-        raise ValueError("cv_folds must be at least 2.")
+    # if cv_folds < 2:
+    #     raise ValueError("cv_folds must be at least 2.")
     
     groups = x_array[:, 0]
     kfold = GroupKFold(n_splits=cv_folds)
