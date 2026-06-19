@@ -103,16 +103,15 @@ def run_optuna(x_array, s_dict, feature_columns, selected_elements=None,n_trials
     def objective(trial: optuna.trial.Trial):
         # Search space
         batch_size = trial.suggest_categorical("batch_size", [8, 16, 32])
-        data_manipulation = trial.suggest_categorical("data_manipulation", [
-            [],
-            ["width_space_ratio"],
-            ["cross_sectional_area"],
-            ["gnd_width_width_ratio"],
-            ["width_space_ratio", "cross_sectional_area"],
-            ["width_space_ratio", "gnd_width_width_ratio"],
-            ["cross_sectional_area", "gnd_width_width_ratio"],
-            ["width_space_ratio","cross_sectional_area", "gnd_width_width_ratio"]
-        ])
+
+        data_manipulation = []
+        if trial.suggest_categorical("use_width_space_ratio", [True, False]):
+            data_manipulation.append("width_space_ratio")
+        if trial.suggest_categorical("use_cross_sectional_area", [True, False]):
+            data_manipulation.append("cross_sectional_area")
+        if trial.suggest_categorical("use_gnd_width_width_ratio", [True, False]):
+            data_manipulation.append("gnd_width_width_ratio")
+
         x_xtnd = x_array[:, 1:].astype(np.float32)
         feat_cols_xtnd = feature_columns[1:].copy()
         if "width_space_ratio" in data_manipulation:
@@ -258,7 +257,7 @@ def run_optuna(x_array, s_dict, feature_columns, selected_elements=None,n_trials
                 print(f"[optuna] Trial {trial.number}: pruned after fold {fold_index}")
                 raise TrialPruned()
 
-        final_cv_loss = float(np.mean(fold_best_losses))
+        final_cv_loss = float(np.mean(cv_fold_scores))
         print(f"[optuna] Trial {trial.number}: completed with cv_loss={final_cv_loss:.6f}")
         return final_cv_loss
 
