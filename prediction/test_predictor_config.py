@@ -7,7 +7,7 @@ import numpy as np
 def test_predictor_configuration(title, device, model, dataloader, learning_rate, batch_size, criterion, optimizer, scheduler=None,
                        epochs=30, early_stopping=False, patience=5, training_curves=False,
                        predicted_vs_actual=False, error_distribution=False, error_vs_feature=None,
-                       feature_columns=None):
+                       feature_columns=None, output_names = None):
     # Train model with given configuration 
     #
     # Args:
@@ -67,12 +67,15 @@ def test_predictor_configuration(title, device, model, dataloader, learning_rate
 
     print(f"==================== Starting Training ====================")
     for epoch in range(epochs):
-        train_loss, train_mae = train_pred_loop(model, train_data, optimizer, criterion, device)
-        val_loss, val_mae, _, _, _ = test_pred_loop(model, val_data, criterion, device)
+        train_loss, train_mae, *_ = train_pred_loop(model, train_data, optimizer, criterion, device)
+        val_loss, val_mae, *_ = test_pred_loop(model, val_data, criterion, device)
 
         # Step scheduler
         if scheduler is not None:
-            scheduler.step(val_loss)
+            try:    
+                scheduler.step(val_loss)
+            except TypeError:
+                scheduler.step()
 
         train_losses.append(train_loss)
         val_losses.append(val_loss)
@@ -102,9 +105,25 @@ def test_predictor_configuration(title, device, model, dataloader, learning_rate
 
     print(f"==================== Training complete ====================")
 
-    _, test_mae, test_mape, test_targets, test_preds = test_pred_loop(model, test_data, criterion, device)
+    test_loss, test_mae, test_mape, test_preds, test_targets, *_ = test_pred_loop(model, test_data, criterion, device)
     print(f">>> Test MAE: {test_mae:.6f}")
     print(f">>> Test MAPE: {test_mape*100:.4f}%")
+
+    num_outputs = test_preds.shape[1] if test_preds.ndim > 1 else 1
+    if output_names is None:
+        output_names = [f"Output Target {i+1}" for i in range(num_outputs)]
+
+    if num_outputs > 1:
+        print("\n>>> Performance Breakdown per Output Target:")
+        for i in range(num_outputs):
+            name = output_names[i]
+            col_mae = np.mean(np.abs(test_preds[:, i] - test_targets[:, i]))
+            
+            # Prevent division by zero if targets contain 0
+            with np.errstate(divide='ignore', invalid='ignore'):
+                col_mape = np.mean(np.abs((test_preds[:, i] - test_targets[:, i]) / test_targets[:, i])) * 100
+            
+            print(f" - {name} -> MAE: {col_mae:.6f} | MAPE: {col_mape:.4f}%")
 
     # Visualization
     if training_curves:
@@ -140,6 +159,7 @@ def test_predictor_configuration(title, device, model, dataloader, learning_rate
                 title=title,
                 feature_name=feature_name,
             )
+
 
 def ber_vs_length_test(model, feature_arrays, length_interval, number_of_points, feature_columns,
                        device='cpu', logBER=True, visualization=False, title=None,

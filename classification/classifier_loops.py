@@ -93,7 +93,7 @@ def test_classifier_loop(model, data, criterion, device):
             preds = torch.argmax(outputs, dim=1)
             probs = torch.softmax(outputs, dim=1)
 
-            # maks = (preds== 0) & (probs[:,0] <0.7)
+            # maks = (preds == 0) & (probs[:,0] < 0.6)
             # preds[maks] = 1
 
             total_acc += torch.sum(preds == labels).item()
