@@ -69,5 +69,8 @@ test_predictor_configuration(
     )
 """
 
-run_optuna(x_array, s_dict, feature_columns, selected_elements=None,n_trials=150, n_epochs=25, seed=42)
+
+storage_url = "sqlite:///param_pred_study.db"
+run_optuna(x_array, s_dict, feature_columns, selected_elements=None,n_trials=200, n_epochs=25, seed=42, 
+           study_name="param_pred_study", storage=storage_url)
 

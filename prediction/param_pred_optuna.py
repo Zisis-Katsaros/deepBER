@@ -83,7 +83,7 @@ def build_model(input_size, hidden_sizes, batch_norm, dropout, activation_name="
 
 
 def run_optuna(x_array, s_dict, feature_columns, selected_elements=None, n_trials=20, n_epochs=5, seed=42, 
-               study_name="param_pred_optuna", storage=None):
+               study_name="param_pred_optuna", storage=None, timeout_seconds = 5.5 * 3600):
     set_seed(seed)
 
     if selected_elements is None:
@@ -258,7 +258,7 @@ def run_optuna(x_array, s_dict, feature_columns, selected_elements=None, n_trial
                                         ))
 
     print("[optuna] Beginning optimization...")
-    study.optimize(objective, n_trials=n_trials)
+    study.optimize(objective, n_trials=n_trials, timeout=timeout_seconds)
 
     out = {
         "best_value": study.best_value,
