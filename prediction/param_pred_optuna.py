@@ -100,44 +100,33 @@ def run_optuna(x_array, s_dict, feature_columns, selected_elements=None, n_trial
         # batch_size = trial.suggest_categorical("batch_size", [64, 128, 256])
 
         data_manipulation = []
-        if trial.suggest_categorical("use_width_space_ratio", [True, False]):
-            data_manipulation.append("width_space_ratio")
-        if trial.suggest_categorical("use_cross_sectional_area", [True, False]):
-            data_manipulation.append("cross_sectional_area")
-        if trial.suggest_categorical("use_gnd_width_width_ratio", [True, False]):
-            data_manipulation.append("gnd_width_width_ratio")
+        use_width_space_ratio = trial.suggest_categorical("use_width_space_ratio", [True, False])
 
         x_xtnd = x_array[:, 1:].astype(np.float32)
         feat_cols_xtnd = feature_columns[1:].copy()
-        if "width_space_ratio" in data_manipulation:
+        if use_width_space_ratio:
             x_xtnd, feat_cols_xtnd = extend_features(x_xtnd, feat_cols_xtnd, "width", "space", "/", "width_space_ratio")
-        if "cross_sectional_area" in data_manipulation:
-            x_xtnd, feat_cols_xtnd = extend_features(x_xtnd, feat_cols_xtnd, "width", "metal_thickness", "*", "cross_sectional_area")
-        if "gnd_width_width_ratio" in data_manipulation:
-            x_xtnd, feat_cols_xtnd = extend_features(x_xtnd, feat_cols_xtnd, "gnd_width", "width", "/", "gnd_width_width_ratio")
+        
+        x_xtnd, feat_cols_xtnd = extend_features(x_xtnd, feat_cols_xtnd, "width", "metal_thickness", "*", "cross_sectional_area")
+        x_xtnd, feat_cols_xtnd = extend_features(x_xtnd, feat_cols_xtnd, "gnd_width", "width", "/", "gnd_width_width_ratio")
 
-        num_layers = 4
-        # num_layers = trial.suggest_int("num_layers", 3, 6)
-        hidden_sizes = [64, 256, 128, 64]
-        # for i in range(num_layers):
-        #     hidden_sizes.append(trial.suggest_categorical(f"n_units_l{i}", [16, 32, 48, 64, 96, 128, 256]))
+        num_layers = trial.suggest_int("num_layers", 3, 6)
+        hidden_sizes = []
+        for i in range(num_layers):
+            hidden_sizes.append(trial.suggest_categorical(f"n_units_l{i}", [16, 32, 48, 64, 96, 128, 256]))
 
-        activation = "gelu"
-        batch_norm = False
-        dropout = 0.1
-        lr = 1e-4
-        # activation = trial.suggest_categorical("activation", ["relu", "leaky_relu", "elu", "gelu"]) 
-        # batch_norm = trial.suggest_categorical("batch_norm", [False, True])
-        # dropout = trial.suggest_float("dropout", 0.0, 0.5)
-        # lr = trial.suggest_float("lr", 1e-6, 1e-3, log=True)
 
-        scheduler_name = "none"
-        # scheduler_name = trial.suggest_categorical("scheduler", ["none", "step", "cosine"])
+        activation = trial.suggest_categorical("activation", ["relu", "leaky_relu", "elu", "gelu"]) 
+        batch_norm = trial.suggest_categorical("batch_norm", [False, True])
+        dropout = trial.suggest_float("dropout", 0.0, 0.5)
+        lr = trial.suggest_float("lr", 1e-6, 1e-3, log=True)
+
+        scheduler_name = trial.suggest_categorical("scheduler", ["none", "step", "cosine"])
         if scheduler_name == "step":
-            step_size = trial.suggest_int("step_size", 1, 5)
-            gamma = trial.suggest_float("gamma", 0.1, 0.9)
+            step_size = trial.suggest_int("step_size", 5, 15)
+            gamma = trial.suggest_float("gamma", 0.2, 0.8)
         elif scheduler_name == "cosine":
-            t_max = trial.suggest_int("t_max", 5, 50)
+            t_max = trial.suggest_int("t_max", n_epochs//2, n_epochs)
 
         patience = 8
 
@@ -147,6 +136,7 @@ def run_optuna(x_array, s_dict, feature_columns, selected_elements=None, n_trial
             f"activation={activation}, batch_norm={batch_norm}, dropout={dropout:.3f}, lr={lr:.6g}, "
             f"scheduler={scheduler_name}, patience={patience}"
         )
+        print(f"use_width_space_ratio=True") if use_width_space_ratio else print(f"use_width_space_ratio=False")
         if scheduler_name == "step":
             print(f"[optuna] Trial {trial.number}: step_size={step_size}, gamma={gamma:.3f}")
         elif scheduler_name == "cosine":
@@ -246,14 +236,26 @@ def run_optuna(x_array, s_dict, feature_columns, selected_elements=None, n_trial
                     raise TrialPruned()
                 step_idx += 1
 
-        max_loss = float(np.max(current_losses))
-        print(f"[optuna] Trial {trial.number}: completed with max_loss={max_loss:.6f}")
-        return max_loss
+        avg_loss = float(np.mean(current_losses))
+        print(f"[optuna] Trial {trial.number}: completed with avg_loss={avg_loss:.6f}")
+        return avg_loss
 
     if storage:
-        study = optuna.create_study(direction="minimize", study_name=study_name, sampler=optuna.samplers.TPESampler(seed=seed, multivariate=True), pruner=optuna.pruners.MedianPruner(), storage=storage, load_if_exists=True)
+        study = optuna.create_study(direction="minimize", study_name=study_name, 
+                                    sampler=optuna.samplers.TPESampler(seed=seed, multivariate=True), 
+                                    pruner=optuna.pruners.HyperbandPruner(
+                                            min_resource=5,  
+                                            max_resource=len(selected_elements)*2, 
+                                            reduction_factor=3 
+                                        ), storage=storage, load_if_exists=True)
     else:
-        study = optuna.create_study(direction="minimize", study_name=study_name, sampler=optuna.samplers.TPESampler(seed=seed, multivariate=True), pruner=optuna.pruners.MedianPruner())
+        study = optuna.create_study(direction="minimize", study_name=study_name, 
+                                    sampler=optuna.samplers.TPESampler(seed=seed, multivariate=True), 
+                                    pruner=optuna.pruners.HyperbandPruner(
+                                            min_resource=5,  
+                                            max_resource=len(selected_elements)*2,
+                                            reduction_factor=3 
+                                        ))
 
     print("[optuna] Beginning optimization...")
     study.optimize(objective, n_trials=n_trials)

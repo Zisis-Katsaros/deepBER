@@ -69,5 +69,5 @@ test_predictor_configuration(
     )
 """
 
-run_optuna(x_array, s_dict, feature_columns, selected_elements=None,n_trials=12, n_epochs=25, seed=42)
+run_optuna(x_array, s_dict, feature_columns, selected_elements=None,n_trials=150, n_epochs=25, seed=42)
 
