@@ -4,7 +4,7 @@ import random
 import numpy as np
 import torch
 from torch import nn
-from sklearn.model_selection import GroupKFold
+from sklearn.model_selection import GroupShuffleSplit
 import optuna
 from optuna.exceptions import TrialPruned
 from rmse import RMSELoss
@@ -82,27 +82,22 @@ def build_model(input_size, hidden_sizes, batch_norm, dropout, activation_name="
     )
 
 
-def run_optuna(x_array, s_dict, feature_columns, selected_elements=None,n_trials=20, n_epochs=5, seed=42, study_name="param_pred_optuna", 
-               storage=None, cv_folds=3):
+def run_optuna(x_array, s_dict, feature_columns, selected_elements=None, n_trials=20, n_epochs=5, seed=42, 
+               study_name="param_pred_optuna", storage=None):
     set_seed(seed)
 
     if selected_elements is None:
-        selected_elements = ["S22", "S55", "S34", "S78", "S217"]
+        selected_elements = ["S55", "S78", "S217"]
 
     print(f"[optuna] Starting study '{study_name}' with n_trials={n_trials}, n_epochs={n_epochs}, seed={seed}")
-    # print(f"[optuna] Loaded dataset: x_shape={x_array.shape}, y_shape={y_array.shape}, features={len(feature_columns)}")
-
-    input_size = len(feature_columns)
-    # if cv_folds < 2:
-    #     raise ValueError("cv_folds must be at least 2.")
-    
+   
     groups = x_array[:, 0]
-    kfold = GroupKFold(n_splits=cv_folds)
-    print(f"[optuna] Using {cv_folds}-fold cross validation")
+    gss = GroupShuffleSplit(n_splits=1, test_size=0.2, random_state=seed)
+    train_idx, val_idx = next(gss.split(x_array, groups=groups))
 
     def objective(trial: optuna.trial.Trial):
-        # Search space
-        batch_size = trial.suggest_categorical("batch_size", [8, 16, 32])
+        batch_size = 128
+        # batch_size = trial.suggest_categorical("batch_size", [64, 128, 256])
 
         data_manipulation = []
         if trial.suggest_categorical("use_width_space_ratio", [True, False]):
@@ -121,24 +116,30 @@ def run_optuna(x_array, s_dict, feature_columns, selected_elements=None,n_trials
         if "gnd_width_width_ratio" in data_manipulation:
             x_xtnd, feat_cols_xtnd = extend_features(x_xtnd, feat_cols_xtnd, "gnd_width", "width", "/", "gnd_width_width_ratio")
 
-        num_layers = trial.suggest_int("num_layers", 1, 5)
-        hidden_sizes = []
-        for i in range(num_layers):
-            hidden_sizes.append(trial.suggest_categorical(f"n_units_l{i}", [16, 32, 48, 64, 96, 128, 256]))
+        num_layers = 4
+        # num_layers = trial.suggest_int("num_layers", 3, 6)
+        hidden_sizes = [64, 256, 128, 64]
+        # for i in range(num_layers):
+        #     hidden_sizes.append(trial.suggest_categorical(f"n_units_l{i}", [16, 32, 48, 64, 96, 128, 256]))
 
-        activation = trial.suggest_categorical("activation", ["relu", "leaky_relu", "elu", "gelu"]) 
-        batch_norm = trial.suggest_categorical("batch_norm", [False, True])
-        dropout = trial.suggest_float("dropout", 0.0, 0.5)
-        lr = trial.suggest_float("lr", 1e-6, 1e-3, log=True)
+        activation = "gelu"
+        batch_norm = False
+        dropout = 0.1
+        lr = 1e-4
+        # activation = trial.suggest_categorical("activation", ["relu", "leaky_relu", "elu", "gelu"]) 
+        # batch_norm = trial.suggest_categorical("batch_norm", [False, True])
+        # dropout = trial.suggest_float("dropout", 0.0, 0.5)
+        # lr = trial.suggest_float("lr", 1e-6, 1e-3, log=True)
 
-        scheduler_name = trial.suggest_categorical("scheduler", ["none", "step", "cosine"])
+        scheduler_name = "none"
+        # scheduler_name = trial.suggest_categorical("scheduler", ["none", "step", "cosine"])
         if scheduler_name == "step":
             step_size = trial.suggest_int("step_size", 1, 5)
             gamma = trial.suggest_float("gamma", 0.1, 0.9)
         elif scheduler_name == "cosine":
             t_max = trial.suggest_int("t_max", 5, 50)
 
-        patience = trial.suggest_int("patience", 1, 10)
+        patience = 8
 
         print(
             f"[optuna] Trial {trial.number}: "
@@ -154,123 +155,109 @@ def run_optuna(x_array, s_dict, feature_columns, selected_elements=None,n_trials
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         criterion = RMSELoss()
         
-        cv_fold_scores = [] # Tracks score of each fold
-        fold_best_losses = []
+        print(
+            f"[optuna] Trial {trial.number}: "
+            f"train_samples={len(train_idx)}, val_samples={len(val_idx)}"
+        )
 
+        current_losses = []
+        step_idx = 0
 
-        for fold_index, (train_idx, val_idx) in enumerate(kfold.split(X=x_array, groups=groups)):
-            print(
-                f"[optuna] Trial {trial.number}: fold {fold_index}/{cv_folds} "
-                f"train_samples={len(train_idx)}, val_samples={len(val_idx)}"
-            )
+        for element in selected_elements:
+            for part in ["Re", "Im"]:
+                y_array = s_dict[element].real if part == "Re" else s_dict[element].imag
+                print(f"[optuna] Training on {part}({element})")
 
-            current_fold_losses = []
+                try:
+                    train_loader, val_loader = build_fold_loaders(
+                        x_xtnd,
+                        y_array,
+                        train_idx,
+                        val_idx,
+                        batch_size,
+                        batch_norm,
+                    )
+                except ValueError as exc:
+                    print(f"[optuna] Trial {trial.number}: invalid - {exc}")
+                    raise TrialPruned() from exc
+                
+                model = build_model(len(feat_cols_xtnd), hidden_sizes, batch_norm, dropout, activation_name=activation).to(device)
 
-            for element in selected_elements:
-                for part in ["Re", "Im"]:
-                    y_array = s_dict[element].real if part == "Re" else s_dict[element].imag
-                    print(f"[optuna] Training on {part}({element})")
+                optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+                if scheduler_name == "step":
+                    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=step_size, gamma=gamma)
+                elif scheduler_name == "cosine":
+                    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=t_max)
+                else:
+                    scheduler = None
 
-                    try:
-                        train_loader, val_loader = build_fold_loaders(
-                            x_xtnd,
-                            y_array,
-                            train_idx,
-                            val_idx,
-                            batch_size,
-                            batch_norm,
-                        )
-                    except ValueError as exc:
-                        print(f"[optuna] Trial {trial.number}: fold {fold_index} invalid - {exc}")
-                        raise TrialPruned() from exc
-                    
-                    model = build_model(len(feat_cols_xtnd), hidden_sizes, batch_norm, dropout, activation_name=activation).to(device)
+                best_val = float("inf")
+                epochs_no_improve = 0
 
-                    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
-                    if scheduler_name == "step":
-                        scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=step_size, gamma=gamma)
-                    elif scheduler_name == "cosine":
-                        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=t_max)
-                    else:
-                        scheduler = None
+                for epoch in range(n_epochs):
+                    model.train()
+                    for xb, yb in train_loader:
+                        xb = xb.to(device).float()
+                        yb = yb.to(device).float().unsqueeze(1)
 
-                    # Early stopping variables
-                    best_val = float("inf")
-                    epochs_no_improve = 0
+                        optimizer.zero_grad()
+                        preds = model(xb)
+                        loss = criterion(preds, yb)
+                        loss.backward()
+                        optimizer.step()
 
-                    # Training loop
-                    for epoch in range(n_epochs):
-                        model.train()
-                        for xb, yb in train_loader:
+                    if scheduler is not None:
+                        scheduler.step()
+
+                    model.eval()
+                    val_losses = []
+                    with torch.no_grad():
+                        for xb, yb in val_loader:
                             xb = xb.to(device).float()
                             yb = yb.to(device).float().unsqueeze(1)
-
-                            optimizer.zero_grad()
                             preds = model(xb)
-                            loss = criterion(preds, yb)
-                            loss.backward()
-                            optimizer.step()
+                            val_losses.append(criterion(preds, yb).item())
 
-                        if scheduler is not None:
-                            scheduler.step()
+                    val_loss = float(np.mean(val_losses))
 
-                        model.eval()
-                        val_losses = []
-                        with torch.no_grad():
-                            for xb, yb in val_loader:
-                                xb = xb.to(device).float()
-                                yb = yb.to(device).float().unsqueeze(1)
-                                preds = model(xb)
-                                val_losses.append(criterion(preds, yb).item())
+                    print(
+                        f"[optuna] Trial {trial.number}: "
+                        f"epoch {epoch + 1}/{n_epochs}, val_loss={val_loss:.6f}, best_val={best_val:.6f}"
+                    )
 
-                        val_loss = float(np.mean(val_losses))
+                    if val_loss < best_val - 1e-8:
+                        best_val = val_loss
+                        epochs_no_improve = 0
+                    else:
+                        epochs_no_improve += 1
 
+                    if epochs_no_improve >= patience:
                         print(
-                            f"[optuna] Trial {trial.number}: fold {fold_index}/{cv_folds}, "
-                            f"epoch {epoch + 1}/{n_epochs}, val_loss={val_loss:.6f}, best_val={best_val:.6f}"
+                            f"[optuna] Trial {trial.number}: early stopping at epoch {epoch + 1} "
+                            f"after {epochs_no_improve} non-improving epochs"
                         )
+                        break
+                
+                current_losses.append(best_val)
 
-                        if val_loss < best_val - 1e-8:
-                            best_val = val_loss
-                            epochs_no_improve = 0
-                        else:
-                            epochs_no_improve += 1
+                trial.report(best_val, step_idx)
+                if trial.should_prune():
+                    print(f"[optuna] Trial {trial.number}: pruned after step {step_idx}")
+                    raise TrialPruned()
+                step_idx += 1
 
-                        if epochs_no_improve >= patience:
-                            print(
-                                f"[optuna] Trial {trial.number}: fold {fold_index} early stopping at epoch {epoch + 1} "
-                                f"after {epochs_no_improve} non-improving epochs"
-                            )
-                            break
-                        
-                current_fold_losses.append(best_val)
+        max_loss = float(np.max(current_losses))
+        print(f"[optuna] Trial {trial.number}: completed with max_loss={max_loss:.6f}")
+        return max_loss
 
-            fold_max_loss = float(np.max(current_fold_losses))
-            cv_fold_scores.append(fold_max_loss) 
-            print(
-                f"[optuna] Trial {trial.number}: completed fold {fold_index}/{cv_folds}, "
-                f"fold_best_val={best_val:.6f}, fold_max_loss={fold_max_loss:.6f}"
-            )
-
-            trial.report(fold_max_loss, fold_index)
-            if trial.should_prune():
-                print(f"[optuna] Trial {trial.number}: pruned after fold {fold_index}")
-                raise TrialPruned()
-
-        final_cv_loss = float(np.mean(cv_fold_scores))
-        print(f"[optuna] Trial {trial.number}: completed with cv_loss={final_cv_loss:.6f}")
-        return final_cv_loss
-
-    # Create study
     if storage:
-        study = optuna.create_study(direction="minimize", study_name=study_name, sampler=optuna.samplers.TPESampler(seed=seed), pruner=optuna.pruners.MedianPruner(), storage=storage, load_if_exists=True)
+        study = optuna.create_study(direction="minimize", study_name=study_name, sampler=optuna.samplers.TPESampler(seed=seed, multivariate=True), pruner=optuna.pruners.MedianPruner(), storage=storage, load_if_exists=True)
     else:
-        study = optuna.create_study(direction="minimize", study_name=study_name, sampler=optuna.samplers.TPESampler(seed=seed), pruner=optuna.pruners.MedianPruner())
+        study = optuna.create_study(direction="minimize", study_name=study_name, sampler=optuna.samplers.TPESampler(seed=seed, multivariate=True), pruner=optuna.pruners.MedianPruner())
 
     print("[optuna] Beginning optimization...")
     study.optimize(objective, n_trials=n_trials)
 
-    # Save best params
     out = {
         "best_value": study.best_value,
         "best_params": study.best_params,
