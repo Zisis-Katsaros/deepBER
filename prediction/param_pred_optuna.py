@@ -97,9 +97,7 @@ def run_optuna(x_array, s_dict, feature_columns, selected_elements=None, n_trial
 
     def objective(trial: optuna.trial.Trial):
         batch_size = 128
-        # batch_size = trial.suggest_categorical("batch_size", [64, 128, 256])
 
-        data_manipulation = []
         use_width_space_ratio = trial.suggest_categorical("use_width_space_ratio", [True, False])
 
         x_xtnd = x_array[:, 1:].astype(np.float32)
@@ -110,15 +108,29 @@ def run_optuna(x_array, s_dict, feature_columns, selected_elements=None, n_trial
         x_xtnd, feat_cols_xtnd = extend_features(x_xtnd, feat_cols_xtnd, "width", "metal_thickness", "*", "cross_sectional_area")
         x_xtnd, feat_cols_xtnd = extend_features(x_xtnd, feat_cols_xtnd, "gnd_width", "width", "/", "gnd_width_width_ratio")
 
-        num_layers = trial.suggest_int("num_layers", 3, 6)
-        hidden_sizes = []
-        for i in range(num_layers):
-            hidden_sizes.append(trial.suggest_categorical(f"n_units_l{i}", [16, 32, 48, 64, 96, 128, 256]))
+        hidden_map = {
+            "funnel_steep": [256, 128, 64, 32],
+            "funnel_shallow": [256, 128, 128, 64, 64],
+            "funnel_long": [256, 256, 128, 128, 64, 64],
+            "funnel_long_small": [256, 128, 64, 64, 32, 32],
+            "rect_medium": [128, 128, 128, 128],
+            "rect_large": [256, 256, 256, 256],
+            "pyramid_short": [64, 128, 64, 32],
+            "pyramid_small": [32, 64, 128, 64, 32],
+            "pyramid_large": [64, 128, 256, 128, 64],
+            "pyramid_large_short": [128, 256, 128, 64],
+            "pyramid_large_long": [64, 128, 256, 128, 64, 32],
+        }
 
+        hidden_shape_name = trial.suggest_categorical("hidden_shape", list(hidden_map.keys()))
+        
+        hidden_sizes = hidden_map[hidden_shape_name]
+        num_layers = len(hidden_sizes)
 
-        activation = trial.suggest_categorical("activation", ["relu", "leaky_relu", "elu", "gelu"]) 
-        batch_norm = trial.suggest_categorical("batch_norm", [False, True])
-        dropout = trial.suggest_float("dropout", 0.0, 0.5)
+        activation = "gelu" 
+        batch_norm = False
+
+        dropout = trial.suggest_float("dropout", 0.0, 0.2, step=0.02)
         lr = trial.suggest_float("lr", 1e-6, 1e-3, log=True)
 
         scheduler_name = trial.suggest_categorical("scheduler", ["none", "step", "cosine"])
