@@ -46,15 +46,18 @@ def extend_features(x_array, feature_names, first_column, second_column, operati
 	first_idx = feature_names.index(first_column)
 	second_idx = feature_names.index(second_column)
 
+	val1 = x_array[:, first_idx].astype(np.float64)
+	val2 = x_array[:, second_idx].astype(np.float64)
+
 	if operation == "+":
-		new_feature = (x_array[:, first_idx] + x_array[:, second_idx]).reshape(-1, 1)
+		new_feature = (val1 + val2).reshape(-1, 1)
 	elif operation == "-":
-		new_feature = (x_array[:, first_idx] - x_array[:, second_idx]).reshape(-1, 1)
+		new_feature = (val1 - val2).reshape(-1, 1)
 	elif operation == "*":
-		new_feature = (x_array[:, first_idx] * x_array[:, second_idx]).reshape(-1, 1)
+		new_feature = (val1 * val2).reshape(-1, 1)
 	elif operation == "/":
 		epsilon = 1e-15
-		new_feature = (x_array[:, first_idx] / (x_array[:, second_idx] + epsilon)).reshape(-1, 1)
+		new_feature = (val1 / val2 + epsilon).reshape(-1, 1)
 	else:
 		raise ValueError("Unsupported operation. Use one of: '+', '-', '*', '/'.")
 
