@@ -105,13 +105,14 @@ def plot_training_curves(train_losses, val_losses, train_maes, val_maes, title=N
     plt.show()
 
 
-def plot_predicted_vs_actual(true_labels, predictions, title=None):
+def plot_predicted_vs_actual(true_labels, predictions, title=None, save_path = None):
     # Plots predicted values against the corresponding actual values
     #
     # Args:
     # - true_labels: True target values
     # - predictions: Model predictions
     # - title: Optional plot title
+    # - save_path: Path where plot is saved 
     # Returns:
     # *none*
 
@@ -139,7 +140,15 @@ def plot_predicted_vs_actual(true_labels, predictions, title=None):
     ax.legend()
     ax.grid(True)
     plt.tight_layout()
+
+    # Saving plot
+    if save_path is not None:
+        os.makedirs(os.path.dirname(os.path.abspath(save_path)), exist_ok=True)
+        plt.savefig(save_path, dpi=300, bbox_inches='tight')
+        print(f"Plot saved successfully to: {save_path}")
+
     plt.show()
+
 
 def plot_residuals(true_labels, predictions, title=None):
     # Plots residuals against the corresponding true values
