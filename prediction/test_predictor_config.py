@@ -3,11 +3,12 @@ from visualization import plot_error_distribution, plot_error_vs_feature, plot_p
 import prediction.predictor as predictor
 import torch
 import numpy as np
+import os
 
 def test_predictor_configuration(title, device, model, dataloader, learning_rate, batch_size, criterion, optimizer, scheduler=None,
                        epochs=30, early_stopping=False, patience=5, training_curves=False,
                        predicted_vs_actual=False, error_distribution=False, error_vs_feature=None,
-                       feature_columns=None, output_names = None):
+                       feature_columns=None, output_names = None, best_model_dir='.', best_model_name='best_model.pth'):
     # Train model with given configuration 
     #
     # Args:
@@ -49,6 +50,9 @@ def test_predictor_configuration(title, device, model, dataloader, learning_rate
     if early_stopping:
         print(f" - Patience: {patience}")
 
+    os.makedirs(best_model_dir, exist_ok=True)
+    save_path = os.path.join(best_model_dir, best_model_name)
+
     # Initialize data splits
     train_data = dataloader[0]
     val_data = dataloader[1]
@@ -89,13 +93,13 @@ def test_predictor_configuration(title, device, model, dataloader, learning_rate
                 best_model_epoch = epoch + 1
                 counter = 0
                 # save model
-                torch.save(model.state_dict(), 'best_model.pth')
+                torch.save(model.state_dict(), save_path)
             else:
                 counter += 1
                 if counter >= patience:
                     print(f"Early stopping at epoch {epoch+1}")
                     print(f"Best model at epoch {best_model_epoch}")
-                    model.load_state_dict(torch.load('best_model.pth'))
+                    model.load_state_dict(torch.load(save_path))
                     break
 
         if (epoch + 1) % 5 == 0 or epoch == 0 or epoch == epochs - 1:
@@ -107,7 +111,7 @@ def test_predictor_configuration(title, device, model, dataloader, learning_rate
 
     test_loss, test_mae, test_mape, test_preds, test_targets, *_ = test_pred_loop(model, test_data, criterion, device)
     print(f">>> Test MAE: {test_mae:.6f}")
-    print(f">>> Test MAPE: {test_mape*100:.4f}%")
+    # print(f">>> Test MAPE: {test_mape*100:.4f}%")
 
     num_outputs = test_preds.shape[1] if test_preds.ndim > 1 else 1
     if output_names is None:
