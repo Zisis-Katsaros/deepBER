@@ -170,7 +170,7 @@ def create_param_prediction_arrays(csv_names, test_names, expected_ports = None,
 
 
 	if manipulate_features is None:
-		manipulate_features = [False] * len(csv_names)
+		manipulate_features = [True] * len(csv_names)
 	elif len(manipulate_features) != len(csv_names):
 		raise ValueError("Length of manipulate_features must match length of csv_names.")
 	
