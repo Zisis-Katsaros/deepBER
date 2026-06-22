@@ -1,6 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.metrics import confusion_matrix
+import os
 
 def plot_ber_vs_length(length_values, predictions, title=None):
     # Plots BER predictions as a function of length.
@@ -53,7 +54,7 @@ def plot_ber_vs_length(length_values, predictions, title=None):
     plt.show()
 
     
-def plot_training_curves(train_losses, val_losses, train_maes, val_maes, title=None):
+def plot_training_curves(train_losses, val_losses, train_maes, val_maes, title=None, save_path = None):
     # Plots training curves
     #
     # Args:
@@ -62,6 +63,7 @@ def plot_training_curves(train_losses, val_losses, train_maes, val_maes, title=N
     # - train_maes: List of training MAEs per epoch
     # - val_maes: List of validation MAEs per epoch
     # - title: Title of configuration
+    # - save_path: Path where plot is saved
     # Returns:
     # *none* 
 
@@ -93,7 +95,15 @@ def plot_training_curves(train_losses, val_losses, train_maes, val_maes, title=N
     plt.tight_layout()
     if title is not None:
         plt.subplots_adjust(top=0.85)
+
+    # Saving plot
+    if save_path is not None:
+        os.makedirs(os.path.dirname(os.path.abspath(save_path)), exist_ok=True)
+        plt.savefig(save_path, dpi=300, bbox_inches='tight')
+        print(f"Plot saved successfully to: {save_path}")
+
     plt.show()
+
 
 def plot_predicted_vs_actual(true_labels, predictions, title=None):
     # Plots predicted values against the corresponding actual values
