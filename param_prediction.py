@@ -18,59 +18,59 @@ csv_names = [
 
 test_names = ["param_prediction_test"]
 
-test_info_dict = create_param_prediction_arrays(csv_names, test_names, sampling_method="lhs", 
-                                                  subfolder="s_params")
+test_info_dict = create_param_prediction_arrays(csv_names, test_names, sampling_method="lhs", subfolder="s_params")
 
 
 x_array = test_info_dict["param_prediction_test"][0]
 s_dict = test_info_dict["param_prediction_test"][1]
-s12real = s_dict["S12"].real
 feature_columns = test_info_dict["param_prediction_test"][6]
 
 # x_array, feature_columns = mock_pki(x_array, feature_columns, s12real)
 
-S12_dataloader = create_param_dataloader(
-    x_array,
-    s12real,
-    batch_size=16,
-    seed=42,
-    standard_scale=True,
-    split_method="lhs"
-    )
+elements = ["S55", "S78", "S217"]
+for element in elements:
+    for part in ["real", "imag"]:
+        y_array = s_dict[element].real if part == "real" else s_dict[element].imag
 
-predictor = DeepBER_Param_Predictor(
-    input_size=len(feature_columns) - 1, 
-    hidden=[64,256,128, 64], 
-    activation_fn=nn.GELU(), 
-    dropout=0.02
-    )
-
-learning_rate = 0.001
-criterion = RMSELoss()
-optimizer = torch.optim.Adam(predictor.parameters(), lr=learning_rate)
-scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=3)
-
-"""        
-test_predictor_configuration(
-        title="DeepBER A12 Parameter Prediction",
+        dataloader = create_param_dataloader(
+                        x_array,
+                        y_array,
+                        batch_size=128,
+                        seed=42,
+                        standard_scale=True,
+                        split_method="lhs"
+                        )
+        
+        predictor = DeepBER_Param_Predictor(
+            input_size=len(feature_columns) - 1, 
+            hidden=[128, 128, 128, 128], 
+            activation_fn=nn.GELU(), 
+            dropout=0.04
+            )
+        
+        criterion = RMSELoss()
+        learning_rate = 0.000446
+        optimizer = torch.optim.Adam(predictor.parameters(), lr=learning_rate)
+        
+        test_predictor_configuration(
+        title="{element}{part}",
         device=device,
         model=predictor,
-        dataloader=S12_dataloader,
+        dataloader=dataloader,
         learning_rate=learning_rate,
-        batch_size=16,
+        batch_size=128,
         criterion=criterion,
         optimizer=optimizer,
-        scheduler=scheduler,
-        epochs=240,
+        epochs=300,
         early_stopping=True,
-        patience=10,
+        patience=20,
         training_curves=True,
-        predicted_vs_actual=True
+        predicted_vs_actual=True,
+        test_out_dir = f"out_files/{element}_{part}"
     )
-"""
 
+# storage_url = "sqlite:///param_pred_study_v2.db"
+# run_optuna(x_array, s_dict, feature_columns, selected_elements=None,n_trials=90, n_epochs=25, seed=42, 
+#            study_name="param_pred_study_v2", storage=storage_url)
 
-storage_url = "sqlite:///param_pred_study_v2.db"
-run_optuna(x_array, s_dict, feature_columns, selected_elements=None,n_trials=90, n_epochs=25, seed=42, 
-           study_name="param_pred_study_v2", storage=storage_url)
 
