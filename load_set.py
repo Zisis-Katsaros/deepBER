@@ -183,7 +183,6 @@ def create_param_prediction_arrays(csv_names, test_names, expected_ports = None,
 		num_of_samples = len(s_array)	
 
 		if manipulate_features[idx]:
-			# add derived features
 			x_array, feature_columns = extend_features(x_array, feature_columns, "width", "space", "/", "width_space_ratio")
 			x_array, feature_columns = extend_features(x_array, feature_columns, "width", "metal_thickness", "*", "cross_sectional_area")
 			x_array, feature_columns = extend_features(x_array, feature_columns, "gnd_width", "width", "/", "gnd_width_width_ratio")
