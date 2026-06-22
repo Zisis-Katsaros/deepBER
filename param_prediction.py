@@ -46,14 +46,14 @@ for element in elements:
             hidden=[128, 128, 128, 128], 
             activation_fn=nn.GELU(), 
             dropout=0.04
-            )
+            ).to(device)
         
         criterion = RMSELoss()
         learning_rate = 0.000446
         optimizer = torch.optim.Adam(predictor.parameters(), lr=learning_rate)
         
         test_predictor_configuration(
-        title="{element}{part}",
+        title=f"{element}{part}",
         device=device,
         model=predictor,
         dataloader=dataloader,
