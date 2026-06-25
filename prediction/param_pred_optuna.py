@@ -6,9 +6,7 @@ from sklearn.model_selection import GroupShuffleSplit
 import optuna
 from rmse import RMSELoss
 from dataset_manipulation import extend_features
-
-
-from param_pred_optuna_helpers import *
+from prediction.param_pred_optuna_helpers import *
 
 def run_optuna(model_architecture, x_array, s_dict, feature_columns, selected_elements=None, n_trials=20, n_epochs=5, seed=42, 
                study_name="param_pred_optuna", storage=None, timeout_seconds = 5.5 * 3600):
@@ -63,6 +61,7 @@ def run_optuna(model_architecture, x_array, s_dict, feature_columns, selected_el
         scheduler_name = "none"
    
         # scheduler_name = trial.suggest_categorical("scheduler", ["none", "step", "cosine"])
+        step_size, gamma, t_max = None, None, None # initialized as none so that they can be passed in run_trial
         if scheduler_name == "step":
             step_size = trial.suggest_int("step_size", 5, 15)
             gamma = trial.suggest_float("gamma", 0.2, 0.8)
@@ -79,6 +78,7 @@ def run_optuna(model_architecture, x_array, s_dict, feature_columns, selected_el
             f"scheduler={scheduler_name}, patience={patience}"
         )
         print(f"use_width_space_ratio=True") if use_width_space_ratio else print(f"use_width_space_ratio=False")
+        
         if scheduler_name == "step":
             print(f"[optuna] Trial {trial.number}: step_size={step_size}, gamma={gamma:.3f}")
         elif scheduler_name == "cosine":

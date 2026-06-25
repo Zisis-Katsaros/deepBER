@@ -21,10 +21,12 @@ def set_seed(seed: int):
 
 
 def build_fold_loaders(x_array, y_array, train_idx, val_idx, batch_size, batch_norm):
-    x_train = x_array[train_idx].astype(np.float32)
-    y_train = y_array[train_idx].astype(np.float32)
-    x_val = x_array[val_idx].astype(np.float32)
-    y_val = y_array[val_idx].astype(np.float32)
+    x_train = x_array[train_idx]
+    y_train = y_array[train_idx]
+    y_train = y_train.reshape(y_train.shape[0], -1)
+    x_val = x_array[val_idx]
+    y_val = y_array[val_idx]
+    y_val = y_val.reshape(y_val.shape[0], -1)
 
     # X standardization
     train_mean = x_train.mean(axis=0)
@@ -74,13 +76,13 @@ def build_model(model_architecture, input_size, hidden_sizes, batch_norm, dropou
         "leaky_relu": nn.LeakyReLU(negative_slope=0.01),
         "elu": nn.ELU(),
         "gelu": nn.GELU(),
-        "c_relu": cvnn.cRule(),
+        "c_relu": cvnn.cRelu(),
         "c_leaky_relu": cvnn.cLeakyRelu(),
         "c_elu": cvnn.cElu(),
         "c_gelu": cvnn.cGelu()
     }
     if model_architecture == "cv_mlp":
-        activation_name = "c"+activation_name
+        activation_name = "c_"+activation_name
     activation_fn = activation_map.get(activation_name, torch.nn.ReLU())
 
     if model_architecture == "single_mlp":
@@ -105,7 +107,6 @@ def build_model(model_architecture, input_size, hidden_sizes, batch_norm, dropou
         return DeepBER_Param_Predictor_Complex(
             input_size=input_size,
             hidden=hidden_sizes,
-            output_size=2,
             activation_fn=activation_fn,
             batch_norm=batch_norm,
             dropout=dropout,
@@ -138,7 +139,7 @@ def run_trial(trial, device, model_architecture, selected_elements, x_xtnd, feat
                     print(f"[optuna] Trial {trial.number}: invalid - {exc}")
                     raise TrialPruned() from exc
                 
-                model = build_model(len(feat_cols_xtnd), hidden_sizes, batch_norm, dropout, activation_name=activation).to(device)
+                model = build_model(model_architecture, len(feat_cols_xtnd), hidden_sizes, batch_norm, dropout, activation_name=activation).to(device)
 
                 optimizer = torch.optim.Adam(model.parameters(), lr=lr)
                 if scheduler_name == "step":
@@ -197,7 +198,7 @@ def run_trial(trial, device, model_architecture, selected_elements, x_xtnd, feat
             
         else:
             if model_architecture == "dual_mlp":
-                y_array = s_dict[element].real if part == "Re" else s_dict[element].imag
+                y_array = np.stack([s_dict[element].real, s_dict[element].imag], axis=1)
             elif model_architecture == "cv_mlp":
                 y_array = s_dict[element]
             else:
@@ -235,8 +236,8 @@ def run_trial(trial, device, model_architecture, selected_elements, x_xtnd, feat
             for epoch in range(n_epochs):
                 model.train()
                 for xb, yb in train_loader:
-                    xb = xb.to(device).float()
-                    yb = yb.to(device).float().unsqueeze(1)
+                    xb = xb.to(device)
+                    yb = yb.to(device)
 
                     optimizer.zero_grad()
                     preds = model(xb)
@@ -251,8 +252,8 @@ def run_trial(trial, device, model_architecture, selected_elements, x_xtnd, feat
                 val_losses = []
                 with torch.no_grad():
                     for xb, yb in val_loader:
-                        xb = xb.to(device).float()
-                        yb = yb.to(device).float().unsqueeze(1)
+                        xb = xb.to(device)
+                        yb = yb.to(device)
                         preds = model(xb)
                         val_losses.append(criterion(preds, yb).item())
 
