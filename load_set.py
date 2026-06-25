@@ -489,7 +489,11 @@ def create_param_dataloader(
 	if len(y_array) == 0:
 		raise ValueError("No samples found inside the provided label array.")
 
-	y_array = np.asarray(y_array, dtype=np.float32).reshape(-1, 1)
+	if y_array.ndim == 1:
+		if y_array.dtype == np.complex64:
+			y_array = np.asarray(y_array).reshape(-1, 1)
+		else:
+			y_array = np.asarray(y_array, dtype=np.float32).reshape(-1, 1)
 
 	# Set split percentages
 	train_percent = 0.8

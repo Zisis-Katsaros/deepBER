@@ -13,3 +13,4 @@ optuna_classifier_study_result.json
 evaluation.py
 ber_snr_conversion.py
 *.db
+/out_files

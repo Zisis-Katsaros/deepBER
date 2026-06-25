@@ -8,5 +8,11 @@ class RMSELoss(nn.Module):
         self.eps = eps
         
     def forward(self,yhat,y):
-        loss = torch.sqrt(self.mse(yhat,y) + self.eps)
+        if yhat.is_complex() or y.is_complex():
+            diff = yhat - y
+            mse = torch.mean(diff.real**2 + diff.imag**2)
+        else:
+            mse = self.mse(yhat, y)
+
+        loss = torch.sqrt(mse + self.eps)
         return loss
