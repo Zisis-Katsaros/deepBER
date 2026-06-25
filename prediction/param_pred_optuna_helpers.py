@@ -150,7 +150,7 @@ def run_trial(trial, device, model_architecture, selected_elements, x_pure, feat
                     model.train()
                     for xb, yb in train_loader:
                         xb = xb.to(device).float()
-                        yb = yb.to(device).float().unsqueeze(1)
+                        yb = yb.to(device).float()
 
                         optimizer.zero_grad()
                         preds = model(xb)
@@ -166,7 +166,7 @@ def run_trial(trial, device, model_architecture, selected_elements, x_pure, feat
                     with torch.no_grad():
                         for xb, yb in val_loader:
                             xb = xb.to(device).float()
-                            yb = yb.to(device).float().unsqueeze(1)
+                            yb = yb.to(device).float()
                             preds = model(xb)
                             val_losses.append(criterion(preds, yb).item())
 
