@@ -55,7 +55,7 @@ class DeepBERPredictor(nn.Module):
     
 
 class DeepBER_Param_Predictor(nn.Module):
-    def __init__(self, input_size, hidden, activation_fn=nn.ReLU(), batch_norm=False, dropout=0.0):
+    def __init__(self, input_size, hidden, output_size, activation_fn=nn.ReLU(), batch_norm=False, dropout=0.0):
         # Modular MLP architecture for S-/ ABCD-Parameter prediction
         #
         # Args:
@@ -88,7 +88,7 @@ class DeepBER_Param_Predictor(nn.Module):
             current_dim = hidden[layer] # update current dimension for next layer
 
         # Final output layer 
-        self.output_layer = nn.Linear(current_dim, 1) # linear layer with 2 outputs [S**_real, S**_imag]
+        self.output_layer = nn.Linear(current_dim, output_size)
         
     # Forward pass
     def forward(self, x):
