@@ -37,7 +37,7 @@ def run_optuna(model_architecture, x_array, s_dict, feature_columns, selected_el
     train_idx, val_idx = next(gss.split(x_array, groups=groups))
 
     def objective(trial: optuna.trial.Trial):
-        batch_size = 128
+        batch_size = 64
 
         x_pure = x_array[:, 1:].astype(np.float32)
         feat_cols_pure = feature_columns[1:].copy()
