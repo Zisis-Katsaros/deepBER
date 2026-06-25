@@ -109,7 +109,7 @@ def build_model(model_architecture, input_size, hidden_sizes, batch_norm, dropou
         raise ValueError("model_architecture should be either 'single_mlp', 'dual_mlp' or 'cv_mlp'.")
 
 
-def run_trial(trial, device, model_architecture, selected_elements, x_xtnd, feat_cols_xtnd, s_dict, train_idx, val_idx, batch_size, 
+def run_trial(trial, device, model_architecture, selected_elements, x_pure, feat_cols_pure, s_dict, train_idx, val_idx, batch_size, 
               batch_norm, hidden_sizes, dropout, activation, lr, scheduler_name, step_size, gamma, t_max, n_epochs, criterion, patience):
     current_losses = []
     step_idx = 0
@@ -122,7 +122,7 @@ def run_trial(trial, device, model_architecture, selected_elements, x_xtnd, feat
 
                 try:
                     train_loader, val_loader = build_fold_loaders(
-                        x_xtnd,
+                        x_pure,
                         y_array,
                         train_idx,
                         val_idx,
@@ -133,7 +133,7 @@ def run_trial(trial, device, model_architecture, selected_elements, x_xtnd, feat
                     print(f"[optuna] Trial {trial.number}: invalid - {exc}")
                     raise TrialPruned() from exc
                 
-                model = build_model(model_architecture, len(feat_cols_xtnd), hidden_sizes, batch_norm, dropout, activation_name=activation).to(device)
+                model = build_model(model_architecture, len(feat_cols_pure), hidden_sizes, batch_norm, dropout, activation_name=activation).to(device)
 
                 optimizer = torch.optim.Adam(model.parameters(), lr=lr)
                 if scheduler_name == "step":
@@ -202,7 +202,7 @@ def run_trial(trial, device, model_architecture, selected_elements, x_xtnd, feat
 
             try:
                 train_loader, val_loader = build_fold_loaders(
-                    x_xtnd,
+                    x_pure,
                     y_array,
                     train_idx,
                     val_idx,
@@ -213,7 +213,7 @@ def run_trial(trial, device, model_architecture, selected_elements, x_xtnd, feat
                 print(f"[optuna] Trial {trial.number}: invalid - {exc}")
                 raise TrialPruned() from exc
             
-            model = build_model(model_architecture, len(feat_cols_xtnd), hidden_sizes, batch_norm, dropout, 
+            model = build_model(model_architecture, len(feat_cols_pure), hidden_sizes, batch_norm, dropout, 
                                 activation_name=activation).to(device)
 
             optimizer = torch.optim.Adam(model.parameters(), lr=lr)
