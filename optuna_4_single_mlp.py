@@ -26,4 +26,4 @@ hidden_map = {
 
 storage_url = "sqlite:///single_mlp_optuna.db"
 run_optuna("single_mlp", x_array, s_dict, feature_columns, hidden_map=hidden_map, n_trials=90, n_epochs=25, seed=42, 
-            study_name="single_mlp_optuna")
+            study_name="single_mlp_optuna", storage=storage_url)
