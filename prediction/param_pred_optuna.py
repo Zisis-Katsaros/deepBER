@@ -91,25 +91,30 @@ def run_optuna(model_architecture, x_array, s_dict, feature_columns, selected_el
         print(f"[optuna] Trial {trial.number}: completed with avg_loss={avg_loss:.6f}")
         return avg_loss
 
-    if storage:
-        study = optuna.create_study(direction="minimize", study_name=study_name, 
-                                    sampler=optuna.samplers.TPESampler(seed=seed, multivariate=True), 
-                                    pruner=optuna.pruners.HyperbandPruner(
-                                            min_resource=5,  
-                                            max_resource=len(selected_elements)*2, 
-                                            reduction_factor=3 
-                                        ), storage=storage, load_if_exists=True)
-    else:
-        study = optuna.create_study(direction="minimize", study_name=study_name, 
-                                    sampler=optuna.samplers.TPESampler(seed=seed, multivariate=True), 
-                                    pruner=optuna.pruners.HyperbandPruner(
-                                            min_resource=5,  
-                                            max_resource=len(selected_elements)*2,
-                                            reduction_factor=3 
-                                        ))
+    sampler = optuna.samplers.TPESampler(seed=seed, multivariate=True)
+    pruner = optuna.pruners.HyperbandPruner(
+        min_resource=5,  
+        max_resource=len(selected_elements) * 2, 
+        reduction_factor=3 
+    )
 
-    print("[optuna] Beginning optimization...")
-    study.optimize(objective, n_trials=n_trials, timeout=timeout_seconds)
+    if storage:
+        study = optuna.create_study(direction="minimize", study_name=study_name, sampler=sampler, pruner=pruner, storage=storage, load_if_exists=True)
+        
+        completed_trials = len(study.trials)
+        trials_remaining = n_trials - completed_trials
+
+        if trials_remaining <= 0:
+            print(f"[optuna] Study '{study_name}' already has {completed_trials} completed trials, which meets or exceeds the requested {n_trials} trials. No further optimization will be performed.")
+            return study
+        print("[optuna] Beginning optimization...")
+        study.optimize(objective, n_trials=trials_remaining, timeout=timeout_seconds)
+
+    else:
+        study = optuna.create_study(direction="minimize", study_name=study_name, sampler=sampler, pruner=pruner)
+
+        print("[optuna] Beginning optimization...")
+        study.optimize(objective, n_trials=n_trials, timeout=timeout_seconds)
 
     out = {
         "best_value": study.best_value,
