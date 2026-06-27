@@ -8,7 +8,7 @@ from rmse import RMSELoss
 from dataset_manipulation import extend_features
 from prediction.param_pred_optuna_helpers import *
 
-def run_optuna(model_architecture, x_array, s_dict, feature_columns, selected_elements=None, hidden_map=None, n_trials=20, n_epochs=5, seed=42, 
+def run_optuna(model_architecture, x_array, s_dict, feature_columns, batch_size=64, selected_elements=None, hidden_map=None, n_trials=20, n_epochs=5, seed=42, 
                study_name="param_pred_optuna", storage=None, timeout_seconds = 5.5 * 3600):
     set_seed(seed)
 
@@ -37,7 +37,7 @@ def run_optuna(model_architecture, x_array, s_dict, feature_columns, selected_el
     train_idx, val_idx = next(gss.split(x_array, groups=groups))
 
     def objective(trial: optuna.trial.Trial):
-        batch_size = 64
+        # batch_size = 64
 
         x_pure = x_array[:, 1:].astype(np.float32)
         feat_cols_pure = feature_columns[1:].copy()
@@ -52,6 +52,7 @@ def run_optuna(model_architecture, x_array, s_dict, feature_columns, selected_el
 
         dropout = trial.suggest_float("dropout", 0.0, 0.1, step=0.02)
         lr = trial.suggest_float("lr", 1e-6, 1e-4, log=True)
+        wd = trial.suggest_float("weight_decay", 1e-6, 1e-3, log=True)
         scheduler_name = "none"
    
         # scheduler_name = trial.suggest_categorical("scheduler", ["none", "step", "cosine"])
@@ -67,7 +68,7 @@ def run_optuna(model_architecture, x_array, s_dict, feature_columns, selected_el
         print(
             f"[optuna] Trial {trial.number}: "
             f"batch_size={batch_size}, num_layers={num_layers}, hidden_sizes={hidden_sizes}, "
-            f"activation={activation}, batch_norm={batch_norm}, dropout={dropout:.3f}, lr={lr:.6g}, "
+            f"activation={activation}, batch_norm={batch_norm}, dropout={dropout:.3f}, lr={lr:.6g}, weight_decay={wd:.6g}, "
             f"scheduler={scheduler_name}, patience={patience}"
         )
         
@@ -85,7 +86,7 @@ def run_optuna(model_architecture, x_array, s_dict, feature_columns, selected_el
         )
 
         current_losses  = run_trial(trial, device, model_architecture, selected_elements, x_pure, feat_cols_pure, s_dict, train_idx, val_idx, batch_size, 
-            batch_norm, hidden_sizes, dropout, activation, lr, scheduler_name, step_size, gamma, t_max, n_epochs, criterion, patience)
+            batch_norm, hidden_sizes, dropout, activation, lr, wd, scheduler_name, step_size, gamma, t_max, n_epochs, criterion, patience)
         
         avg_loss = float(np.mean(current_losses))
         print(f"[optuna] Trial {trial.number}: completed with avg_loss={avg_loss:.6f}")
