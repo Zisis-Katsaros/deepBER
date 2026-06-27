@@ -22,6 +22,6 @@ hidden_map = {
     "pyramid_large": [64, 128, 256, 128, 64]
 }
 
-storage_url = "sqlite:///dual_mlp_optuna.db"
+storage_url = "sqlite:///dual_mlp_optuna_v2.db"
 run_optuna("dual_mlp", x_array, s_dict, feature_columns, batch_size=128, hidden_map=hidden_map, n_trials=50, n_epochs=25, seed=42, 
-            study_name="dual_mlp_optuna", storage=storage_url)
+            study_name="dual_mlp_optuna_v2", storage=storage_url)
