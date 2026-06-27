@@ -52,6 +52,7 @@ def run_optuna(model_architecture, x_array, s_dict, feature_columns, selected_el
 
         dropout = trial.suggest_float("dropout", 0.0, 0.1, step=0.02)
         lr = trial.suggest_float("lr", 1e-6, 1e-4, log=True)
+        wd = trial.suggest_float("weight_decay", 1e-6, 1e-3, log=True)
         scheduler_name = "none"
    
         # scheduler_name = trial.suggest_categorical("scheduler", ["none", "step", "cosine"])
@@ -67,7 +68,7 @@ def run_optuna(model_architecture, x_array, s_dict, feature_columns, selected_el
         print(
             f"[optuna] Trial {trial.number}: "
             f"batch_size={batch_size}, num_layers={num_layers}, hidden_sizes={hidden_sizes}, "
-            f"activation={activation}, batch_norm={batch_norm}, dropout={dropout:.3f}, lr={lr:.6g}, "
+            f"activation={activation}, batch_norm={batch_norm}, dropout={dropout:.3f}, lr={lr:.6g}, weight_decay={wd:.6g}, "
             f"scheduler={scheduler_name}, patience={patience}"
         )
         
@@ -85,7 +86,7 @@ def run_optuna(model_architecture, x_array, s_dict, feature_columns, selected_el
         )
 
         current_losses  = run_trial(trial, device, model_architecture, selected_elements, x_pure, feat_cols_pure, s_dict, train_idx, val_idx, batch_size, 
-            batch_norm, hidden_sizes, dropout, activation, lr, scheduler_name, step_size, gamma, t_max, n_epochs, criterion, patience)
+            batch_norm, hidden_sizes, dropout, activation, lr, wd, scheduler_name, step_size, gamma, t_max, n_epochs, criterion, patience)
         
         avg_loss = float(np.mean(current_losses))
         print(f"[optuna] Trial {trial.number}: completed with avg_loss={avg_loss:.6f}")

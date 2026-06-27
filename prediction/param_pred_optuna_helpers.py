@@ -110,7 +110,7 @@ def build_model(model_architecture, input_size, hidden_sizes, batch_norm, dropou
 
 
 def run_trial(trial, device, model_architecture, selected_elements, x_pure, feat_cols_pure, s_dict, train_idx, val_idx, batch_size, 
-              batch_norm, hidden_sizes, dropout, activation, lr, scheduler_name, step_size, gamma, t_max, n_epochs, criterion, patience):
+              batch_norm, hidden_sizes, dropout, activation, lr, wd, scheduler_name, step_size, gamma, t_max, n_epochs, criterion, patience):
     current_losses = []
     step_idx = 0
     
@@ -135,7 +135,7 @@ def run_trial(trial, device, model_architecture, selected_elements, x_pure, feat
                 
                 model = build_model(model_architecture, len(feat_cols_pure), hidden_sizes, batch_norm, dropout, activation_name=activation).to(device)
 
-                optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+                optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=wd)
                 if scheduler_name == "step":
                     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=step_size, gamma=gamma)
                 elif scheduler_name == "cosine":
@@ -216,7 +216,7 @@ def run_trial(trial, device, model_architecture, selected_elements, x_pure, feat
             model = build_model(model_architecture, len(feat_cols_pure), hidden_sizes, batch_norm, dropout, 
                                 activation_name=activation).to(device)
 
-            optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+            optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=wd)
             if scheduler_name == "step":
                 scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=step_size, gamma=gamma)
             elif scheduler_name == "cosine":
