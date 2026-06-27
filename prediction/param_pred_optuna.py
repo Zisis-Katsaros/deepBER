@@ -8,7 +8,7 @@ from rmse import RMSELoss
 from dataset_manipulation import extend_features
 from prediction.param_pred_optuna_helpers import *
 
-def run_optuna(model_architecture, x_array, s_dict, feature_columns, selected_elements=None, hidden_map=None, n_trials=20, n_epochs=5, seed=42, 
+def run_optuna(model_architecture, x_array, s_dict, feature_columns, batch_size=64, selected_elements=None, hidden_map=None, n_trials=20, n_epochs=5, seed=42, 
                study_name="param_pred_optuna", storage=None, timeout_seconds = 5.5 * 3600):
     set_seed(seed)
 
@@ -37,7 +37,7 @@ def run_optuna(model_architecture, x_array, s_dict, feature_columns, selected_el
     train_idx, val_idx = next(gss.split(x_array, groups=groups))
 
     def objective(trial: optuna.trial.Trial):
-        batch_size = 64
+        # batch_size = 64
 
         x_pure = x_array[:, 1:].astype(np.float32)
         feat_cols_pure = feature_columns[1:].copy()
