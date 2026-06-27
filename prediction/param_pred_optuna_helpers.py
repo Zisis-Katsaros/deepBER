@@ -271,12 +271,12 @@ def run_trial(trial, device, model_architecture, selected_elements, x_pure, feat
                     )
                     break    
             
-            current_losses.append(best_val)
+        current_losses.append(best_val)
 
-            trial.report(best_val, step_idx)
-            if trial.should_prune():
-                print(f"[optuna] Trial {trial.number}: pruned after step {step_idx}")
-                raise TrialPruned()
-            step_idx += 1
+        trial.report(best_val, step_idx)
+        if trial.should_prune():
+            print(f"[optuna] Trial {trial.number}: pruned after step {step_idx}")
+            raise TrialPruned()
+        step_idx += 1
     return current_losses            
     
