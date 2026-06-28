@@ -78,5 +78,5 @@ for element in elements:
         y_scale_params=y_scale_params,
         training_curves=True,
         predicted_vs_actual=True,
-        test_out_dir = f"out_files/{element}_{part}"
+        test_out_dir = f"out_files/single_mlp/{element}_{part}"
     )
