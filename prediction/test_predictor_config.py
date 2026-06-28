@@ -6,7 +6,7 @@ import numpy as np
 import os
 
 def test_predictor_configuration(title, device, model, dataloader, learning_rate, batch_size, criterion, optimizer, scheduler=None,
-                       epochs=30, early_stopping=False, patience=5, training_curves=False,
+                       epochs=30, early_stopping=False, patience=5, y_scale_params = None, training_curves=False,
                        predicted_vs_actual=False, error_distribution=False, error_vs_feature=None,
                        feature_columns=None, output_names = None, test_out_dir='.'):
     # Train model with given configuration 
@@ -112,6 +112,15 @@ def test_predictor_configuration(title, device, model, dataloader, learning_rate
     print(f"==================== Training complete ====================")
 
     test_loss, test_mae, test_mape, test_preds, test_targets, *_ = test_pred_loop(model, test_data, criterion, device)
+
+    if y_scale_params is not None:
+        if torch.is_tensor(test_preds):
+            test_preds = test_preds.cpu().numpy()
+            test_targets = test_targets.cpu().numpy()
+            
+        test_preds = test_preds*y_scale_params[1] + y_scale_params[0]
+        test_targets = test_targets*y_scale_params[1] + y_scale_params[0]
+
     print(f">>> Test MAE: {test_mae:.6f}")
     print(f">>> Test MAPE: {test_mape*100:.4f}%")
     np.savez_compressed(results_save_path, preds=test_preds, targets=test_targets)
