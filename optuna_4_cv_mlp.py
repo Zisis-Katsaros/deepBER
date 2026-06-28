@@ -6,6 +6,7 @@ from load_set import create_param_dataloader
 from prediction.predictor import DeepBER_Param_Predictor_Complex
 from rmse import RMSELoss
 from prediction.test_predictor_config import test_predictor_configuration
+from complexNN import nn as cvnn
 
 
 # ============================================= Initializing Dataset ============================================= #
@@ -50,7 +51,7 @@ for element in elements:
     predictor = DeepBER_Param_Predictor_Complex(
         input_size=len(feature_columns) - 1, 
         hidden=[128, 96, 64, 48, 32], 
-        activation_fn=nn.GELU(), 
+        activation_fn=cvnn.cGelu(), 
         dropout=0.0
         ).to(device)
     
