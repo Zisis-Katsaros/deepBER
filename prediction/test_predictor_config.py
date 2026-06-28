@@ -6,7 +6,7 @@ import numpy as np
 import os
 
 def test_predictor_configuration(title, device, model, dataloader, learning_rate, batch_size, criterion, optimizer, scheduler=None,
-                       epochs=30, early_stopping=False, patience=5, training_curves=False,
+                       epochs=30, early_stopping=False, patience=5, y_scale_params = None, training_curves=False,
                        predicted_vs_actual=False, error_distribution=False, error_vs_feature=None,
                        feature_columns=None, output_names = None, test_out_dir='.'):
     # Train model with given configuration 
@@ -53,7 +53,6 @@ def test_predictor_configuration(title, device, model, dataloader, learning_rate
     os.makedirs(test_out_dir, exist_ok=True)
     model_save_path = os.path.join(test_out_dir, "best_model.pth")
     training_curves_save_path = os.path.join(test_out_dir, "training_curves.png")
-    pred_vs_act_save_path = os.path.join(test_out_dir, "pred_vs_actual.png")
     results_save_path = os.path.join(test_out_dir, "test_results.npz")
 
     # Initialize data splits
@@ -113,13 +112,22 @@ def test_predictor_configuration(title, device, model, dataloader, learning_rate
     print(f"==================== Training complete ====================")
 
     test_loss, test_mae, test_mape, test_preds, test_targets, *_ = test_pred_loop(model, test_data, criterion, device)
+
+    if y_scale_params is not None:
+        if torch.is_tensor(test_preds):
+            test_preds = test_preds.cpu().numpy()
+            test_targets = test_targets.cpu().numpy()
+            
+        test_preds = test_preds*y_scale_params[1] + y_scale_params[0]
+        test_targets = test_targets*y_scale_params[1] + y_scale_params[0]
+
     print(f">>> Test MAE: {test_mae:.6f}")
-    # print(f">>> Test MAPE: {test_mape*100:.4f}%")
+    print(f">>> Test MAPE: {test_mape*100:.4f}%")
     np.savez_compressed(results_save_path, preds=test_preds, targets=test_targets)
 
     num_outputs = test_preds.shape[1] if test_preds.ndim > 1 else 1
     if output_names is None:
-        output_names = [f"Output Target {i+1}" for i in range(num_outputs)]
+        output_names = [f"Out{i+1}" for i in range(num_outputs)]
 
     if num_outputs > 1:
         print("\n>>> Performance Breakdown per Output Target:")
@@ -138,7 +146,22 @@ def test_predictor_configuration(title, device, model, dataloader, learning_rate
         plot_training_curves(train_losses, val_losses, train_maes, val_maes, title=title, save_path=training_curves_save_path)
     
     if predicted_vs_actual:
-        plot_predicted_vs_actual(test_targets, test_preds, title=title, save_path=pred_vs_act_save_path)
+        if num_outputs > 1:
+            for out_idx in range(num_outputs):
+                title_out = f"{title} - {output_names[out_idx]}"
+                pred_vs_act_save_path = os.path.join(test_out_dir, f"pred_vs_actual_out{out_idx}.png")
+                plot_predicted_vs_actual(test_targets[:, out_idx], test_preds[:, out_idx], title=title_out, save_path=pred_vs_act_save_path)
+        elif test_targets[0].dtype == np.complex64:
+            title_real = f"{title} - Real Part"
+            title_imag = f"{title} - Imaginary Part"
+            pred_vs_act_save_path_real = os.path.join(test_out_dir, "pred_vs_actual_real.png")
+            pred_vs_act_save_path_imag = os.path.join(test_out_dir, "pred_vs_actual_imag.png")
+            
+            plot_predicted_vs_actual(test_targets.real, test_preds.real, title=title_real, save_path=pred_vs_act_save_path_real)
+            plot_predicted_vs_actual(test_targets.imag, test_preds.imag, title=title_imag, save_path=pred_vs_act_save_path_imag)
+        else:
+            pred_vs_act_save_path = os.path.join(test_out_dir, "pred_vs_actual.png")
+            plot_predicted_vs_actual(test_targets, test_preds, title=title, save_path=pred_vs_act_save_path)
     
     if error_distribution:
         plot_error_distribution(test_targets, test_preds, title=title)

@@ -525,10 +525,15 @@ def create_param_dataloader(
 	# Standard scaling
 	if standard_scale:
 		# Fit scaling parameters on train split only to avoid leakage.
-		train_mean = x_features[train_idx].mean(axis=0)
-		train_std = x_features[train_idx].std(axis=0)
-		train_std = np.where(train_std == 0.0, 1.0, train_std)
-		x_features = ((x_features - train_mean) / train_std).astype(np.float32)
+		x_train_mean = x_features[train_idx].mean(axis=0)
+		x_train_std = x_features[train_idx].std(axis=0)
+		x_train_std = np.where(x_train_std == 0.0, 1.0, x_train_std)
+		x_features = ((x_features - x_train_mean) / x_train_std).astype(np.float32)
+
+		y_train_mean = y_array[train_idx].mean(axis=0)
+		y_train_std = y_array[train_idx].std(axis=0)
+		y_train_std = np.where(y_train_std == 0.0, 1.0, y_train_std)
+		y_array = ((y_array - y_train_mean) / y_train_std)
 
 	train_set = TensorDataset(
 		torch.from_numpy(x_features[train_idx]),
@@ -547,4 +552,7 @@ def create_param_dataloader(
 	val_data = DataLoader(val_set, batch_size=batch_size, shuffle=False)
 	test_data = DataLoader(test_set, batch_size=batch_size, shuffle=False)
 
-	return [train_data, val_data, test_data]
+	if standard_scale:
+		return [train_data, val_data, test_data], (y_train_mean, y_train_std)
+	else:
+		return [train_data, val_data, test_data]
