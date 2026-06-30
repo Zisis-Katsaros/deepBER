@@ -3,7 +3,7 @@ from pathlib import Path
 import numpy as np
 from numpy.typing import NDArray
 import torch
-from torch.utils.data import DataLoader, TensorDataset, random_split
+from torch.utils.data import DataLoader, TensorDataset
 from dataset_manipulation import extend_features, exclude_columns
 from classification.ber_to_class import ber_to_class
 from prediction.s2abcd import s2generalized_abcd
