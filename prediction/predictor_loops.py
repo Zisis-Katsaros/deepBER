@@ -145,7 +145,7 @@ def test_pred_loop(model, data: torch.utils.data.DataLoader, criterion: torch.nn
     eps = 1e-8 # to account for labels being equal to 0
 
     with torch.no_grad(): # disable gradient calculation
-        for inputs, labels, _ in data:
+        for inputs, labels in data:
             inputs = inputs.to(device)
             labels = labels.to(device)
 

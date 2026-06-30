@@ -208,15 +208,15 @@ def create_param_prediction_arrays(csv_names: list[str], expected_ports:int = 18
 	else:
 		raise ValueError("sampling_method must be 'random' or 'lhs'.")
 	
-	# Get indices of selected rows in x_array and create sampling mask
+	# Get indices of selected rows in x_array and sort to maintain original order
 	selected_row_indices = np.concatenate([grouping[i] for i in sampled_group_idxs])
-	mask = np.isin(x_array[:,0], selected_row_indices)
+	selected_row_indices = np.sort(selected_row_indices)
 
-	x_array = x_array[mask]
+	x_array = x_array[selected_row_indices]
 
 	for dict in [s_dict, a_dict, b_dict, c_dict, d_dict]:
 		for key in dict.keys():
-			dict[key] = dict[key][mask]
+			dict[key] = dict[key][selected_row_indices]
 			
 	# Return
 	return x_array, s_dict, a_dict, b_dict, c_dict, d_dict, feature_columns
@@ -474,15 +474,15 @@ def create_param_dataloader(x_array: NDArray, y_array: NDArray, batch_size: int 
 	test_group_ids = split_group_ids[train_size + val_size:]
 
 	# Map grouping ids to original row indices (accounting for the case that val and test sets are empty)
-	train_row_ids = np.concatenate([grouping[i] for i in train_group_ids])
-	val_row_ids = np.concatenate([grouping[i] for i in val_group_ids]) if len(val_group_ids) > 0 else np.array([], dtype=int)
-	test_row_ids = np.concatenate([grouping[i] for i in test_group_ids]) if len(test_group_ids) > 0 else np.array([], dtype=int)
+	train_idx = np.concatenate([grouping[i] for i in train_group_ids])
+	val_idx = np.concatenate([grouping[i] for i in val_group_ids]) if len(val_group_ids) > 0 else np.array([], dtype=int)
+	test_idx = np.concatenate([grouping[i] for i in test_group_ids]) if len(test_group_ids) > 0 else np.array([], dtype=int)
 
-	# Split samples into train/val/test
-	train_idx = np.isin(x_array[:,0], train_row_ids)
-	val_idx = np.isin(x_array[:,0], val_row_ids)
-	test_idx = np.isin(x_array[:,0], test_row_ids)
-	
+	# Sort to maintain original order
+	train_idx = np.sort(train_idx)
+	val_idx = np.sort(val_idx)
+	test_idx = np.sort(test_idx)
+
 	# Standard scaling
 	if standard_scale:
 		# Fit scaling parameters on train split only to avoid leakage.

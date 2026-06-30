@@ -57,8 +57,8 @@ def extend_features(x_array: NDArray, feature_names: list[str], first_column: st
 	first_idx = feature_names.index(first_column)
 	second_idx = feature_names.index(second_column)
 
-	val1 = x_array[:, first_idx].astype(np.float64)
-	val2 = x_array[:, second_idx].astype(np.float64)
+	val1 = x_array[:, first_idx].astype(np.float32)
+	val2 = x_array[:, second_idx].astype(np.float32)
 
 	if operation == "+":
 		new_feature = (val1 + val2).reshape(-1, 1)
@@ -119,8 +119,8 @@ def pki_extend(x_array: NDArray, feature_names: list[str], pki: NDArray, mode: L
 		x_array = np.hstack((x_array, pki))
 		feature_names.append("pki")
 	else:
-		x_array = np.hstack((x_array, pki.real))
-		x_array = np.hstack((x_array, pki.imag))
+		x_array = np.hstack((x_array, pki.real)).astype(np.float32)
+		x_array = np.hstack((x_array, pki.imag)).astype(np.float32)
 		feature_names.append("pki_real")
 		feature_names.append("pki_imag")
 
