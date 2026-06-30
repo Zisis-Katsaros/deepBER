@@ -1,16 +1,22 @@
 import numpy as np
+from numpy.typing import NDArray
+from typing import Literal
+from scipy.interpolate import interp1d
 
 
-def exclude_columns(x_array, feature_names, columns_to_exclude):
-	# Removes specified columns from x_array
-	#
-	# Args:
-	# - x_array: 2D array of features
-	# - feature_names: List of feature column names
-	# - columns_to_exclude: List of column names to exclude
-	# Returns:
-	# - x_array: Updated 2D array with excluded columns removed
-	# - feature_names: Updated list of feature column names
+def exclude_columns(x_array: NDArray, feature_names: list[str], columns_to_exclude: list[str]):
+	"""
+	# exclude_columns()
+	## Removes specified columns from x_array
+
+	## Args:
+	- x_array: 2D array of features
+	- feature_names: List of feature column names
+	- columns_to_exclude: List of column names to exclude
+	## Returns:
+	- x_array: Updated 2D array with excluded columns removed
+	- feature_names: Updated list of feature column names
+	"""
 
 	# Validate that all columns to exclude exist
 	for col in columns_to_exclude:
@@ -26,19 +32,24 @@ def exclude_columns(x_array, feature_names, columns_to_exclude):
 
 	return x_filtered, feature_names_filtered
 
-def extend_features(x_array, feature_names, first_column, second_column, operation, new_feature_name):
-	# Extends features by applying an operation to two existing features
-	#
-	# Args:
-	# - x_array: 2D array of features
-	# - feature_names: List of feature column names
-	# - first_column: Name of the first feature column
-	# - second_column: Name of the second feature column
-	# - operation: Function that takes two arrays and returns a new array (e.g. lambda a, b: a * b)
-	# - new_feature_name: Name of the new feature column to be added
-	# Returns:
-	# - x_array: Updated 2D array of features with the new feature added
-	# - feature_names: Updated list of feature column names with the new feature name added
+
+def extend_features(x_array: NDArray, feature_names: list[str], first_column: str, second_column: str, operation: Literal["+", "-", "*", "/"], 
+					new_feature_name: str):
+	"""
+	# extend_features()
+	## Extends features by applying an operation to two existing features (e.g. "width" "/" "space" -> "width_space_ratio")
+	
+	## Args:
+	- x_array: 2D array of features
+	- feature_names: List of feature column names
+	- first_column: Name of the first feature column
+	- second_column: Name of the second feature column
+	- operation: +, -, * or /
+	- new_feature_name: Name of the new feature column to be added
+	## Returns:
+	- x_array: Updated 2D array of features with the new feature added
+	- feature_names: Updated list of feature column names with the new feature name added
+	"""
 
 	if first_column not in feature_names or second_column not in feature_names:
 		raise ValueError(f"Both columns must be in feature_names.")
@@ -67,15 +78,50 @@ def extend_features(x_array, feature_names, first_column, second_column, operati
 	return x_array, feature_names
 
 
-def mock_pki(x_array, feature_names, y_array, noise_factor=0.2):
-	y_std = np.std(y_array)
-	noise_std = noise_factor * y_std
+def mock_pki(freqs, s_param_actual, f0: float =10.0, alpha: float =0.012, beta: float =0.05):
+	"""
+	# mock_pki()
+	## Simulates prior knowledge input by taking the actual s parameters and warping their phase and magnitude
+	"""
+	# Phase error
+	freqs_warped = freqs * (1 + alpha *(freqs - f0))
 
-	noise = np.random.normal(0, noise_std, y_array.shape)
-	pki = y_array + noise
-	pki = np.clip(pki).reshape(-1,1)
+	# Interpolation
+	interp_real = interp1d(freqs, s_param_actual.real, kind='cubic', fill_value="extrapolate")
+	interp_imag = interp1d(freqs, s_param_actual.imag, kind='cubic', fill_value="extrapolate")
 
-	x_array = np.hstack((x_array, pki))
-	feature_names.append("pki")
+	s_param_warped_real = interp_real(freqs_warped)
+	s_param_warped_imag = interp_imag(freqs_warped)
+	s_param_warped = s_param_warped_real + 1j * s_param_warped_imag
+
+	# Amplitude error
+	amplitude_error_envelope = 1 + beta * np.sqrt(np.abs(freqs - f0))
+
+	s_param_mock = s_param_warped * amplitude_error_envelope
+	return s_param_mock
+
+def pki_extend(x_array: NDArray, feature_names: list[str], pki: NDArray, mode: Literal["real", "complex"] ="real"):
+	"""
+	# pki_extend()
+	## Extends features by adding prior knowledge input, works for real and complex values
+	
+	## Args:
+	- x_array: 2D array of features
+	- feature_names: List of feature column names
+	- pki: 1D array of prior knowledge input for each sample
+	- mode: if "real", two new featuresget added: Re(pki) and Im(pki), if "complex"	one gets added: Re(pki) + 1j*Im(pki)
+	## Returns:
+	- x_array: Updated 2D array of features with the new pki feature added
+	- feature_names: Updated list of feature column names with the new pki feature name(s) added
+	"""
+	pki = pki.reshape(-1, 1)
+	if mode == "complex":
+		x_array = np.hstack((x_array, pki))
+		feature_names.append("pki")
+	else:
+		x_array = np.hstack((x_array, pki.real))
+		x_array = np.hstack((x_array, pki.imag))
+		feature_names.append("pki_real")
+		feature_names.append("pki_imag")
 
 	return x_array, feature_names
