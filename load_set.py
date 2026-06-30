@@ -210,19 +210,21 @@ def create_param_prediction_arrays(csv_names: list[str], expected_ports:int = 18
 	return x_array, s_dict, a_dict, b_dict, c_dict, d_dict, feature_columns
 
 
-def load_csv_dataset(csv_names, target_columns="BER", subfolder=None):
-	# Loads dataset from CSV file
-	#
-	# Args:
-	# - csv_names: List of CSV file names
-	# - target_columns: List of target column names
-	# - subfolder: Subfolder in csv_files where the datasets are located 
-	# Returns:
-	# - x_array: 2D array of features
-	# - y_array: 1D array of labels
-	# - feature_columns: List of feature column names 
+def load_csv_dataset(csv_names: list[str], target_columns="BER", subfolder: str =None):
+	""""
+	# load_csv_dataset()
+	## Loads dataset from CSV file(s)
 
-			
+	## Args:
+	- csv_names: List of CSV file names
+	- target_columns: List of target column names
+	- subfolder: Subfolder in csv_files/ where the datasets are located 
+	## Returns:
+	- x_array: 2D array of features
+	- y_array: 1D array of labels
+	- feature_columns: List of feature column names 
+	"""
+
 	# If target_columns is given as a single string, convert it to a list for consistent processing
 	if not isinstance(target_columns, list):
 		target_columns = [target_columns]
@@ -230,12 +232,11 @@ def load_csv_dataset(csv_names, target_columns="BER", subfolder=None):
 	else:
 		single_target = False
 
-
 	x_array = []
 	y_array = []
 	feature_columns = None
 	
-
+	# Iterate through csv files and extract inputs, labels and feature names from each one
 	for idx, name in enumerate(csv_names):
 		if subfolder is not None:
 			dataset_path = Path(__file__).resolve().parent / "csv_files" / subfolder / name
