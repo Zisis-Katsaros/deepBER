@@ -1,41 +1,44 @@
 from prediction.predictor_loops import train_pred_loop, test_pred_loop
 from visualization import plot_error_distribution, plot_error_vs_feature, plot_predicted_vs_actual, plot_training_curves, plot_ber_vs_length
-import prediction.predictor as predictor
 import torch
 import numpy as np
 import os
 
-def test_predictor_configuration(title, device, model, dataloader, learning_rate, batch_size, criterion, optimizer, scheduler=None,
-                       epochs=30, early_stopping=False, patience=5, y_scale_params = None, training_curves=False,
-                       predicted_vs_actual=False, error_distribution=False, error_vs_feature=None,
-                       feature_columns=None, output_names = None, test_out_dir='.'):
-    # Train model with given configuration 
-    #
-    # Args:
-    # - title: Title of the test configuration (for visualization and logging)
-    # - device: Device to run the model on (CPU or GPU)
-    # - model: The neural network model to be trained and evaluated
-    # - dataloader: [train_data, val_data, test_data]
-    # - learning_rate: Learning rate for the optimizer
-    # - batch_size: Batch size for training and evaluation
-    # - criterion: Loss function
-    # - optimizer: Optimization algorithm
-    # - epochs: Maximum number of training epochs
-    # - early_stopping: If true training stops if there is no improvement
-    # - patience: Number of epochs to wait for improvement before stopping (if early_stopping is true)
-    # - training_curves: If true training curves will be plotted at the end of training
-    # - predicted_vs_actual: If true a plot of predicted vs. actual values will be plotted at the end of training
-    # - error_distribution: If true a histogram of prediction errors will be plotted at the end of training
-    # - error_vs_feature: List of feature names for which to plot error vs. feature
-    # - feature_columns: List of feature names matching the model input columns
-    # Returns:
-    # *none*
+def test_predictor_configuration(title: str, device: torch.device, model, dataloader: list[torch.utils.data.DataLoader], learning_rate: float, 
+                                batch_size: int, criterion: torch.nn.Module, optimizer: torch.optim.Optimizer, scheduler=None, epochs: int =30, 
+                                early_stopping: bool =False, patience: int =5, y_scale_params: tuple =None, training_curves: bool =False,
+                                predicted_vs_actual: bool =False, error_distribution: bool =False, error_vs_feature: bool =None,
+                                feature_columns=None, output_names = None, test_out_dir: str ='.'):
+    """ 
+    # test_predictor_configuration()
+    ## Train model with given configuration and visualize/ save results
+    
+    ## Args:
+    - title: Title of the test configuration (for visualization and logging)
+    - device: Device to run the model on (CPU or GPU)
+    - model: The neural network model to be trained and evaluated
+    - dataloader: [train_data, val_data, test_data]
+    - learning_rate: Learning rate for the optimizer
+    - batch_size: Batch size for training and evaluation
+    - criterion: Loss function
+    - optimizer: Optimization algorithm
+    - epochs: Maximum number of training epochs
+    - early_stopping: If true training stops if there is no improvement
+    - patience: Number of epochs to wait for improvement before stopping (if early_stopping is true)
+    - training_curves: If true training curves will be plotted at the end of training
+    - predicted_vs_actual: If true a plot of predicted vs. actual values will be plotted at the end of training
+    - error_distribution: If true a histogram of prediction errors will be plotted at the end of training
+    - error_vs_feature: List of feature names for which to plot error vs. feature
+    - feature_columns: List of feature names matching the model input columns
+    - output_names: Name of each output incase of multiple outputs
+    - test_out_dir: Directory where output files are saved
+    ## Returns:
+    *none*
+    """
 
-    # Print test details
-    print(f'Using device: {device}\n\n')
-
-    print(f"{title}")
+    # Print test details 
     print(f" Info:")
+    print(f'Using device: {device}')
     print(f" - Model:")
     print(model)
     print(f" - Data Split:")
@@ -50,6 +53,7 @@ def test_predictor_configuration(title, device, model, dataloader, learning_rate
     if early_stopping:
         print(f" - Patience: {patience}")
 
+    # Create output directories
     os.makedirs(test_out_dir, exist_ok=True)
     model_save_path = os.path.join(test_out_dir, "best_model.pth")
     training_curves_save_path = os.path.join(test_out_dir, "training_curves.png")
