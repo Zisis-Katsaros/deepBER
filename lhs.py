@@ -24,7 +24,6 @@ def latin_hypercube_order(x_array: NDArray, sample_size: int, seed: int =42):
 	if sample_size <= 0:
 		raise ValueError("sample_size must be greater than 0.")
 
-	
 	x_min = x_view.min(axis=0)
 	x_max = x_view.max(axis=0)
 	x_range = np.where((x_max - x_min) == 0.0, 1.0, x_max - x_min)
