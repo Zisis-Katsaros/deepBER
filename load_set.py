@@ -513,7 +513,10 @@ def create_param_dataloader(x_array: NDArray, y_array: NDArray, batch_size: int 
 	val_data = DataLoader(val_set, batch_size=batch_size, shuffle=False)
 	test_data = DataLoader(test_set, batch_size=batch_size, shuffle=False)
 
+	dataloader = [train_data, val_data, test_data]
+	x_scale_params = (x_train_mean, x_train_std)
+	y_scale_params = (y_train_mean, y_train_std)
 	if standard_scale:
-		return [train_data, val_data, test_data], (x_train_mean, x_train_std), (y_train_mean, y_train_std)
+		return dataloader, x_scale_params, y_scale_params
 	else:
-		return [train_data, val_data, test_data]
+		return dataloader, None, None
