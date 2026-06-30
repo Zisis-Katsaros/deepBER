@@ -10,13 +10,23 @@ from prediction.s2abcd import s2generalized_abcd
 from lhs import latin_hypercube_order
 from typing import Literal
 
-def get_grouping(x_array, n_non_unique_feats: int = 7, round_decimals: int = 5):
+def get_grouping(x_array: NDArray, n_non_unique_feats: int = 7, round_decimals: int = 5):
+	"""
+	# get_grouping()
+	## For a given x_array containing mixed-up grouped samples, gets how samples are grouped and each set of unique features
+
+	## Args:
+	- x_array: 2D array of mixed-up grouped samples
+	- n_non_unique_feats: Number of non unique features, it is assumed that these are the frist n features
+	- round_decimal: Rounding will occur after this many digits after decimal point, if None no rounding will occur
+	"""
 	geometries = x_array[:, :n_non_unique_feats]
 
 	if round_decimals is not None:
 		geometries = np.round(geometries, decimals=round_decimals)
 
-	unique_geoms, inverse_indices = np.unique(geometries, axis=0, return_inverse=True)
+	# Get each unique set of features and their positions
+	unique_feats, inverse_indices = np.unique(geometries, axis=0, return_inverse=True)
 
 	sort_idx = np.argsort(inverse_indices)
 	sorted_group_ids = inverse_indices[sort_idx]
@@ -25,7 +35,7 @@ def get_grouping(x_array, n_non_unique_feats: int = 7, round_decimals: int = 5):
 	split_indices = np.flatnonzero(np.diff(sorted_group_ids)) + 1
 
 	grouping_indices = np.split(sort_idx, split_indices)
-	return grouping_indices, unique_geoms
+	return grouping_indices, unique_feats
 
 
 def create_arrays(csv_names, target_columns, thresholds, test_names, manipulate_features = None,  
