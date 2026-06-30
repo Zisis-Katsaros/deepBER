@@ -1,6 +1,7 @@
 import csv
 from pathlib import Path
 import numpy as np
+from numpy.typing import NDArray
 import torch
 from torch.utils.data import DataLoader, TensorDataset, random_split
 from dataset_manipulation import extend_features, exclude_columns
@@ -182,6 +183,7 @@ def create_param_prediction_arrays(csv_names: list[str], expected_ports:int = 18
 	if not 0.0 < sample_percentage <= 1.0:
 		raise ValueError("sample_percentage must be within the interval (0.0, 1.0].")
 
+	# Get grouping indices and unique geometries from x_array
 	grouping, unique_geoms = get_grouping(x_array)
 	
 	total_size = len(grouping)
@@ -192,7 +194,7 @@ def create_param_prediction_arrays(csv_names: list[str], expected_ports:int = 18
 		generator = torch.Generator().manual_seed(seed)
 		sampled_group_idxs = torch.randperm(total_size, generator=generator)[:sample_size].numpy()
 	elif sampling_method == "lhs":
-		selected_group_ids = latin_hypercube_order(unique_geoms, sample_size, seed=seed, grouped=True)
+		selected_group_ids = latin_hypercube_order(unique_geoms, sample_size, seed=seed)
 	else:
 		raise ValueError("sampling_method must be 'random' or 'lhs'.")
 	
@@ -406,26 +408,25 @@ def create_dataloader(
 	return [train_data, val_data, test_data]
 
 
-def create_param_dataloader(
-	x_array,
- 	y_array,
- 	batch_size=64,
- 	seed=42,
- 	standard_scale=False,
-	split_method="random",
-):
-	# Creates dataloader
-	#
-	# Args:
-	# - x_array: 2D array of features
-	# - y_array: 1D array of labels
-	# - batch_size: Batch size for dataloader
-	# - seed: Random seed for reproducibility
-	# - standard_scale: If true standard scaling is applied to features
-	# - split_method: "random" or "lhs" for splitting the dataset
-	# Returns:
-	# - dataloader: [train_data, val_data, test_data], x_scale_params, y_scale_params
+def create_param_dataloader(x_array: NDArray, y_array: NDArray, batch_size: int =64, seed: int =42, standard_scale: bool =False,
+							split_method: Literal["random", "lhs"] = "random", split_percentages: list[float]=[0.8, 0.1]):
+	"""
+	# create_param_dataloader()
+	## Creates train/val/test dataloader
 
+	## Args:
+	- x_array: 2D array of features
+	- y_array: 1D array of labels
+	- batch_size: Batch size for dataloader
+	- seed: Random seed for reproducibility
+	- standard_scale: If true standard scaling is applied to features and labels using mean and std of the training data
+	- split_method: "random" or "lhs" for splitting the dataset
+	- split_percentages: [percentage of samples for training set, percentage of samples for validation set]
+	## Returns:
+	- dataloader: [train_data, val_data, test_data]
+	- x_scale_params: (x_train_mean, x_train_std)
+	- y_scale_params: (y_train_mean, y_train_std)
+	"""
 
 	if len(y_array) == 0:
 		raise ValueError("No samples found inside the provided label array.")
@@ -437,42 +438,48 @@ def create_param_dataloader(
 			y_array = np.asarray(y_array, dtype=np.float32).reshape(-1, 1)
 
 	# Set split percentages
-	train_percent = 0.8
-	val_percent = 0.1
+	train_percent = split_percentages[0]
+	val_percent = split_percentages[1]
+	if train_percent + val_percent > 1.0:
+		raise ValueError("train_percent + val_percent cannot exceed 1.0")
 
-	sample_ids = list(set(x_array[:,0]))
+	# Get grouping indices and unique geometries from x_array
+	grouping, unique_geoms = get_grouping(x_array)
 
-	total_size = len(sample_ids)
+	total_size = len(grouping)
 	train_size = int(total_size * train_percent)
 	val_size = int(total_size * val_percent)
 
 	if split_method == "random":
 		generator = torch.Generator().manual_seed(seed)
-		split_sample_ids = torch.randperm(total_size, generator=generator).numpy()
+		split_group_ids = torch.randperm(total_size, generator=generator).numpy()
 	elif split_method == "lhs":
-		split_sample_ids = latin_hypercube_order(x_array, total_size, seed=seed, grouped=True)
+		split_group_ids = latin_hypercube_order(unique_geoms, total_size, seed=seed)
 	else:
 		raise ValueError("split_method must be 'random' or 'lhs'.")
 
-	train_ids = split_sample_ids[:train_size]
-	val_ids = split_sample_ids[train_size:train_size + val_size]
-	test_ids = split_sample_ids[train_size + val_size:]
+	# Split grouping ids into train/val/test
+	train_group_ids = split_group_ids[:train_size]
+	val_group_ids = split_group_ids[train_size:train_size + val_size]
+	test_group_ids = split_group_ids[train_size + val_size:]
 
-	train_idx = np.isin(x_array[:,0], train_ids)
-	val_idx = np.isin(x_array[:,0], val_ids)
-	test_idx = np.isin(x_array[:,0], test_ids)
+	# Map grouping ids to original row indices (accounting for the case that val and test sets are empty)
+	train_row_ids = np.concatenate([grouping[i] for i in train_group_ids])
+	val_row_ids = np.concatenate([grouping[i] for i in val_group_ids]) if len(val_group_ids) > 0 else np.array([], dtype=int)
+	test_row_ids = np.concatenate([grouping[i] for i in test_group_ids]) if len(test_group_ids) > 0 else np.array([], dtype=int)
+
+	# Split samples into train/val/test
+	train_idx = np.isin(x_array[:,0], train_row_ids)
+	val_idx = np.isin(x_array[:,0], val_row_ids)
+	test_idx = np.isin(x_array[:,0], test_row_ids)
 	
-	str_id_array = x_array[:, 0]
-	unique_string_ids, id_array_int = np.unique(str_id_array, return_inverse=True)
-
-	x_features = x_array[:, 1:].astype(float)
 	# Standard scaling
 	if standard_scale:
 		# Fit scaling parameters on train split only to avoid leakage.
-		x_train_mean = x_features[train_idx].mean(axis=0)
-		x_train_std = x_features[train_idx].std(axis=0)
+		x_train_mean = x_array[train_idx].mean(axis=0)
+		x_train_std = x_array[train_idx].std(axis=0)
 		x_train_std = np.where(x_train_std == 0.0, 1.0, x_train_std)
-		x_features = ((x_features - x_train_mean) / x_train_std).astype(np.float32)
+		x_array = ((x_array - x_train_mean) / x_train_std)
 
 		y_train_mean = y_array[train_idx].mean(axis=0)
 		y_train_std = y_array[train_idx].std(axis=0)
@@ -480,33 +487,23 @@ def create_param_dataloader(
 		y_array = ((y_array - y_train_mean) / y_train_std)
 
 	train_set = TensorDataset(
-		torch.from_numpy(x_features[train_idx]),
+		torch.from_numpy(x_array[train_idx]),
 		torch.from_numpy(y_array[train_idx]),
-		torch.from_numpy(id_array_int[train_idx])
 	)
 	val_set = TensorDataset(
-		torch.from_numpy(x_features[val_idx]),
+		torch.from_numpy(x_array[val_idx]),
 		torch.from_numpy(y_array[val_idx]),
-		torch.from_numpy(id_array_int[val_idx])
 	)
 	test_set = TensorDataset(
-		torch.from_numpy(x_features[test_idx]),
+		torch.from_numpy(x_array[test_idx]),
 		torch.from_numpy(y_array[test_idx]),
-		torch.from_numpy(id_array_int[test_idx])
 	)
 
 	train_data = DataLoader(train_set, batch_size=batch_size, shuffle=True)
 	val_data = DataLoader(val_set, batch_size=batch_size, shuffle=False)
 	test_data = DataLoader(test_set, batch_size=batch_size, shuffle=False)
 
-	sample_ids = {
-		"train": train_ids,
-        "val": val_ids,
-        "test": test_ids,
-		"id_mapping": unique_string_ids
-	}
-
 	if standard_scale:
-		return [train_data, val_data, test_data], (x_train_mean, x_train_std), (y_train_mean, y_train_std), sample_ids
+		return [train_data, val_data, test_data], (x_train_mean, x_train_std), (y_train_mean, y_train_std)
 	else:
-		return [train_data, val_data, test_data], 
+		return [train_data, val_data, test_data]
