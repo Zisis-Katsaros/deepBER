@@ -204,7 +204,7 @@ def create_param_prediction_arrays(csv_names: list[str], expected_ports:int = 18
 		generator = torch.Generator().manual_seed(seed)
 		sampled_group_idxs = torch.randperm(total_size, generator=generator)[:sample_size].numpy()
 	elif sampling_method == "lhs":
-		selected_group_ids = latin_hypercube_order(unique_geoms, sample_size, seed=seed)
+		sampled_group_idxs = latin_hypercube_order(unique_geoms, sample_size, seed=seed)
 	else:
 		raise ValueError("sampling_method must be 'random' or 'lhs'.")
 	
@@ -310,14 +310,14 @@ def load_csv_dataset(csv_names: list[str], target_columns="BER", subfolder: str 
 		if not features:
 			raise ValueError("No valid numeric rows were found in the dataset.")
 
-		x_batch = np.asarray(features)
+		x_batch = np.asarray(features, dtype=np.float32)
 		y_batch = np.asarray(targets, dtype=np.float32)
 
 		x_array.extend(x_batch)
 		y_array.extend(y_batch)
 
 	# Convert lists back to numpy arrays with proper shape
-	x_array = np.asarray(x_array).reshape(-1, len(feature_columns))
+	x_array = np.asarray(x_array, dtype=np.float32).reshape(-1, len(feature_columns))
 	y_array = np.asarray(y_array, dtype=np.float32)
 	
 	return x_array, y_array, feature_columns
