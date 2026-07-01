@@ -3,6 +3,61 @@ import matplotlib.pyplot as plt
 from sklearn.metrics import confusion_matrix
 import os
 
+
+def plot_pki_vs_act_freq(true_labels, pki, freq_array, title=None, save_path=None):
+    fig, ax = plt.subplots(figsize=(10, 6))
+    
+    if title is not None:
+        ax.set_title(title + ": PKI vs. Actual", fontsize=16)
+    else:
+        ax.set_title("PKI vs. Actual", fontsize=16)
+
+    ax.scatter(freq_array, true_labels, color='blue', alpha=0.7, label='Actual Waveform')
+    ax.scatter(freq_array, pki, color='orange', alpha=0.7, label='Predicted Waveform')
+
+    ax.set_xlabel("Frequency (GHz)")
+    ax.set_ylabel("PKI/ Actuals")
+    ax.legend()
+    ax.grid(True)
+    plt.tight_layout()
+
+    # Saving plot
+    if save_path is not None:
+        os.makedirs(os.path.dirname(os.path.abspath(save_path)), exist_ok=True)
+        plt.savefig(save_path, dpi=300, bbox_inches='tight')
+        print(f"Plot saved successfully to: {save_path}")
+
+    plt.show()
+
+
+def plot_preds_vs_act_freq(true_labels, predictions, freq_array, pki=None, title=None, save_path=None):
+    fig, ax = plt.subplots(figsize=(10, 6))
+    
+    if title is not None:
+        ax.set_title(title + ": Predictions vs. Actual", fontsize=16)
+    else:
+        ax.set_title("Predictions vs. Actual", fontsize=16)
+
+    if pki is not None:
+        ax.scatter(freq_array, pki, color='red', alpha=0.5, label='PKI')
+    ax.scatter(freq_array, true_labels, color='blue', alpha=0.7, label='Actual Waveform')
+    ax.scatter(freq_array, predictions, color='orange', alpha=0.7, label='Predicted Waveform')
+    
+    ax.set_xlabel("Frequency (GHz)")
+    ax.set_ylabel("Predictions/ Actuals")
+    ax.legend()
+    ax.grid(True)
+    plt.tight_layout()
+
+    # Saving plot
+    if save_path is not None:
+        os.makedirs(os.path.dirname(os.path.abspath(save_path)), exist_ok=True)
+        plt.savefig(save_path, dpi=300, bbox_inches='tight')
+        print(f"Plot saved successfully to: {save_path}")
+
+    plt.show()
+
+
 def plot_ber_vs_length(length_values, predictions, title=None):
     # Plots BER predictions as a function of length.
     #
