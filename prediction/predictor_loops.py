@@ -206,6 +206,7 @@ def test_pred_loop(model, data: torch.utils.data.DataLoader, criterion: torch.nn
                 total_mape += torch.sum(error / (torch.abs(labels) + eps)).item()
 
                 total_mae_per_output += torch.sum(error, dim=0)
+                total_mape_per_output += torch.sum(error / (torch.abs(labels) + eps), dim=0)
 
     avg_loss = total_loss / total_samples
 
