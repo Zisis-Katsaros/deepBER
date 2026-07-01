@@ -1,5 +1,6 @@
 from prediction.predictor_loops import train_pred_loop, test_pred_loop
-from visualization import plot_error_distribution, plot_error_vs_feature, plot_predicted_vs_actual, plot_training_curves, plot_ber_vs_length
+from visualization import plot_error_distribution, plot_error_vs_feature, plot_predicted_vs_actual, plot_training_curves, plot_ber_vs_length, plot_preds_vs_act_freq
+from load_set import get_grouping
 import torch
 import numpy as np
 import os
@@ -115,7 +116,7 @@ def test_predictor_configuration(title: str, device: torch.device, model, datalo
 
     print(f"==================== Training complete ====================")
 
-    test_loss, test_mae, test_mape, test_preds, test_targets, *_ = test_pred_loop(model, test_data, criterion, device)
+    test_loss, test_mae, test_mape, test_preds, test_targets, avg_mae_per_output, avg_mape_per_output, *_ = test_pred_loop(model, test_data, criterion, device)
 
     if y_scale_params is not None:
         if torch.is_tensor(test_preds):
@@ -137,13 +138,9 @@ def test_predictor_configuration(title: str, device: torch.device, model, datalo
         print("\n>>> Performance Breakdown per Output Target:")
         for i in range(num_outputs):
             name = output_names[i]
-            col_mae = np.mean(np.abs(test_preds[:, i] - test_targets[:, i]))
-            
-            # Prevent division by zero if targets contain 0
-            with np.errstate(divide='ignore', invalid='ignore'):
-                col_mape = np.mean(np.abs((test_preds[:, i] - test_targets[:, i]) / test_targets[:, i])) * 100
-            
-            print(f" - {name} -> MAE: {col_mae:.6f} | MAPE: {col_mape:.4f}%")
+            out_mae = avg_mae_per_output[i]
+            out_mape = avg_mape_per_output[i]
+            print(f" - {name} -> MAE: {out_mae:.6f} | MAPE: {out_mape:.4f}%")
 
     # Visualization
     if training_curves:
@@ -194,6 +191,119 @@ def test_predictor_configuration(title: str, device: torch.device, model, datalo
                 title=title,
                 feature_name=feature_name,
             )
+
+def single_geometry_test(title: str, device: torch.device, model, test_data: torch.utils.data.DataLoader, x_scale_params, y_scale_params, max_geoms: int =None, 
+                         pki: bool =False, n_non_unique_feats: int =7, save_dir=None):
+    model.eval()
+    
+    # Create output directory
+    if save_dir is not None:
+        os.makedirs(save_dir, exist_ok=True)
+
+    # Extract all inputs and true labels from the DataLoader
+    x_list, y_list = [], []
+    for inputs, labels in test_data:
+        x_list.append(inputs.numpy())
+        y_list.append(labels.numpy())
+        
+    x_array = np.concatenate(x_list, axis=0)
+    y_array = np.concatenate(y_list, axis=0)
+    
+    # Perform forward pass to get all predictions
+    preds_list = []
+    with torch.no_grad():
+        for inputs, _ in test_data:
+            inputs = inputs.to(device)
+            outputs = model(inputs)
+            preds_list.append(outputs.cpu().numpy())
+            
+    preds_array = np.concatenate(preds_list, axis=0)
+    
+    # If arrays are 1D (batch_size,), unsqueeze them to (batch_size, 1)
+    if y_array.ndim == 1: y_array = np.expand_dims(y_array, 1)
+    if preds_array.ndim == 1: preds_array = np.expand_dims(preds_array, 1)
+
+    # Unscale the data to real-world units
+    x_unscaled = x_array * x_scale_params[1] + x_scale_params[0]
+    y_unscaled = y_array * y_scale_params[1] + y_scale_params[0]
+    preds_unscaled = preds_array * y_scale_params[1] + y_scale_params[0]
+    
+    # Group data by unique geometric parameters
+    grouping_indices, _ = get_grouping(x_unscaled, n_non_unique_feats=n_non_unique_feats)
+    
+    freq_idx = n_non_unique_feats 
+    num_outputs = y_array.shape[1]
+
+    # Loop through each geometry group and plot
+    for i, indices in enumerate(grouping_indices):
+        if max_geoms is not None and i >= max_geoms:
+            break
+            
+        group_x = x_unscaled[indices]
+        group_y = y_unscaled[indices]
+        group_preds = preds_unscaled[indices]
+        
+        # Extract Frequency and sort everything to ensure continuous line/scatter plots
+        freq_array = group_x[:, freq_idx]
+        sort_idx = np.argsort(freq_array)
+        
+        freq_array = freq_array[sort_idx]
+        group_x = group_x[sort_idx]
+        group_y = group_y[sort_idx]
+        group_preds = group_preds[sort_idx]
+        
+        # Iterate over output elements (Single, Dual (Re/Im pairs), or Complex elements)
+        for out_idx in range(num_outputs):
+            y_true_col = group_y[:, out_idx]
+            y_pred_col = group_preds[:, out_idx]
+            
+            # Extract PKI if requested (Matches the trailing n features of x_array)
+            pki_curve = None
+            if pki:
+                pki_feature_idx = -num_outputs + out_idx
+                pki_curve = group_x[:, pki_feature_idx]
+
+            # Plotting
+            # If the outputs are complex 
+            if np.iscomplexobj(y_true_col):
+                # Plot Real part
+                if save_dir is not None:
+                    plot_save_path_re = os.path.join(save_dir, f"pred_vs_act_freq_Re_{i+1}")
+                    plot_save_path_im = os.path.join(save_dir, f"pred_vs_act_freq_Im_{i+1}")
+                else:
+                    plot_save_path_re, plot_save_path_im = None, None
+                plot_preds_vs_act_freq(
+                    true_labels=np.real(y_true_col),
+                    predictions=np.real(y_pred_col),
+                    freq_array=freq_array,
+                    pki=np.real(pki_curve) if pki_curve is not None else None,
+                    title=f"{title} | Geom {i+1} - Out {out_idx+1} [Real]",
+                    save_path=plot_save_path_re
+                )
+                # Plot Imaginary part
+                plot_preds_vs_act_freq(
+                    true_labels=np.imag(y_true_col),
+                    predictions=np.imag(y_pred_col),
+                    freq_array=freq_array,
+                    pki=np.imag(pki_curve) if pki_curve is not None else None,
+                    title=f"{title} | Geom {i+1} - Out {out_idx+1} [Imag]",
+                    save_path=plot_save_path_im
+                )
+            
+            # If outputs are single or dual
+            else:
+                if save_dir is not None:
+                    plot_save_path = os.path.join(save_dir, f"pred_vs_act_freq_Out{out_idx+1}_{i+1}")
+                else:
+                    plot_save_path = None
+                plot_preds_vs_act_freq(
+                    true_labels=y_true_col,
+                    predictions=y_pred_col,
+                    freq_array=freq_array,
+                    pki=pki_curve,
+                    title=f"{title} | Geom {i+1} - Out {out_idx+1}",
+                    save_path=plot_save_path
+                )
 
 
 def ber_vs_length_test(model, feature_arrays, length_interval, number_of_points, feature_columns,
