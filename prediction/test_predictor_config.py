@@ -4,6 +4,23 @@ from load_set import get_grouping
 import torch
 import numpy as np
 import os
+from sklearn.metrics import mean_absolute_error
+
+def mae(labels, preds):
+    is_complex = np.iscomplexobj(labels)
+    if not is_complex:
+        return mean_absolute_error(labels, preds)
+    else:
+        real_error = np.abs(labels.real - preds.real)
+        imag_error = np.abs(labels.imag - preds.imag)
+        return np.mean(real_error + imag_error)
+
+
+def smape(labels, preds, epsilon=1e-8):
+    numerator = np.abs(preds - labels)
+    denominator = (np.abs(labels) + np.abs(preds)) / 2.0
+    return np.mean(numerator / (denominator + epsilon))
+
 
 def test_predictor_configuration(title: str, device: torch.device, model, dataloader: list[torch.utils.data.DataLoader], learning_rate: float, 
                                 batch_size: int, criterion: torch.nn.Module, optimizer: torch.optim.Optimizer, scheduler=None, epochs: int =30, 
@@ -116,31 +133,50 @@ def test_predictor_configuration(title: str, device: torch.device, model, datalo
 
     print(f"==================== Training complete ====================")
 
-    test_loss, test_mae, test_mape, test_preds, test_targets, avg_mae_per_output, avg_mape_per_output, *_ = test_pred_loop(model, test_data, criterion, device)
+    _, _, _, test_preds, test_targets, *_, = test_pred_loop(model, test_data, criterion, device)
 
     if y_scale_params is not None:
         if torch.is_tensor(test_preds):
             test_preds = test_preds.cpu().numpy()
             test_targets = test_targets.cpu().numpy()
             
-        test_preds = test_preds*y_scale_params[1] + y_scale_params[0]
-        test_targets = test_targets*y_scale_params[1] + y_scale_params[0]
-
-    print(f">>> Test MAE: {test_mae:.6f}")
-    print(f">>> Test MAPE: {test_mape*100:.4f}%")
+        test_preds = test_preds * y_scale_params[1] + y_scale_params[0]
+        test_targets = test_targets * y_scale_params[1] + y_scale_params[0]
     np.savez_compressed(results_save_path, preds=test_preds, targets=test_targets)
 
+    is_complex = np.iscomplexobj(test_preds)
+    
+    test_mae = mae(test_targets, test_preds)
+    test_smape = smape(test_targets, test_preds)
+    print(f">>> Test MAE: {test_mae:.6f}")
+    print(f">>> Test sMAPE: {test_smape * 100:.4f}%")
+    
     num_outputs = test_preds.shape[1] if test_preds.ndim > 1 else 1
     if output_names is None:
         output_names = [f"Out{i+1}" for i in range(num_outputs)]
 
-    if num_outputs > 1:
+    
+    if is_complex:
+        mae_real = mean_absolute_error(np.real(test_targets), np.real(test_preds))
+        smape_real = smape(np.real(test_targets), np.real(test_preds))
+        mae_imag = mean_absolute_error(np.imag(test_targets), np.imag(test_preds))
+        smape_imag = smape(np.imag(test_targets), np.imag(test_preds))
+        
+        print("\n>>> Overall Complex Performance:")
+        print(f" - Real -> MAE: {mae_real:.6f} | sMAPE: {smape_real * 100:.4f}%")
+        print(f" - Imag -> MAE: {mae_imag:.6f} | sMAPE: {smape_imag * 100:.4f}%")
+        
+    elif num_outputs > 1:
         print("\n>>> Performance Breakdown per Output Target:")
         for i in range(num_outputs):
             name = output_names[i]
-            out_mae = avg_mae_per_output[i]
-            out_mape = avg_mape_per_output[i]
-            print(f" - {name} -> MAE: {out_mae:.6f} | MAPE: {out_mape:.4f}%")
+            y_true_col = test_targets[:, i]
+            y_pred_col = test_preds[:, i]
+            
+            out_mae = mean_absolute_error(y_true_col, y_pred_col)
+            out_smape = smape(y_true_col, y_pred_col)
+            
+            print(f" - {name} -> MAE: {out_mae:.6f} | sMAPE: {out_smape * 100:.4f}%")
 
     # Visualization
     if training_curves:
@@ -216,12 +252,13 @@ def single_geometry_test(title: str, device: torch.device, model, test_data: tor
             inputs = inputs.to(device)
             outputs = model(inputs)
             preds_list.append(outputs.cpu().numpy())
-            
     preds_array = np.concatenate(preds_list, axis=0)
     
     # If arrays are 1D (batch_size,), unsqueeze them to (batch_size, 1)
-    if y_array.ndim == 1: y_array = np.expand_dims(y_array, 1)
-    if preds_array.ndim == 1: preds_array = np.expand_dims(preds_array, 1)
+    if y_array.ndim == 1: 
+        y_array = np.expand_dims(y_array, 1)
+    if preds_array.ndim == 1: 
+        preds_array = np.expand_dims(preds_array, 1)
 
     # Unscale the data to real-world units
     x_unscaled = x_array * x_scale_params[1] + x_scale_params[0]
@@ -243,7 +280,7 @@ def single_geometry_test(title: str, device: torch.device, model, test_data: tor
         group_y = y_unscaled[indices]
         group_preds = preds_unscaled[indices]
         
-        # Extract Frequency and sort everything to ensure continuous line/scatter plots
+        # Extract Frequency 
         freq_array = group_x[:, freq_idx]
         sort_idx = np.argsort(freq_array)
         
@@ -252,20 +289,19 @@ def single_geometry_test(title: str, device: torch.device, model, test_data: tor
         group_y = group_y[sort_idx]
         group_preds = group_preds[sort_idx]
         
-        # Iterate over output elements (Single, Dual (Re/Im pairs), or Complex elements)
+        # Iterate over output elements 
         for out_idx in range(num_outputs):
             y_true_col = group_y[:, out_idx]
             y_pred_col = group_preds[:, out_idx]
             
-            # Extract PKI if requested (Matches the trailing n features of x_array)
-            pki_curve = None
-            if pki:
-                pki_feature_idx = -num_outputs + out_idx
-                pki_curve = group_x[:, pki_feature_idx]
-
             # Plotting
             # If the outputs are complex 
             if np.iscomplexobj(y_true_col):
+                pki_real, pki_imag = None, None
+                if pki:
+                    pki_real = group_x[:, -2 * num_outputs + 2 * out_idx]
+                    pki_imag = group_x[:, -2 * num_outputs + 2 * out_idx + 1]
+
                 # Plot Real part
                 if save_dir is not None:
                     plot_save_path_re = os.path.join(save_dir, f"pred_vs_act_freq_Re_{i+1}")
@@ -276,8 +312,8 @@ def single_geometry_test(title: str, device: torch.device, model, test_data: tor
                     true_labels=np.real(y_true_col),
                     predictions=np.real(y_pred_col),
                     freq_array=freq_array,
-                    pki=np.real(pki_curve) if pki_curve is not None else None,
-                    title=f"{title} | Geom {i+1} - Out {out_idx+1} [Real]",
+                    pki=pki_real,
+                    title=f"{title} | Geom {i+1} [Real]" if num_outputs == 1 else f"{title} | Geom {i+1} Out{out_idx+1} [Real]",
                     save_path=plot_save_path_re
                 )
                 # Plot Imaginary part
@@ -285,13 +321,16 @@ def single_geometry_test(title: str, device: torch.device, model, test_data: tor
                     true_labels=np.imag(y_true_col),
                     predictions=np.imag(y_pred_col),
                     freq_array=freq_array,
-                    pki=np.imag(pki_curve) if pki_curve is not None else None,
-                    title=f"{title} | Geom {i+1} - Out {out_idx+1} [Imag]",
+                    pki=pki_imag,
+                    title=f"{title} | Geom {i+1} [Imag]" if num_outputs == 1 else f"{title} | Geom {i+1} Out{out_idx+1} [Imag]",
                     save_path=plot_save_path_im
-                )
-            
+                )    
             # If outputs are single or dual
             else:
+                pki_feat = None
+                if pki:
+                    pki_feat = group_x[:, -num_outputs + out_idx] 
+
                 if save_dir is not None:
                     plot_save_path = os.path.join(save_dir, f"pred_vs_act_freq_Out{out_idx+1}_{i+1}")
                 else:
@@ -300,8 +339,8 @@ def single_geometry_test(title: str, device: torch.device, model, test_data: tor
                     true_labels=y_true_col,
                     predictions=y_pred_col,
                     freq_array=freq_array,
-                    pki=pki_curve,
-                    title=f"{title} | Geom {i+1} - Out {out_idx+1}",
+                    pki=pki_feat,
+                    title=f"{title} | Geom {i+1}" if num_outputs == 1 else f"{title} | Geom {i+1} - Out{out_idx+1}",
                     save_path=plot_save_path
                 )
 
