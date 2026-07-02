@@ -100,7 +100,7 @@ def mock_pki(freqs, s_param_actual, f0: float =10.0, alpha: float =0.012, beta: 
 	s_param_mock = s_param_warped * amplitude_error_envelope
 	return s_param_mock
 
-def pki_extend(x_array: NDArray, feature_names: list[str], pki: NDArray, mode: Literal["real", "complex"] ="real"):
+def pki_extend(x_array: NDArray, feature_names: list[str], pki: NDArray, mode: Literal["dual", "real", "imag"] = "dual"):
 	"""
 	# pki_extend()
 	## Extends features by adding prior knowledge input, works for real and complex values
@@ -109,19 +109,21 @@ def pki_extend(x_array: NDArray, feature_names: list[str], pki: NDArray, mode: L
 	- x_array: 2D array of features
 	- feature_names: List of feature column names
 	- pki: 1D array of prior knowledge input for each sample
-	- mode: if "real", two new featuresget added: Re(pki) and Im(pki), if "complex"	one gets added: Re(pki) + 1j*Im(pki)
+	- mode: "dual" for real and imaginary parts, "real" for real part only, "imag" for imaginary part only
 	## Returns:
 	- x_array: Updated 2D array of features with the new pki feature added
-	- feature_names: Updated list of feature column names with the new pki feature name(s) added
+	- feature_names: Updated list of feature column names with the new pki feature names added
 	"""
 	pki = pki.reshape(-1, 1)
-	if mode == "complex":
-		x_array = np.hstack((x_array, pki))
-		feature_names.append("pki")
-	else:
+	if mode == "dual":
 		x_array = np.hstack((x_array, pki.real)).astype(np.float32)
 		x_array = np.hstack((x_array, pki.imag)).astype(np.float32)
 		feature_names.append("pki_real")
 		feature_names.append("pki_imag")
-
+	elif mode == "real":
+		x_array = np.hstack((x_array, pki.real)).astype(np.float32)
+		feature_names.append("pki_real")
+	elif mode == "imag":
+		x_array = np.hstack((x_array, pki.imag)).astype(np.float32)
+		feature_names.append("pki_imag")
 	return x_array, feature_names
