@@ -1,5 +1,7 @@
 from prediction.predictor_loops import train_pred_loop, test_pred_loop
-from visualization import plot_error_distribution, plot_error_vs_feature, plot_predicted_vs_actual, plot_training_curves, plot_ber_vs_length, plot_preds_vs_act_freq
+from prediction.s2abcd import s2abcd_dict
+from visualization import plot_error_distribution, plot_error_vs_feature, plot_predicted_vs_actual, plot_training_curves, plot_ber_vs_length, \
+                        plot_preds_vs_act_freq, plot_abcd_preds_vs_act_freq
 from load_set import get_grouping
 import torch
 import numpy as np
@@ -229,7 +231,7 @@ def test_predictor_configuration(title: str, device: torch.device, model, datalo
             )
 
 def single_geometry_test(title: str, device: torch.device, model, test_data: torch.utils.data.DataLoader, x_scale_params, y_scale_params, max_geoms: int =None, 
-                         pki: bool =False, n_non_unique_feats: int =7, save_dir=None):
+                         pki: bool =False, n_non_unique_feats: int =7, visualization: bool = False, save_dir=None):
     model.eval()
     
     # Create output directory
@@ -271,6 +273,8 @@ def single_geometry_test(title: str, device: torch.device, model, test_data: tor
     freq_idx = n_non_unique_feats 
     num_outputs = y_array.shape[1]
 
+    labels_per_geom = []
+    preds_per_geom = []
     # Loop through each geometry group and plot
     for i, indices in enumerate(grouping_indices):
         if max_geoms is not None and i >= max_geoms:
@@ -279,6 +283,10 @@ def single_geometry_test(title: str, device: torch.device, model, test_data: tor
         group_x = x_unscaled[indices]
         group_y = y_unscaled[indices]
         group_preds = preds_unscaled[indices]
+        
+        # Add to labels/preds_per_geom lists to output for ABCD acts vs preds in the frequency domain per geometry
+        labels_per_geom.append(group_y)
+        preds_per_geom.append(group_preds)
         
         # Extract Frequency 
         freq_array = group_x[:, freq_idx]
@@ -302,29 +310,31 @@ def single_geometry_test(title: str, device: torch.device, model, test_data: tor
                     pki_real = group_x[:, -2 * num_outputs + 2 * out_idx]
                     pki_imag = group_x[:, -2 * num_outputs + 2 * out_idx + 1]
 
-                # Plot Real part
                 if save_dir is not None:
                     plot_save_path_re = os.path.join(save_dir, f"pred_vs_act_freq_Re_{i+1}")
                     plot_save_path_im = os.path.join(save_dir, f"pred_vs_act_freq_Im_{i+1}")
                 else:
                     plot_save_path_re, plot_save_path_im = None, None
-                plot_preds_vs_act_freq(
-                    true_labels=np.real(y_true_col),
-                    predictions=np.real(y_pred_col),
-                    freq_array=freq_array,
-                    pki=pki_real,
-                    title=f"{title} | Geom {i+1} [Real]" if num_outputs == 1 else f"{title} | Geom {i+1} Out{out_idx+1} [Real]",
-                    save_path=plot_save_path_re
-                )
-                # Plot Imaginary part
-                plot_preds_vs_act_freq(
-                    true_labels=np.imag(y_true_col),
-                    predictions=np.imag(y_pred_col),
-                    freq_array=freq_array,
-                    pki=pki_imag,
-                    title=f"{title} | Geom {i+1} [Imag]" if num_outputs == 1 else f"{title} | Geom {i+1} Out{out_idx+1} [Imag]",
-                    save_path=plot_save_path_im
-                )    
+
+                if visualization:
+                    # Plot Real part
+                    plot_preds_vs_act_freq(
+                        true_labels=np.real(y_true_col),
+                        predictions=np.real(y_pred_col),
+                        freq_array=freq_array,
+                        pki=pki_real,
+                        title=f"{title} | Geom {i+1} [Real]" if num_outputs == 1 else f"{title} | Geom {i+1} Out{out_idx+1} [Real]",
+                        save_path=plot_save_path_re
+                    ) 
+                    # Plot Imaginary part
+                    plot_preds_vs_act_freq(
+                        true_labels=np.imag(y_true_col),
+                        predictions=np.imag(y_pred_col),
+                        freq_array=freq_array,
+                        pki=pki_imag,
+                        title=f"{title} | Geom {i+1} [Imag]" if num_outputs == 1 else f"{title} | Geom {i+1} Out{out_idx+1} [Imag]",
+                        save_path=plot_save_path_im
+                    )    
             # If outputs are single or dual
             else:
                 pki_feat = None
@@ -335,14 +345,113 @@ def single_geometry_test(title: str, device: torch.device, model, test_data: tor
                     plot_save_path = os.path.join(save_dir, f"pred_vs_act_freq_Out{out_idx+1}_{i+1}")
                 else:
                     plot_save_path = None
-                plot_preds_vs_act_freq(
-                    true_labels=y_true_col,
-                    predictions=y_pred_col,
-                    freq_array=freq_array,
-                    pki=pki_feat,
-                    title=f"{title} | Geom {i+1}" if num_outputs == 1 else f"{title} | Geom {i+1} - Out{out_idx+1}",
-                    save_path=plot_save_path
-                )
+                
+                if visualization:
+                    plot_preds_vs_act_freq(
+                        true_labels=y_true_col,
+                        predictions=y_pred_col,
+                        freq_array=freq_array,
+                        pki=pki_feat,
+                        title=f"{title} | Geom {i+1}" if num_outputs == 1 else f"{title} | Geom {i+1} - Out{out_idx+1}",
+                        save_path=plot_save_path
+                    )
+    return labels_per_geom, preds_per_geom, freq_array
+
+def abcd_preds_vs_act_freq(s_labels_dict, s_preds_dict, freq_array, expected_ports=18, z0=50.0, save_dir=None):
+    # Create output directory
+    if save_dir is not None:
+        os.makedirs(save_dir, exist_ok=True)
+    
+    first_val = next(iter(s_labels_dict.values()))
+    num_samples = len(first_val)
+    a_test_labels_dict, b_test_labels_dict, c_test_labels_dict, d_test_labels_dict = s2abcd_dict(s_labels_dict, expected_ports=expected_ports, z0=z0)
+    a_test_preds_dict, b_test_preds_dict, c_test_preds_dict, d_test_preds_dict = s2abcd_dict(s_preds_dict, expected_ports=expected_ports, z0=z0)
+
+    a_all_labels = []
+    a_all_preds = []
+    b_all_labels = []
+    b_all_preds = []
+    c_all_labels = []
+    c_all_preds = []
+    d_all_labels = []
+    d_all_preds = []
+
+    # Iterate through all elements of the ABCD matrices
+    for i in range(expected_ports//2):
+        for j in range(expected_ports//2):
+            key = f"A{i+1}{j+1}"
+            a_labels_array = a_test_labels_dict[key]
+            a_preds_array = a_test_preds_dict[key]
+            key = f"B{i+1}{j+1}"
+            b_labels_array = b_test_labels_dict[key]
+            b_preds_array = b_test_preds_dict[key]
+            key = f"C{i+1}{j+1}"
+            c_labels_array = c_test_labels_dict[key]
+            c_preds_array = c_test_preds_dict[key]
+            key = f"D{i+1}{j+1}"
+            d_labels_array = d_test_labels_dict[key]
+            d_preds_array = d_test_preds_dict[key]
+
+            # Iterate through each submatrix 
+            for label_array, pred_array, prefix, all_labels, all_preds in zip([a_labels_array, b_labels_array, c_labels_array, d_labels_array], 
+                                           [a_preds_array, b_preds_array, c_preds_array, d_preds_array], ["A", "B", "C", "D"], 
+                                           [a_all_labels, b_all_labels, c_all_labels, d_all_labels], [a_all_preds, b_all_preds, c_all_preds, d_all_preds]):
+                
+                all_labels.append(label_array)
+                all_preds.append(pred_array)
+
+                # Print MAE and sMPE of the current element for each submatrix
+                mae_real = mean_absolute_error(np.real(label_array), np.real(pred_array))
+                smape_real = smape(np.real(label_array), np.real(pred_array))
+                mae_imag = mean_absolute_error(np.imag(label_array), np.imag(pred_array))
+                smape_imag = smape(np.imag(label_array), np.imag(pred_array))
+
+                print(f"Re({prefix}{i+1}{j+1}) - MAE: {mae_real:.6f} | sMAPE: {smape_real * 100:.4f}%")
+                print(f"Im({prefix}{i+1}{j+1}) - MAE: {mae_imag:.6f} | sMAPE: {smape_imag * 100:.4f}%")
+
+            plot_save_path_re = os.path.join(save_dir, f"abcd_pred_vs_act_freq_{i+1}{j+1}_Re.png") if save_dir is not None else None
+            plot_save_path_im = os.path.join(save_dir, f"abcd_pred_vs_act_freq_{i+1}{j+1}_Im.png") if save_dir is not None else None
+            plot_abcd_preds_vs_act_freq(
+                a_labels_array.real, a_preds_array.real,
+                b_labels_array.real, b_preds_array.real,
+                c_labels_array.real, c_preds_array.real,
+                d_labels_array.real, d_preds_array.real,
+                freq_array,
+                title=f"{i+1}{j+1}, Real Part",
+                save_path=plot_save_path_re
+            )
+
+            plot_abcd_preds_vs_act_freq(
+                a_labels_array.imag, a_preds_array.imag,
+                b_labels_array.imag, b_preds_array.imag,
+                c_labels_array.imag, c_preds_array.imag,
+                d_labels_array.imag, d_preds_array.imag,
+                freq_array,
+                title=f"{i+1}{j+1}, Imaginary Part",
+                save_path=plot_save_path_im
+            )
+    # Iterate through ABCD submatrices to calculate overall MAE and sMAPE for each submatrix
+    for all_labels, all_preds, prefix in zip([a_all_labels, b_all_labels, c_all_labels, d_all_labels], 
+                                           [a_all_preds, b_all_preds, c_all_preds, d_all_preds], ["A", "B", "C", "D"]):
+        all_labels_array = np.concatenate(all_labels)
+        all_preds_array = np.concatenate(all_preds)
+
+        mae_real = mean_absolute_error(np.real(all_labels_array), np.real(all_preds_array))
+        smape_real = smape(np.real(all_labels_array), np.real(all_preds_array))
+        mae_imag = mean_absolute_error(np.imag(all_labels_array), np.imag(all_preds_array))
+        smape_imag = smape(np.imag(all_labels_array), np.imag(all_preds_array))
+
+        print(f"Overall RE({prefix}) - MAE: {mae_real:.6f} | sMAPE: {smape_real * 100:.4f}%")
+        print(f"Overall IM({prefix}) - MAE: {mae_imag:.6f} | sMAPE: {smape_imag * 100:.4f}%")
+
+
+
+
+
+
+
+
+
 
 
 def ber_vs_length_test(model, feature_arrays, length_interval, number_of_points, feature_columns,
