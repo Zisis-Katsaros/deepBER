@@ -7,3 +7,4 @@ optuna
 lightgbm
 catboost
 complexNN
+seaborn

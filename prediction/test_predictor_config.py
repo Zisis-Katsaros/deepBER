@@ -1,41 +1,64 @@
 from prediction.predictor_loops import train_pred_loop, test_pred_loop
-from visualization import plot_error_distribution, plot_error_vs_feature, plot_predicted_vs_actual, plot_training_curves, plot_ber_vs_length
-import prediction.predictor as predictor
+from prediction.s2abcd import s2abcd_dict
+from visualization import plot_error_distribution, plot_error_vs_feature, plot_predicted_vs_actual, plot_training_curves, plot_ber_vs_length, \
+                        plot_preds_vs_act_freq, plot_abcd_preds_vs_act_freq
+from load_set import get_grouping
 import torch
 import numpy as np
 import os
+from sklearn.metrics import mean_absolute_error
 
-def test_predictor_configuration(title, device, model, dataloader, learning_rate, batch_size, criterion, optimizer, scheduler=None,
-                       epochs=30, early_stopping=False, patience=5, y_scale_params = None, training_curves=False,
-                       predicted_vs_actual=False, error_distribution=False, error_vs_feature=None,
-                       feature_columns=None, output_names = None, test_out_dir='.'):
-    # Train model with given configuration 
-    #
-    # Args:
-    # - title: Title of the test configuration (for visualization and logging)
-    # - device: Device to run the model on (CPU or GPU)
-    # - model: The neural network model to be trained and evaluated
-    # - dataloader: [train_data, val_data, test_data]
-    # - learning_rate: Learning rate for the optimizer
-    # - batch_size: Batch size for training and evaluation
-    # - criterion: Loss function
-    # - optimizer: Optimization algorithm
-    # - epochs: Maximum number of training epochs
-    # - early_stopping: If true training stops if there is no improvement
-    # - patience: Number of epochs to wait for improvement before stopping (if early_stopping is true)
-    # - training_curves: If true training curves will be plotted at the end of training
-    # - predicted_vs_actual: If true a plot of predicted vs. actual values will be plotted at the end of training
-    # - error_distribution: If true a histogram of prediction errors will be plotted at the end of training
-    # - error_vs_feature: List of feature names for which to plot error vs. feature
-    # - feature_columns: List of feature names matching the model input columns
-    # Returns:
-    # *none*
+def mae(labels, preds):
+    is_complex = np.iscomplexobj(labels)
+    if not is_complex:
+        return mean_absolute_error(labels, preds)
+    else:
+        real_error = np.abs(labels.real - preds.real)
+        imag_error = np.abs(labels.imag - preds.imag)
+        return np.mean(real_error + imag_error)
 
-    # Print test details
-    print(f'Using device: {device}\n\n')
 
-    print(f"{title}")
+def smape(labels, preds, epsilon=1e-8):
+    numerator = np.abs(preds - labels)
+    denominator = (np.abs(labels) + np.abs(preds)) / 2.0
+    return np.mean(numerator / (denominator + epsilon))
+
+
+def test_predictor_configuration(title: str, device: torch.device, model, dataloader: list[torch.utils.data.DataLoader], learning_rate: float, 
+                                batch_size: int, criterion: torch.nn.Module, optimizer: torch.optim.Optimizer, scheduler=None, epochs: int =30, 
+                                early_stopping: bool =False, patience: int =5, y_scale_params: tuple =None, training_curves: bool =False,
+                                predicted_vs_actual: bool =False, error_distribution: bool =False, error_vs_feature: bool =None,
+                                feature_columns=None, output_names = None, test_out_dir: str ='.'):
+    """ 
+    # test_predictor_configuration()
+    ## Train model with given configuration and visualize/ save results
+    
+    ## Args:
+    - title: Title of the test configuration (for visualization and logging)
+    - device: Device to run the model on (CPU or GPU)
+    - model: The neural network model to be trained and evaluated
+    - dataloader: [train_data, val_data, test_data]
+    - learning_rate: Learning rate for the optimizer
+    - batch_size: Batch size for training and evaluation
+    - criterion: Loss function
+    - optimizer: Optimization algorithm
+    - epochs: Maximum number of training epochs
+    - early_stopping: If true training stops if there is no improvement
+    - patience: Number of epochs to wait for improvement before stopping (if early_stopping is true)
+    - training_curves: If true training curves will be plotted at the end of training
+    - predicted_vs_actual: If true a plot of predicted vs. actual values will be plotted at the end of training
+    - error_distribution: If true a histogram of prediction errors will be plotted at the end of training
+    - error_vs_feature: List of feature names for which to plot error vs. feature
+    - feature_columns: List of feature names matching the model input columns
+    - output_names: Name of each output incase of multiple outputs
+    - test_out_dir: Directory where output files are saved
+    ## Returns:
+    *none*
+    """
+
+    # Print test details 
     print(f" Info:")
+    print(f'Using device: {device}')
     print(f" - Model:")
     print(model)
     print(f" - Data Split:")
@@ -50,6 +73,7 @@ def test_predictor_configuration(title, device, model, dataloader, learning_rate
     if early_stopping:
         print(f" - Patience: {patience}")
 
+    # Create output directories
     os.makedirs(test_out_dir, exist_ok=True)
     model_save_path = os.path.join(test_out_dir, "best_model.pth")
     training_curves_save_path = os.path.join(test_out_dir, "training_curves.png")
@@ -111,35 +135,50 @@ def test_predictor_configuration(title, device, model, dataloader, learning_rate
 
     print(f"==================== Training complete ====================")
 
-    test_loss, test_mae, test_mape, test_preds, test_targets, *_ = test_pred_loop(model, test_data, criterion, device)
+    _, _, _, test_preds, test_targets, *_, = test_pred_loop(model, test_data, criterion, device)
 
     if y_scale_params is not None:
         if torch.is_tensor(test_preds):
             test_preds = test_preds.cpu().numpy()
             test_targets = test_targets.cpu().numpy()
             
-        test_preds = test_preds*y_scale_params[1] + y_scale_params[0]
-        test_targets = test_targets*y_scale_params[1] + y_scale_params[0]
-
-    print(f">>> Test MAE: {test_mae:.6f}")
-    print(f">>> Test MAPE: {test_mape*100:.4f}%")
+        test_preds = test_preds * y_scale_params[1] + y_scale_params[0]
+        test_targets = test_targets * y_scale_params[1] + y_scale_params[0]
     np.savez_compressed(results_save_path, preds=test_preds, targets=test_targets)
 
+    is_complex = np.iscomplexobj(test_preds)
+    
+    test_mae = mae(test_targets, test_preds)
+    test_smape = smape(test_targets, test_preds)
+    print(f">>> Test MAE: {test_mae:.6f}")
+    print(f">>> Test sMAPE: {test_smape * 100:.4f}%")
+    
     num_outputs = test_preds.shape[1] if test_preds.ndim > 1 else 1
     if output_names is None:
         output_names = [f"Out{i+1}" for i in range(num_outputs)]
 
-    if num_outputs > 1:
+    
+    if is_complex:
+        mae_real = mean_absolute_error(np.real(test_targets), np.real(test_preds))
+        smape_real = smape(np.real(test_targets), np.real(test_preds))
+        mae_imag = mean_absolute_error(np.imag(test_targets), np.imag(test_preds))
+        smape_imag = smape(np.imag(test_targets), np.imag(test_preds))
+        
+        print("\n>>> Overall Complex Performance:")
+        print(f" - Real -> MAE: {mae_real:.6f} | sMAPE: {smape_real * 100:.4f}%")
+        print(f" - Imag -> MAE: {mae_imag:.6f} | sMAPE: {smape_imag * 100:.4f}%")
+        
+    elif num_outputs > 1:
         print("\n>>> Performance Breakdown per Output Target:")
         for i in range(num_outputs):
             name = output_names[i]
-            col_mae = np.mean(np.abs(test_preds[:, i] - test_targets[:, i]))
+            y_true_col = test_targets[:, i]
+            y_pred_col = test_preds[:, i]
             
-            # Prevent division by zero if targets contain 0
-            with np.errstate(divide='ignore', invalid='ignore'):
-                col_mape = np.mean(np.abs((test_preds[:, i] - test_targets[:, i]) / test_targets[:, i])) * 100
+            out_mae = mean_absolute_error(y_true_col, y_pred_col)
+            out_smape = smape(y_true_col, y_pred_col)
             
-            print(f" - {name} -> MAE: {col_mae:.6f} | MAPE: {col_mape:.4f}%")
+            print(f" - {name} -> MAE: {out_mae:.6f} | sMAPE: {out_smape * 100:.4f}%")
 
     # Visualization
     if training_curves:
@@ -190,6 +229,229 @@ def test_predictor_configuration(title, device, model, dataloader, learning_rate
                 title=title,
                 feature_name=feature_name,
             )
+
+def single_geometry_test(title: str, device: torch.device, model, test_data: torch.utils.data.DataLoader, x_scale_params, y_scale_params, max_geoms: int =None, 
+                         pki: bool =False, n_non_unique_feats: int =7, visualization: bool = False, save_dir=None):
+    model.eval()
+    
+    # Create output directory
+    if save_dir is not None:
+        os.makedirs(save_dir, exist_ok=True)
+
+    # Extract all inputs and true labels from the DataLoader
+    x_list, y_list = [], []
+    for inputs, labels in test_data:
+        x_list.append(inputs.numpy())
+        y_list.append(labels.numpy())
+        
+    x_array = np.concatenate(x_list, axis=0)
+    y_array = np.concatenate(y_list, axis=0)
+    
+    # Perform forward pass to get all predictions
+    preds_list = []
+    with torch.no_grad():
+        for inputs, _ in test_data:
+            inputs = inputs.to(device)
+            outputs = model(inputs)
+            preds_list.append(outputs.cpu().numpy())
+    preds_array = np.concatenate(preds_list, axis=0)
+    
+    # If arrays are 1D (batch_size,), unsqueeze them to (batch_size, 1)
+    if y_array.ndim == 1: 
+        y_array = np.expand_dims(y_array, 1)
+    if preds_array.ndim == 1: 
+        preds_array = np.expand_dims(preds_array, 1)
+
+    # Unscale the data to real-world units
+    x_unscaled = x_array * x_scale_params[1] + x_scale_params[0]
+    y_unscaled = y_array * y_scale_params[1] + y_scale_params[0]
+    preds_unscaled = preds_array * y_scale_params[1] + y_scale_params[0]
+    
+    # Group data by unique geometric parameters
+    grouping_indices, _ = get_grouping(x_unscaled, n_non_unique_feats=n_non_unique_feats)
+    
+    freq_idx = n_non_unique_feats 
+    num_outputs = y_array.shape[1]
+
+    labels_per_geom = []
+    preds_per_geom = []
+    # Loop through each geometry group and plot
+    for i, indices in enumerate(grouping_indices):
+        if max_geoms is not None and i >= max_geoms:
+            break
+            
+        group_x = x_unscaled[indices]
+        group_y = y_unscaled[indices]
+        group_preds = preds_unscaled[indices]
+        
+        # Add to labels/preds_per_geom lists to output for ABCD acts vs preds in the frequency domain per geometry
+        labels_per_geom.append(group_y)
+        preds_per_geom.append(group_preds)
+        
+        # Extract Frequency 
+        freq_array = group_x[:, freq_idx]
+        sort_idx = np.argsort(freq_array)
+        
+        freq_array = freq_array[sort_idx]
+        group_x = group_x[sort_idx]
+        group_y = group_y[sort_idx]
+        group_preds = group_preds[sort_idx]
+        
+        # Iterate over output elements 
+        for out_idx in range(num_outputs):
+            y_true_col = group_y[:, out_idx]
+            y_pred_col = group_preds[:, out_idx]
+            
+            # Plotting
+            # If the outputs are complex 
+            if np.iscomplexobj(y_true_col):
+                pki_real, pki_imag = None, None
+                if pki:
+                    pki_real = group_x[:, -2 * num_outputs + 2 * out_idx]
+                    pki_imag = group_x[:, -2 * num_outputs + 2 * out_idx + 1]
+
+                if save_dir is not None:
+                    plot_save_path_re = os.path.join(save_dir, f"pred_vs_act_freq_Re_{i+1}")
+                    plot_save_path_im = os.path.join(save_dir, f"pred_vs_act_freq_Im_{i+1}")
+                else:
+                    plot_save_path_re, plot_save_path_im = None, None
+
+                if visualization:
+                    # Plot Real part
+                    plot_preds_vs_act_freq(
+                        true_labels=np.real(y_true_col),
+                        predictions=np.real(y_pred_col),
+                        freq_array=freq_array,
+                        pki=pki_real,
+                        title=f"{title} | Geom {i+1} [Real]" if num_outputs == 1 else f"{title} | Geom {i+1} Out{out_idx+1} [Real]",
+                        save_path=plot_save_path_re
+                    ) 
+                    # Plot Imaginary part
+                    plot_preds_vs_act_freq(
+                        true_labels=np.imag(y_true_col),
+                        predictions=np.imag(y_pred_col),
+                        freq_array=freq_array,
+                        pki=pki_imag,
+                        title=f"{title} | Geom {i+1} [Imag]" if num_outputs == 1 else f"{title} | Geom {i+1} Out{out_idx+1} [Imag]",
+                        save_path=plot_save_path_im
+                    )    
+            # If outputs are single or dual
+            else:
+                pki_feat = None
+                if pki:
+                    pki_feat = group_x[:, -num_outputs + out_idx] 
+
+                if save_dir is not None:
+                    plot_save_path = os.path.join(save_dir, f"pred_vs_act_freq_Out{out_idx+1}_{i+1}")
+                else:
+                    plot_save_path = None
+                
+                if visualization:
+                    plot_preds_vs_act_freq(
+                        true_labels=y_true_col,
+                        predictions=y_pred_col,
+                        freq_array=freq_array,
+                        pki=pki_feat,
+                        title=f"{title} | Geom {i+1}" if num_outputs == 1 else f"{title} | Geom {i+1} - Out{out_idx+1}",
+                        save_path=plot_save_path
+                    )
+    return labels_per_geom, preds_per_geom, freq_array
+
+def abcd_preds_vs_act_freq(s_labels_dict, s_preds_dict, freq_array, expected_ports=18, z0=50.0, save_dir=None):
+    # Create output directory
+    if save_dir is not None:
+        os.makedirs(save_dir, exist_ok=True)
+    
+    first_val = next(iter(s_labels_dict.values()))
+    num_samples = len(first_val)
+    a_test_labels_dict, b_test_labels_dict, c_test_labels_dict, d_test_labels_dict = s2abcd_dict(s_labels_dict, expected_ports=expected_ports, z0=z0)
+    a_test_preds_dict, b_test_preds_dict, c_test_preds_dict, d_test_preds_dict = s2abcd_dict(s_preds_dict, expected_ports=expected_ports, z0=z0)
+
+    a_all_labels = []
+    a_all_preds = []
+    b_all_labels = []
+    b_all_preds = []
+    c_all_labels = []
+    c_all_preds = []
+    d_all_labels = []
+    d_all_preds = []
+
+    # Iterate through all elements of the ABCD matrices
+    for i in range(expected_ports//2):
+        for j in range(expected_ports//2):
+            key = f"A{i+1}{j+1}"
+            a_labels_array = a_test_labels_dict[key]
+            a_preds_array = a_test_preds_dict[key]
+            key = f"B{i+1}{j+1}"
+            b_labels_array = b_test_labels_dict[key]
+            b_preds_array = b_test_preds_dict[key]
+            key = f"C{i+1}{j+1}"
+            c_labels_array = c_test_labels_dict[key]
+            c_preds_array = c_test_preds_dict[key]
+            key = f"D{i+1}{j+1}"
+            d_labels_array = d_test_labels_dict[key]
+            d_preds_array = d_test_preds_dict[key]
+
+            # Iterate through each submatrix 
+            for label_array, pred_array, prefix, all_labels, all_preds in zip([a_labels_array, b_labels_array, c_labels_array, d_labels_array], 
+                                           [a_preds_array, b_preds_array, c_preds_array, d_preds_array], ["A", "B", "C", "D"], 
+                                           [a_all_labels, b_all_labels, c_all_labels, d_all_labels], [a_all_preds, b_all_preds, c_all_preds, d_all_preds]):
+                
+                all_labels.append(label_array)
+                all_preds.append(pred_array)
+
+                # Print MAE and sMPE of the current element for each submatrix
+                mae_real = mean_absolute_error(np.real(label_array), np.real(pred_array))
+                smape_real = smape(np.real(label_array), np.real(pred_array))
+                mae_imag = mean_absolute_error(np.imag(label_array), np.imag(pred_array))
+                smape_imag = smape(np.imag(label_array), np.imag(pred_array))
+
+                print(f"Re({prefix}{i+1}{j+1}) - MAE: {mae_real:.6f} | sMAPE: {smape_real * 100:.4f}%")
+                print(f"Im({prefix}{i+1}{j+1}) - MAE: {mae_imag:.6f} | sMAPE: {smape_imag * 100:.4f}%")
+
+            plot_save_path_re = os.path.join(save_dir, f"abcd_pred_vs_act_freq_{i+1}{j+1}_Re.png") if save_dir is not None else None
+            plot_save_path_im = os.path.join(save_dir, f"abcd_pred_vs_act_freq_{i+1}{j+1}_Im.png") if save_dir is not None else None
+            plot_abcd_preds_vs_act_freq(
+                a_labels_array.real, a_preds_array.real,
+                b_labels_array.real, b_preds_array.real,
+                c_labels_array.real, c_preds_array.real,
+                d_labels_array.real, d_preds_array.real,
+                freq_array,
+                title=f"{i+1}{j+1}, Real Part",
+                save_path=plot_save_path_re
+            )
+
+            plot_abcd_preds_vs_act_freq(
+                a_labels_array.imag, a_preds_array.imag,
+                b_labels_array.imag, b_preds_array.imag,
+                c_labels_array.imag, c_preds_array.imag,
+                d_labels_array.imag, d_preds_array.imag,
+                freq_array,
+                title=f"{i+1}{j+1}, Imaginary Part",
+                save_path=plot_save_path_im
+            )
+    # Iterate through ABCD submatrices to calculate overall MAE and sMAPE for each submatrix
+    for all_labels, all_preds, prefix in zip([a_all_labels, b_all_labels, c_all_labels, d_all_labels], 
+                                           [a_all_preds, b_all_preds, c_all_preds, d_all_preds], ["A", "B", "C", "D"]):
+        all_labels_array = np.concatenate(all_labels)
+        all_preds_array = np.concatenate(all_preds)
+
+        mae_real = mean_absolute_error(np.real(all_labels_array), np.real(all_preds_array))
+        smape_real = smape(np.real(all_labels_array), np.real(all_preds_array))
+        mae_imag = mean_absolute_error(np.imag(all_labels_array), np.imag(all_preds_array))
+        smape_imag = smape(np.imag(all_labels_array), np.imag(all_preds_array))
+
+        print(f"Overall RE({prefix}) - MAE: {mae_real:.6f} | sMAPE: {smape_real * 100:.4f}%")
+        print(f"Overall IM({prefix}) - MAE: {mae_imag:.6f} | sMAPE: {smape_imag * 100:.4f}%")
+
+
+
+
+
+
+
+
+
 
 
 def ber_vs_length_test(model, feature_arrays, length_interval, number_of_points, feature_columns,
