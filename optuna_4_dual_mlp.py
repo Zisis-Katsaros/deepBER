@@ -15,7 +15,7 @@ torch.manual_seed(42)
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
 pki = False
-pred_arrays_dict = torch.load("csv_files/s_params/pt/pred_arrays_dict.pt", weights_only=False)
+pred_arrays_dict = torch.load("csv_files/s_params/pt/pred_arrays_dict_30perc.pt", weights_only=False)
 s_mock_dict = torch.load("csv_files/s_params/pt/s_mock_dict.pt", weights_only=False)
 
 x_array = pred_arrays_dict["x_array"].astype(np.float32)
@@ -36,13 +36,12 @@ run_optuna("dual_mlp", x_array, s_dict, feature_columns, batch_size=128, hidden_
 """
 
 geoms_tested = 5
-labels_dict_per_geom = []
-preds_dict_per_geom = []
-s_test_labels_dict = {}
-s_test_preds_dict = {}
+labels_dict_per_geom = np.array([{} for _ in range(geoms_tested)], dtype=dict)
+preds_dict_per_geom = np.array([{} for _ in range(geoms_tested)], dtype=dict)
 
 elements = list(key for key in s_dict.keys() if key != "all") # ["S55", "S78", "S217"]
 for element in elements:
+    print(f"Training and testing for {element}\n")
     if pki:
         x_xtnd, feature_columns_xtnd = pki_extend(x_array, feature_columns, s_mock_dict[element])
     else:
@@ -104,12 +103,9 @@ for element in elements:
         save_dir = f"out_files/dual_mlp/{element}/pki" if pki else f"out_files/dual_mlp/{element}/no_pki"
     )
 
-    for label_array, pred_array in zip(labels_per_geom, preds_per_geom):
-        s_test_labels_dict[element] = label_array[:, 0] + 1j * label_array[:, 1]
-        s_test_preds_dict[element] = pred_array[:, 0] + 1j * pred_array[:, 1]
-
-        labels_dict_per_geom.append(s_test_labels_dict)
-        preds_dict_per_geom.append(s_test_preds_dict)
+    for geom_idx, (label_array, pred_array) in enumerate(zip(labels_per_geom, preds_per_geom)):
+        labels_dict_per_geom[geom_idx][element] = label_array[:, 0] + 1j * label_array[:, 1]
+        preds_dict_per_geom[geom_idx][element] = pred_array[:, 0] + 1j * pred_array[:, 1]
 
 for s_labels_dict, s_preds_dict in zip(labels_dict_per_geom, preds_dict_per_geom):
     abcd_preds_vs_act_freq(s_labels_dict, s_preds_dict, freq_array, save_dir=f"out_files/dual_mlp/abcd_preds_vs_act")
