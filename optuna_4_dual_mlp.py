@@ -39,7 +39,7 @@ geoms_tested = 5
 labels_dict_per_geom = np.array([{} for _ in range(geoms_tested)], dtype=dict)
 preds_dict_per_geom = np.array([{} for _ in range(geoms_tested)], dtype=dict)
 
-processed_elements = [key for idx, key in enumerate(s_dict.keys()) if idx < 65 and key != "all"] 
+processed_elements = [key for idx, key in enumerate(s_dict.keys()) if idx < 73 and key != "all"] 
 elements = list(key for key in s_dict.keys() if key != "all" and key not in processed_elements) # ["S55", "S78", "S217"]
 for element in elements:
     print(f"Training and testing for {element}\n")
