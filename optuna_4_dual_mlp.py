@@ -15,7 +15,7 @@ torch.manual_seed(42)
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
 pki = False
-pred_arrays_dict = torch.load("csv_files/s_params/pt/pred_arrays_dict_30perc.pt", weights_only=False)
+pred_arrays_dict = torch.load("csv_files/s_params/pt/pred_arrays_dict.pt", weights_only=False)
 s_mock_dict = torch.load("csv_files/s_params/pt/s_mock_dict.pt", weights_only=False)
 
 x_array = pred_arrays_dict["x_array"].astype(np.float32)
@@ -86,8 +86,8 @@ for element in elements:
     early_stopping=True,
     patience=10,
     y_scale_params=y_scale_params,
-    training_curves=False,
-    predicted_vs_actual=False,
+    training_curves=True,
+    predicted_vs_actual=True,
     test_out_dir = f"out_files/dual_mlp/{element}/pki" if pki else f"out_files/dual_mlp/{element}/no_pki"
     )
 
