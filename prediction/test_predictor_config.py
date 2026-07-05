@@ -280,6 +280,7 @@ def single_geometry_test(title: str, device: torch.device, model, test_data: tor
 
     labels_per_geom = []
     preds_per_geom = []
+    freq_arrays_per_geom = []
     # Loop through each geometry group and plot
     for i, indices in enumerate(grouping_indices):
         if max_geoms is not None and i >= max_geoms:
@@ -289,10 +290,6 @@ def single_geometry_test(title: str, device: torch.device, model, test_data: tor
         group_y = y_unscaled[indices]
         group_preds = preds_unscaled[indices]
         
-        # Add to labels/preds_per_geom lists to output for ABCD acts vs preds in the frequency domain per geometry
-        labels_per_geom.append(group_y)
-        preds_per_geom.append(group_preds)
-        
         # Extract Frequency 
         freq_array = group_x[:, freq_idx]
         sort_idx = np.argsort(freq_array)
@@ -301,6 +298,11 @@ def single_geometry_test(title: str, device: torch.device, model, test_data: tor
         group_x = group_x[sort_idx]
         group_y = group_y[sort_idx]
         group_preds = group_preds[sort_idx]
+
+        # Keep geometry outputs aligned with the sorted frequency axis.
+        labels_per_geom.append(group_y)
+        preds_per_geom.append(group_preds)
+        freq_arrays_per_geom.append(freq_array)
         
         # Iterate over output elements 
         for out_idx in range(num_outputs):
@@ -363,7 +365,7 @@ def single_geometry_test(title: str, device: torch.device, model, test_data: tor
                         save_path=plot_save_path,
                         close_figures=close_figures
                     )
-    return labels_per_geom, preds_per_geom, freq_array
+    return labels_per_geom, preds_per_geom, freq_arrays_per_geom
 
 def abcd_preds_vs_act_freq(s_labels_dict, s_preds_dict, freq_array, expected_ports=18, z0=50.0, save_dir=None, close_figures: bool =True):
     # Create output directory
