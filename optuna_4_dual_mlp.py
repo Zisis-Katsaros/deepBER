@@ -15,7 +15,7 @@ torch.manual_seed(42)
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
 pki = False
-pred_arrays_dict = torch.load("csv_files/s_params/pt/pred_arrays_dict.pt", weights_only=False)
+pred_arrays_dict = torch.load("csv_files/s_params/pt/pred_arrays_dict_30perc.pt", weights_only=False)
 s_mock_dict = torch.load("csv_files/s_params/pt/s_mock_dict.pt", weights_only=False)
 
 x_array = pred_arrays_dict["x_array"].astype(np.float32)
@@ -38,8 +38,9 @@ run_optuna("dual_mlp", x_array, s_dict, feature_columns, batch_size=128, hidden_
 geoms_tested = 5
 labels_dict_per_geom = np.array([{} for _ in range(geoms_tested)], dtype=dict)
 preds_dict_per_geom = np.array([{} for _ in range(geoms_tested)], dtype=dict)
+freq_arrays_per_geom = [None for _ in range(geoms_tested)]
 
-processed_elements = [key for idx, key in enumerate(s_dict.keys()) if idx < 141 and key != "all"] 
+processed_elements = [] # [key for idx, key in enumerate(s_dict.keys()) if idx < 141 and key != "all"] 
 elements = list(key for key in s_dict.keys() if key != "all") # ["S55", "S78", "S217"]
 for element in elements:
     if element in processed_elements:
@@ -85,7 +86,7 @@ for element in elements:
     criterion=criterion,
     optimizer=optimizer,
     scheduler=scheduler,
-    epochs=300,
+    epochs=1,
     early_stopping=True,
     patience=10,
     y_scale_params=y_scale_params,
@@ -95,6 +96,7 @@ for element in elements:
     close_figures=True
     )
 
+# """
 for element in elements:
     if pki:
         x_xtnd, feature_columns_xtnd = pki_extend(x_array, feature_columns, s_mock_dict[element])
@@ -118,10 +120,11 @@ for element in elements:
         activation_fn=nn.GELU(), 
         output_size=out_size,
         dropout=0.02
-        ).to(device)
-    
+        ).to(device) 
     predictor.load_state_dict(torch.load(f"out_files/dual_mlp/{element}/pki/best_model.pth" if pki else f"out_files/dual_mlp/{element}/no_pki/best_model.pth", map_location=device))
-    labels_per_geom, preds_per_geom, freq_array = single_geometry_test(
+# """
+    
+    labels_per_geom, preds_per_geom, freq_arrays = single_geometry_test(
         title=f"{element}",
         device=device,
         model=predictor,
@@ -134,10 +137,20 @@ for element in elements:
         close_figures=True
     )
 
-    for geom_idx, (label_array, pred_array) in enumerate(zip(labels_per_geom, preds_per_geom)):
+    for geom_idx, (label_array, pred_array, geom_freq_array) in enumerate(zip(labels_per_geom, preds_per_geom, freq_arrays)):
         labels_dict_per_geom[geom_idx][element] = label_array[:, 0] + 1j * label_array[:, 1]
         preds_dict_per_geom[geom_idx][element] = pred_array[:, 0] + 1j * pred_array[:, 1]
+        if freq_arrays_per_geom[geom_idx] is None:
+            freq_arrays_per_geom[geom_idx] = geom_freq_array
 
-for s_labels_dict, s_preds_dict in zip(labels_dict_per_geom, preds_dict_per_geom):
-    abcd_preds_vs_act_freq(s_labels_dict, s_preds_dict, freq_array, save_dir=f"out_files/dual_mlp/abcd_preds_vs_act", close_figures=True)
+for geom_idx, (s_labels_dict, s_preds_dict, geom_freq_array) in enumerate(zip(labels_dict_per_geom, preds_dict_per_geom, freq_arrays_per_geom), start=1):
+    if not s_labels_dict or geom_freq_array is None:
+        continue
+    abcd_preds_vs_act_freq(
+        s_labels_dict,
+        s_preds_dict,
+        geom_freq_array,
+        save_dir=f"out_files/dual_mlp/abcd_preds_vs_act/geom_{geom_idx}",
+        close_figures=True
+    )
 
