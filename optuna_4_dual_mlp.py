@@ -39,9 +39,11 @@ geoms_tested = 5
 labels_dict_per_geom = np.array([{} for _ in range(geoms_tested)], dtype=dict)
 preds_dict_per_geom = np.array([{} for _ in range(geoms_tested)], dtype=dict)
 
-processed_elements = [key for idx, key in enumerate(s_dict.keys()) if idx < 73 and key != "all"] 
-elements = list(key for key in s_dict.keys() if key != "all" and key not in processed_elements) # ["S55", "S78", "S217"]
+processed_elements = [key for idx, key in enumerate(s_dict.keys()) if idx < 141 and key != "all"] 
+elements = list(key for key in s_dict.keys() if key != "all") # ["S55", "S78", "S217"]
 for element in elements:
+    if element in processed_elements:
+        continue
     print(f"Training and testing for {element}\n")
     if pki:
         x_xtnd, feature_columns_xtnd = pki_extend(x_array, feature_columns, s_mock_dict[element])
@@ -89,9 +91,36 @@ for element in elements:
     y_scale_params=y_scale_params,
     training_curves=True,
     predicted_vs_actual=True,
-    test_out_dir = f"out_files/dual_mlp/{element}/pki" if pki else f"out_files/dual_mlp/{element}/no_pki"
+    test_out_dir = f"out_files/dual_mlp/{element}/pki" if pki else f"out_files/dual_mlp/{element}/no_pki",
+    close_figures=True
     )
 
+for element in elements:
+    if pki:
+        x_xtnd, feature_columns_xtnd = pki_extend(x_array, feature_columns, s_mock_dict[element])
+    else:
+        x_xtnd = x_array
+    y_array = np.stack([s_dict[element].real, s_dict[element].imag], axis=1)
+    out_size = y_array.shape[1] if y_array.ndim > 1 else 1
+
+    dataloader, x_scale_params, y_scale_params = create_param_dataloader(
+                    x_xtnd,
+                    y_array,
+                    batch_size=128,
+                    seed=42,
+                    standard_scale=True,
+                    split_method="lhs"
+                    )
+    
+    predictor = DeepBER_Param_Predictor(
+        input_size=len(feature_columns), 
+        hidden=[48, 64, 96, 64, 48], 
+        activation_fn=nn.GELU(), 
+        output_size=out_size,
+        dropout=0.02
+        ).to(device)
+    
+    predictor.load_state_dict(torch.load(f"out_files/dual_mlp/{element}/pki/best_model.pth" if pki else f"out_files/dual_mlp/{element}/no_pki/best_model.pth", map_location=device))
     labels_per_geom, preds_per_geom, freq_array = single_geometry_test(
         title=f"{element}",
         device=device,
@@ -101,7 +130,8 @@ for element in elements:
         y_scale_params=y_scale_params,
         max_geoms=geoms_tested,
         pki=pki,
-        save_dir = f"out_files/dual_mlp/{element}/pki" if pki else f"out_files/dual_mlp/{element}/no_pki"
+        save_dir = f"out_files/dual_mlp/{element}/pki" if pki else f"out_files/dual_mlp/{element}/no_pki",
+        close_figures=True
     )
 
     for geom_idx, (label_array, pred_array) in enumerate(zip(labels_per_geom, preds_per_geom)):
@@ -109,5 +139,5 @@ for element in elements:
         preds_dict_per_geom[geom_idx][element] = pred_array[:, 0] + 1j * pred_array[:, 1]
 
 for s_labels_dict, s_preds_dict in zip(labels_dict_per_geom, preds_dict_per_geom):
-    abcd_preds_vs_act_freq(s_labels_dict, s_preds_dict, freq_array, save_dir=f"out_files/dual_mlp/abcd_preds_vs_act")
+    abcd_preds_vs_act_freq(s_labels_dict, s_preds_dict, freq_array, save_dir=f"out_files/dual_mlp/abcd_preds_vs_act", close_figures=True)
 

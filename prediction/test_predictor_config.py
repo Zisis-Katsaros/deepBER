@@ -28,7 +28,7 @@ def test_predictor_configuration(title: str, device: torch.device, model, datalo
                                 batch_size: int, criterion: torch.nn.Module, optimizer: torch.optim.Optimizer, scheduler=None, epochs: int =30, 
                                 early_stopping: bool =False, patience: int =5, y_scale_params: tuple =None, training_curves: bool =False,
                                 predicted_vs_actual: bool =False, error_distribution: bool =False, error_vs_feature: bool =None,
-                                feature_columns=None, output_names = None, test_out_dir: str ='.'):
+                                feature_columns=None, output_names = None, test_out_dir: str ='.', close_figures: bool =True):
     """ 
     # test_predictor_configuration()
     ## Train model with given configuration and visualize/ save results
@@ -182,25 +182,30 @@ def test_predictor_configuration(title: str, device: torch.device, model, datalo
 
     # Visualization
     if training_curves:
-        plot_training_curves(train_losses, val_losses, train_maes, val_maes, title=title, save_path=training_curves_save_path)
+        plot_training_curves(train_losses, val_losses, train_maes, val_maes, title=title, save_path=training_curves_save_path, 
+                            close_figure=close_figures)
     
     if predicted_vs_actual:
         if num_outputs > 1:
             for out_idx in range(num_outputs):
                 title_out = f"{title} - {output_names[out_idx]}"
                 pred_vs_act_save_path = os.path.join(test_out_dir, f"pred_vs_actual_out{out_idx}.png")
-                plot_predicted_vs_actual(test_targets[:, out_idx], test_preds[:, out_idx], title=title_out, save_path=pred_vs_act_save_path)
+                plot_predicted_vs_actual(test_targets[:, out_idx], test_preds[:, out_idx], title=title_out, save_path=pred_vs_act_save_path,
+                                        close_figure=close_figures)
         elif test_targets[0].dtype == np.complex64:
             title_real = f"{title} - Real Part"
             title_imag = f"{title} - Imaginary Part"
             pred_vs_act_save_path_real = os.path.join(test_out_dir, "pred_vs_actual_real.png")
             pred_vs_act_save_path_imag = os.path.join(test_out_dir, "pred_vs_actual_imag.png")
             
-            plot_predicted_vs_actual(test_targets.real, test_preds.real, title=title_real, save_path=pred_vs_act_save_path_real)
-            plot_predicted_vs_actual(test_targets.imag, test_preds.imag, title=title_imag, save_path=pred_vs_act_save_path_imag)
+            plot_predicted_vs_actual(test_targets.real, test_preds.real, title=title_real, save_path=pred_vs_act_save_path_real, 
+                                    close_figure=close_figures)
+            plot_predicted_vs_actual(test_targets.imag, test_preds.imag, title=title_imag, save_path=pred_vs_act_save_path_imag,
+                                    close_figure=close_figures)
         else:
             pred_vs_act_save_path = os.path.join(test_out_dir, "pred_vs_actual.png")
-            plot_predicted_vs_actual(test_targets, test_preds, title=title, save_path=pred_vs_act_save_path)
+            plot_predicted_vs_actual(test_targets, test_preds, title=title, save_path=pred_vs_act_save_path, 
+                                    close_figure=close_figures)
     
     if error_distribution:
         plot_error_distribution(test_targets, test_preds, title=title)
@@ -231,7 +236,7 @@ def test_predictor_configuration(title: str, device: torch.device, model, datalo
             )
 
 def single_geometry_test(title: str, device: torch.device, model, test_data: torch.utils.data.DataLoader, x_scale_params, y_scale_params, max_geoms: int =None, 
-                         pki: bool =False, n_non_unique_feats: int =7, visualization: bool = False, save_dir=None):
+                         pki: bool =False, n_non_unique_feats: int =7, visualization: bool = False, save_dir=None, close_figures: bool =True):
     model.eval()
     
     # Create output directory
@@ -324,7 +329,8 @@ def single_geometry_test(title: str, device: torch.device, model, test_data: tor
                         freq_array=freq_array,
                         pki=pki_real,
                         title=f"{title} | Geom {i+1} [Real]" if num_outputs == 1 else f"{title} | Geom {i+1} Out{out_idx+1} [Real]",
-                        save_path=plot_save_path_re
+                        save_path=plot_save_path_re,
+                        close_figures=close_figures
                     ) 
                     # Plot Imaginary part
                     plot_preds_vs_act_freq(
@@ -333,7 +339,8 @@ def single_geometry_test(title: str, device: torch.device, model, test_data: tor
                         freq_array=freq_array,
                         pki=pki_imag,
                         title=f"{title} | Geom {i+1} [Imag]" if num_outputs == 1 else f"{title} | Geom {i+1} Out{out_idx+1} [Imag]",
-                        save_path=plot_save_path_im
+                        save_path=plot_save_path_im,
+                        close_figures=close_figures
                     )    
             # If outputs are single or dual
             else:
@@ -353,17 +360,16 @@ def single_geometry_test(title: str, device: torch.device, model, test_data: tor
                         freq_array=freq_array,
                         pki=pki_feat,
                         title=f"{title} | Geom {i+1}" if num_outputs == 1 else f"{title} | Geom {i+1} - Out{out_idx+1}",
-                        save_path=plot_save_path
+                        save_path=plot_save_path,
+                        close_figures=close_figures
                     )
     return labels_per_geom, preds_per_geom, freq_array
 
-def abcd_preds_vs_act_freq(s_labels_dict, s_preds_dict, freq_array, expected_ports=18, z0=50.0, save_dir=None):
+def abcd_preds_vs_act_freq(s_labels_dict, s_preds_dict, freq_array, expected_ports=18, z0=50.0, save_dir=None, close_figures: bool =True):
     # Create output directory
     if save_dir is not None:
         os.makedirs(save_dir, exist_ok=True)
     
-    first_val = next(iter(s_labels_dict.values()))
-    num_samples = len(first_val)
     a_test_labels_dict, b_test_labels_dict, c_test_labels_dict, d_test_labels_dict = s2abcd_dict(s_labels_dict, expected_ports=expected_ports, z0=z0)
     a_test_preds_dict, b_test_preds_dict, c_test_preds_dict, d_test_preds_dict = s2abcd_dict(s_preds_dict, expected_ports=expected_ports, z0=z0)
 
@@ -418,7 +424,8 @@ def abcd_preds_vs_act_freq(s_labels_dict, s_preds_dict, freq_array, expected_por
                 d_labels_array.real, d_preds_array.real,
                 freq_array,
                 title=f"{i+1}{j+1}, Real Part",
-                save_path=plot_save_path_re
+                save_path=plot_save_path_re,
+                close_figure=close_figures
             )
 
             plot_abcd_preds_vs_act_freq(
@@ -428,7 +435,8 @@ def abcd_preds_vs_act_freq(s_labels_dict, s_preds_dict, freq_array, expected_por
                 d_labels_array.imag, d_preds_array.imag,
                 freq_array,
                 title=f"{i+1}{j+1}, Imaginary Part",
-                save_path=plot_save_path_im
+                save_path=plot_save_path_im,
+                close_figure=close_figures
             )
     # Iterate through ABCD submatrices to calculate overall MAE and sMAPE for each submatrix
     for all_labels, all_preds, prefix in zip([a_all_labels, b_all_labels, c_all_labels, d_all_labels], 
