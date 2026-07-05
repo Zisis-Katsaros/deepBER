@@ -5,7 +5,7 @@ import os
 
 
 def  plot_abcd_preds_vs_act_freq(a_labels_array, a_preds_array, b_labels_array, b_preds_array, c_labels_array, c_preds_array, d_labels_array, d_preds_array, 
-                                freq_array, title=None, save_path=None):
+                                freq_array, title=None, save_path=None, close_figure: bool =True):
     fig, axes = plt.subplots(2, 2, figsize=(12, 8))
 
     for ax_idx, (labels_array, preds_array, prefix) in enumerate(zip(
@@ -31,7 +31,11 @@ def  plot_abcd_preds_vs_act_freq(a_labels_array, a_preds_array, b_labels_array, 
         os.makedirs(os.path.dirname(os.path.abspath(save_path)), exist_ok=True)
         plt.savefig(save_path, dpi=300, bbox_inches='tight')
         print(f"Plot saved successfully to: {save_path}")
-    plt.show()
+
+    if not close_figure:
+        plt.show()
+    if close_figure:
+        plt.close(fig)
          
 
 def plot_pki_vs_act_freq(true_labels, pki, freq_array, title=None, save_path=None):
@@ -60,7 +64,7 @@ def plot_pki_vs_act_freq(true_labels, pki, freq_array, title=None, save_path=Non
     plt.show()
 
 
-def plot_preds_vs_act_freq(true_labels, predictions, freq_array, pki=None, title=None, save_path=None):
+def plot_preds_vs_act_freq(true_labels, predictions, freq_array, pki=None, title=None, save_path=None, close_figure: bool =True):
     fig, ax = plt.subplots(figsize=(10, 6))
     
     if title is not None:
@@ -85,7 +89,10 @@ def plot_preds_vs_act_freq(true_labels, predictions, freq_array, pki=None, title
         plt.savefig(save_path, dpi=300, bbox_inches='tight')
         print(f"Plot saved successfully to: {save_path}")
 
-    plt.show()
+    if not close_figure:
+        plt.show()
+    if close_figure:
+        plt.close(fig)
 
 
 def plot_ber_vs_length(length_values, predictions, title=None):
@@ -139,7 +146,7 @@ def plot_ber_vs_length(length_values, predictions, title=None):
     plt.show()
 
     
-def plot_training_curves(train_losses, val_losses, train_maes, val_maes, title=None, save_path = None):
+def plot_training_curves(train_losses, val_losses, train_maes, val_maes, title=None, save_path = None, close_figure: bool =True):
     # Plots training curves
     #
     # Args:
@@ -187,10 +194,13 @@ def plot_training_curves(train_losses, val_losses, train_maes, val_maes, title=N
         plt.savefig(save_path, dpi=300, bbox_inches='tight')
         print(f"Plot saved successfully to: {save_path}")
 
-    plt.show()
+    if not close_figure:
+        plt.show()
+    if close_figure:
+        plt.close(fig)
 
 
-def plot_predicted_vs_actual(true_labels, predictions, title=None, save_path = None):
+def plot_predicted_vs_actual(true_labels, predictions, title=None, save_path = None, close_figure: bool =True):
     # Plots predicted values against the corresponding actual values
     #
     # Args:
@@ -232,7 +242,10 @@ def plot_predicted_vs_actual(true_labels, predictions, title=None, save_path = N
         plt.savefig(save_path, dpi=300, bbox_inches='tight')
         print(f"Plot saved successfully to: {save_path}")
 
-    plt.show()
+    if not close_figure:
+        plt.show()
+    if close_figure:
+        plt.close(fig)
 
 
 def plot_residuals(true_labels, predictions, title=None):
