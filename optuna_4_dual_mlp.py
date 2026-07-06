@@ -15,7 +15,7 @@ torch.manual_seed(42)
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
 pki = False
-pred_arrays_dict = torch.load("csv_files/s_params/pt/pred_arrays_dict_30perc.pt", weights_only=False)
+pred_arrays_dict = torch.load("csv_files/s_params/pt/pred_arrays_dict.pt", weights_only=False)
 s_mock_dict = torch.load("csv_files/s_params/pt/s_mock_dict.pt", weights_only=False)
 
 x_array = pred_arrays_dict["x_array"].astype(np.float32)
@@ -40,7 +40,7 @@ labels_dict_per_geom = np.array([{} for _ in range(geoms_tested)], dtype=dict)
 preds_dict_per_geom = np.array([{} for _ in range(geoms_tested)], dtype=dict)
 freq_arrays_per_geom = [None for _ in range(geoms_tested)]
 
-processed_elements = [] # [key for idx, key in enumerate(s_dict.keys()) if idx < 141 and key != "all"] 
+processed_elements = [key for idx, key in enumerate(s_dict.keys()) if idx < 200 and key != "all"] 
 elements = list(key for key in s_dict.keys() if key != "all") # ["S55", "S78", "S217"]
 for element in elements:
     if element in processed_elements:
@@ -86,7 +86,7 @@ for element in elements:
     criterion=criterion,
     optimizer=optimizer,
     scheduler=scheduler,
-    epochs=1,
+    epochs=300,
     early_stopping=True,
     patience=10,
     y_scale_params=y_scale_params,
