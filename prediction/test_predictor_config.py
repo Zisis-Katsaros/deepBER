@@ -278,6 +278,7 @@ def single_geometry_test(title: str, device: torch.device, model, test_data: tor
     freq_idx = n_non_unique_feats 
     num_outputs = y_array.shape[1]
 
+    geometries = []
     labels_per_geom = []
     preds_per_geom = []
     freq_arrays_per_geom = []
@@ -291,9 +292,11 @@ def single_geometry_test(title: str, device: torch.device, model, test_data: tor
         group_preds = preds_unscaled[indices]
         
         # Extract Frequency 
+        geom_features = group_x[0, :n_non_unique_feats]
         freq_array = group_x[:, freq_idx]
         sort_idx = np.argsort(freq_array)
         
+        geometries.append(geom_features)
         freq_array = freq_array[sort_idx]
         group_x = group_x[sort_idx]
         group_y = group_y[sort_idx]
@@ -365,7 +368,7 @@ def single_geometry_test(title: str, device: torch.device, model, test_data: tor
                         save_path=plot_save_path,
                         close_figures=close_figures
                     )
-    return labels_per_geom, preds_per_geom, freq_arrays_per_geom
+    return geometries, labels_per_geom, preds_per_geom, freq_arrays_per_geom
 
 def abcd_preds_vs_act_freq(s_labels_dict, s_preds_dict, freq_array, expected_ports=18, z0=50.0, save_dir=None, close_figures: bool =True):
     # Create output directory

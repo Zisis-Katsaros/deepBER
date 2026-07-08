@@ -8,3 +8,4 @@ lightgbm
 catboost
 complexNN
 seaborn
+scikit-rf

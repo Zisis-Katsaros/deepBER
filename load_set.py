@@ -19,6 +19,9 @@ def get_grouping(x_array: NDArray, n_non_unique_feats: int = 7, round_decimals: 
 	- x_array: 2D array of mixed-up grouped samples
 	- n_non_unique_feats: Number of non unique features, it is assumed that these are the frist n features
 	- round_decimal: Rounding will occur after this many digits after decimal point, if None no rounding will occur
+	## Returns:
+	- grouping_indices: List of lists, each containing the indices of samples belonging to the same group
+	- unique_feats: 2D array of unique features, each row is a unique set of features
 	"""
 	geometries = x_array[:, :n_non_unique_feats]
 
