@@ -8,6 +8,7 @@ from rmse import RMSELoss
 from prediction.test_predictor_config import test_predictor_configuration, single_geometry_test, abcd_preds_vs_act_freq
 import numpy as np
 from dataset_manipulation import pki_extend
+from export_files_for_transient import export_files_for_transient
 
 
 # ============================================= Initializing Dataset ============================================= #
@@ -35,7 +36,7 @@ run_optuna("dual_mlp", x_array, s_dict, feature_columns, batch_size=128, hidden_
             study_name="dual_mlp_optuna_v2", storage=storage_url)
 """
 
-geoms_tested = 5
+geoms_tested = 44
 labels_dict_per_geom = np.array([{} for _ in range(geoms_tested)], dtype=dict)
 preds_dict_per_geom = np.array([{} for _ in range(geoms_tested)], dtype=dict)
 freq_arrays_per_geom = [None for _ in range(geoms_tested)]
@@ -102,6 +103,7 @@ for element in elements:
         x_xtnd, feature_columns_xtnd = pki_extend(x_array, feature_columns, s_mock_dict[element])
     else:
         x_xtnd = x_array
+        feature_columns_xtnd = feature_columns
     y_array = np.stack([s_dict[element].real, s_dict[element].imag], axis=1)
     out_size = y_array.shape[1] if y_array.ndim > 1 else 1
 
@@ -115,7 +117,7 @@ for element in elements:
                     )
     
     predictor = DeepBER_Param_Predictor(
-        input_size=len(feature_columns), 
+        input_size=len(feature_columns_xtnd), 
         hidden=[48, 64, 96, 64, 48], 
         activation_fn=nn.GELU(), 
         output_size=out_size,
@@ -124,7 +126,7 @@ for element in elements:
     predictor.load_state_dict(torch.load(f"out_files/dual_mlp/{element}/pki/best_model.pth" if pki else f"out_files/dual_mlp/{element}/no_pki/best_model.pth", map_location=device))
 # """
     
-    labels_per_geom, preds_per_geom, freq_arrays = single_geometry_test(
+    geometries, labels_per_geom, preds_per_geom, freq_arrays = single_geometry_test(
         title=f"{element}",
         device=device,
         model=predictor,
@@ -143,14 +145,8 @@ for element in elements:
         if freq_arrays_per_geom[geom_idx] is None:
             freq_arrays_per_geom[geom_idx] = geom_freq_array
 
-for geom_idx, (s_labels_dict, s_preds_dict, geom_freq_array) in enumerate(zip(labels_dict_per_geom, preds_dict_per_geom, freq_arrays_per_geom), start=1):
-    if not s_labels_dict or geom_freq_array is None:
-        continue
-    abcd_preds_vs_act_freq(
-        s_labels_dict,
-        s_preds_dict,
-        geom_freq_array,
-        save_dir=f"out_files/dual_mlp/abcd_preds_vs_act/geom_{geom_idx}",
-        close_figures=True
-    )
+export_files_for_transient(geometries, feature_columns, labels_dict_per_geom, preds_dict_per_geom, freq_arrays_per_geom, save_dir="csv_files/export4transient")
+
+
+
 
