@@ -71,3 +71,88 @@ def s2abcd_dict(s_dict, expected_ports=18, z0=50.0):
     c_dict = trans_param_mat2dict(C, "C")
     d_dict = trans_param_mat2dict(D, "D")
     return a_dict, b_dict, c_dict, d_dict
+
+
+def s2lc(s, freq, lengths, z0=50.0):
+    """
+    # s2lc()
+    ## Converts S-parameters to L and C matrices for the specified frequency
+
+    ## Args:
+    - s: S-parameter matrices
+    - freq: Frequency value in GHz
+    - lengths: Array of lengths of the transmission lines
+    - z0: Reference impedance (default: 50.0 Ohms)
+    ## Returns:
+    - L: Inductance matrices
+    - C: Capacitance matrices
+    """
+    num_ports = s.shape[1]
+    N = num_ports // 2 # dimention of L, C matrices
+
+    freqs = np.array([freq] * s.shape[0])  # Create an array of the same frequency for each sample
+    lengths = np.asarray(lengths)[:, np.newaxis] # Ensure lengths is a column vector
+    omega = 2 * np.pi * freqs[:, np.newaxis, np.newaxis]
+
+    # Convert S-parameters to Z-parameters
+    I_2N = np.eye(num_ports, dtype=np.complex64)
+    Z0_mat = z0 * I_2N
+
+    I_plus_S = I_2N + s
+    I_minus_S_inv = np.linalg.pinv(I_2N - s)
+    Z = Z0_mat @ I_plus_S @ I_minus_S_inv
+
+    # Extract submatrices
+    Z21 = Z[:, N:, :N]
+    Z22 = Z[:, N:, N:]
+
+    Z21_inv = np.linalg.pinv(Z21)
+    A = Z21_inv @ Z22
+    lambdas, V = np.linalg.eig(A)
+
+    # Calculate the diagonal elements
+    gamma_hat = np.arccosh(lambdas) / lengths
+    gamma_hat = np.where(gamma_hat.real < 0, -gamma_hat, gamma_hat) # real part must be positive
+
+    # Reconstruct the full gamma matrix
+    V_inv = np.linalg.pinv(V)
+
+    gamma_mat = (V * gamma_hat[:, np.newaxis, :]) @ V_inv
+
+    sinh_gl = np.sinh(gamma_hat * lengths)
+    sinh_gamma_l_mat = (V * sinh_gl[:, np.newaxis, :]) @ V_inv
+
+    # Compute Characteristic Impedance Matrix Zc
+    Zc = Z21 @ sinh_gamma_l_mat
+    Zc_inv = np.linalg.pinv(Zc)
+
+    # Calculate L and C matrices
+    L = np.imag(Zc @ gamma_mat) / omega
+    C = np.imag(gamma_mat @ Zc_inv) / omega
+
+    return L, C
+
+
+def s2lc_dict(s, freq, lengths, z0=50.0):
+    """
+    # s2lc_dict()
+    ## Converts S-parameters to L and C matrices and returns them as dictionaries for the specified frequency
+
+    ## Args:
+    - s: S-parameter matrices
+    - freq: Frequency value in GHz
+    - lengths: Array of lengths of the transmission lines
+    - z0: Reference impedance (default: 50.0 Ohms)
+    ## Returns:
+    - l_dict: Dictionary of inductance matrices
+    - c_dict: Dictionary of capacitance matrices
+    """
+    L, C = s2lc(s, freq, lengths, z0=z0)
+    
+    l_dict = trans_param_mat2dict(L, "L")
+    c_dict = trans_param_mat2dict(C, "C")
+    
+    return l_dict, c_dict
+
+    
+
