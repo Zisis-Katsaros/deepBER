@@ -10,7 +10,7 @@ function V_in_prbs = prbs_stimulus(num_bits, bit_rate, rise_time, Ts)
     - V_in_prbs: Voltage values corresponding to the time vector t_prbs
     %}
     arguments
-        num_bits (1,1) double {mustBeInteger, mustBePositive} = 1000; % Default number of bits is 1000
+        num_bits (1,1) double {mustBeInteger, mustBePositive} = 10000; % Default number of bits is 10000
         bit_rate (1,1) double {mustBePositive} = 10e9; % Default bit rate is 10 Gbps
         rise_time (1,1) double {mustBePositive} = 40e-12; % Default rise time is 40 ps
         Ts (1,1) double {mustBePositive} = 1e-12; % Default sampling period is 1 ps
