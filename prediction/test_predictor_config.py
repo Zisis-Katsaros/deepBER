@@ -53,7 +53,8 @@ def test_predictor_configuration(title: str, device: torch.device, model, datalo
     - output_names: Name of each output incase of multiple outputs
     - test_out_dir: Directory where output files are saved
     ## Returns:
-    *none*
+    - test_preds: Predictions of the test set
+    - test_targets: True labels of the test set
     """
 
     # Print test details 
@@ -75,9 +76,11 @@ def test_predictor_configuration(title: str, device: torch.device, model, datalo
 
     # Create output directories
     os.makedirs(test_out_dir, exist_ok=True)
-    model_save_path = os.path.join(test_out_dir, "best_model.pth")
-    training_curves_save_path = os.path.join(test_out_dir, "training_curves.png")
-    results_save_path = os.path.join(test_out_dir, "test_results.npz")
+    os.makedirs(os.path.join(test_out_dir, "weights"), exist_ok=True)
+    os.makedirs(os.path.join(test_out_dir, title), exist_ok=True)
+    model_save_path = os.path.join(test_out_dir, "weights", f"best_model_{title}.pth")
+    training_curves_save_path = os.path.join(test_out_dir, title, f"training_curves_{title}.png")
+    results_save_path = os.path.join(test_out_dir, title, f"test_results.npz")
 
     # Initialize data splits
     train_data = dataloader[0]
@@ -189,21 +192,21 @@ def test_predictor_configuration(title: str, device: torch.device, model, datalo
         if num_outputs > 1:
             for out_idx in range(num_outputs):
                 title_out = f"{title} - {output_names[out_idx]}"
-                pred_vs_act_save_path = os.path.join(test_out_dir, f"pred_vs_actual_out{out_idx}.png")
+                pred_vs_act_save_path = os.path.join(test_out_dir, title, f"pred_vs_actual_out{out_idx}.png")
                 plot_predicted_vs_actual(test_targets[:, out_idx], test_preds[:, out_idx], title=title_out, save_path=pred_vs_act_save_path,
                                         close_figure=close_figures)
         elif test_targets[0].dtype == np.complex64:
             title_real = f"{title} - Real Part"
             title_imag = f"{title} - Imaginary Part"
-            pred_vs_act_save_path_real = os.path.join(test_out_dir, "pred_vs_actual_real.png")
-            pred_vs_act_save_path_imag = os.path.join(test_out_dir, "pred_vs_actual_imag.png")
+            pred_vs_act_save_path_real = os.path.join(test_out_dir, title, "pred_vs_actual_real.png")
+            pred_vs_act_save_path_imag = os.path.join(test_out_dir, title, "pred_vs_actual_imag.png")
             
             plot_predicted_vs_actual(test_targets.real, test_preds.real, title=title_real, save_path=pred_vs_act_save_path_real, 
                                     close_figure=close_figures)
             plot_predicted_vs_actual(test_targets.imag, test_preds.imag, title=title_imag, save_path=pred_vs_act_save_path_imag,
                                     close_figure=close_figures)
         else:
-            pred_vs_act_save_path = os.path.join(test_out_dir, "pred_vs_actual.png")
+            pred_vs_act_save_path = os.path.join(test_out_dir, title, "pred_vs_actual.png")
             plot_predicted_vs_actual(test_targets, test_preds, title=title, save_path=pred_vs_act_save_path, 
                                     close_figure=close_figures)
     
@@ -234,6 +237,7 @@ def test_predictor_configuration(title: str, device: torch.device, model, datalo
                 title=title,
                 feature_name=feature_name,
             )
+    return test_preds, test_targets
 
 def single_geometry_test(title: str, device: torch.device, model, test_data: torch.utils.data.DataLoader, x_scale_params, y_scale_params, max_geoms: int =None, 
                          pki: bool =False, n_non_unique_feats: int =7, visualization: bool = False, save_dir=None, close_figures: bool =True):
