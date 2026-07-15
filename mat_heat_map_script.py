@@ -3,7 +3,8 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import torch
 from load_set import get_grouping
-import re
+from prediction.s2abcd import trans_param_dict2mat
+
 
 def plot_matrix_heatmap(data_dict, avg_per_geom=True, avg_per_element=True, x_array=None, n_geom_feats: int=7, mask_large_values=False):
     """
@@ -11,63 +12,10 @@ def plot_matrix_heatmap(data_dict, avg_per_geom=True, avg_per_element=True, x_ar
     Automatically detects if the dictionary contains a full NxN matrix 
     or just the upper-triangular elements of a symmetric matrix.
     """
+    matrices = trans_param_dict2mat(data_dict)
+    expected_ports = matrices.shape[1]
+    prefix = list(data_dict.keys())[0][0]  # Get the first character of the first key to determine the prefix
     
-    # Dynamically extract the string prefix (e.g., "S", "L", "C", "ABCD")
-    first_key = list(data_dict.keys())[0]
-    match = re.match(r"^([a-zA-Z]+)", first_key)
-    if not match:
-        raise ValueError(f"Could not extract a string prefix from the key: {first_key}")
-    prefix = match.group(1)
-    
-    # Dynamically determine N (expected_ports) and Matrix Format
-    num_keys = len(data_dict)
-    
-    # Try full matrix assumption: K = N^2
-    n_full = int(np.sqrt(num_keys))
-    is_full = (n_full * n_full == num_keys)
-    
-    # Try symmetric upper-triangular assumption: K = N(N+1)/2
-    n_tri = int((np.sqrt(1 + 8 * num_keys) - 1) / 2)
-    is_tri = (n_tri * (n_tri + 1) // 2 == num_keys)
-    
-    # Resolve the format
-    if is_full and is_tri:
-        # Rare edge cases (like K=1 or K=36). Tie-break by checking which max key exists.
-        if f"{prefix}{n_tri}{n_tri}" in data_dict:
-            expected_ports, matrix_format = n_tri, "upper_triangular"
-        else:
-            expected_ports, matrix_format = n_full, "full"
-    elif is_full:
-        expected_ports, matrix_format = n_full, "full"
-    elif is_tri:
-        expected_ports, matrix_format = n_tri, "upper_triangular"
-    else:
-        raise ValueError(f"Dictionary length ({num_keys}) doesn't match a valid NxN full or upper-triangular matrix.")
-    
-    # Get the number of samples from the first array in the dictionary
-    num_of_samples = data_dict[first_key].shape[0]
-
-    if avg_per_element:
-        avg_per_geom = False  # Disable avg_per_geom if avg_per_element is True
-
-    # Initialize the generalized matrices array
-    matrices = np.zeros((num_of_samples, expected_ports, expected_ports), dtype=complex)
-
-    # Reconstruct the NxN matrices based on the detected format
-    if matrix_format == "upper_triangular":
-        for i in range(expected_ports):
-            for j in range(i, expected_ports):
-                key = f"{prefix}{i+1}{j+1}"
-                val = data_dict[key]
-                matrices[:, i, j] = val
-                matrices[:, j, i] = val  # Mirror to lower triangle
-    else: # matrix_format == "full"
-        for i in range(expected_ports):
-            for j in range(expected_ports):
-                key = f"{prefix}{i+1}{j+1}"
-                val = data_dict[key]
-                matrices[:, i, j] = val
-
     # Averaging Logic
     if avg_per_element:
         # Take the mean of the absolute values across all samples (axis=0)

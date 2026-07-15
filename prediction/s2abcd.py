@@ -1,4 +1,5 @@
 import numpy as np
+import re
 
 def s2generalized_abcd(s, z0=50.0):
     # Calculates the generalized ABCD matrices from a given S-parameter matrix
@@ -20,7 +21,7 @@ def s2generalized_abcd(s, z0=50.0):
 
     I = np.eye(k)
 
-    s21_inv = np.linalg.pinv(s21)
+    s21_inv = np.linalg.pinv(s21) 
 
     # Calculation of ABCD matrices
 
@@ -31,39 +32,81 @@ def s2generalized_abcd(s, z0=50.0):
 
     return A, B, C, D
 
-def s_dict2mat(s_dict, expected_ports=18):
-    first_val = next(iter(s_dict.values()))
-    num_samples = len(first_val)
-    s_matrices = np.zeros((num_samples, expected_ports, expected_ports), dtype=np.complex64)
+def trans_param_dict2mat(data_dict):
+    first_key = list(data_dict.keys())[0]
+    match = re.match(r"^([a-zA-Z]+)", first_key)
+    if not match:
+        raise ValueError(f"Could not extract a string prefix from the key: {first_key}")
+    prefix = match.group(1)
+    
+    # Dynamically determine N (expected_ports) and Matrix Format
+    num_keys = len(data_dict)
+    
+    # Try full matrix assumption: K = N^2
+    n_full = int(np.sqrt(num_keys))
+    is_full = (n_full * n_full == num_keys)
+    
+    # Try symmetric upper-triangular assumption: K = N(N+1)/2
+    n_tri = int((np.sqrt(1 + 8 * num_keys) - 1) / 2)
+    is_tri = (n_tri * (n_tri + 1) // 2 == num_keys)
+    
+    # Resolve the format
+    if is_full and is_tri:
+        # Rare edge cases (like K=1 or K=36). Tie-break by checking which max key exists.
+        if f"{prefix}{n_tri}{n_tri}" in data_dict:
+            expected_ports, matrix_format = n_tri, "upper_triangular"
+        else:
+            expected_ports, matrix_format = n_full, "full"
+    elif is_full:
+        expected_ports, matrix_format = n_full, "full"
+    elif is_tri:
+        expected_ports, matrix_format = n_tri, "upper_triangular"
+    else:
+        raise ValueError(f"Dictionary length ({num_keys}) doesn't match a valid NxN full or upper-triangular matrix.")
+    
+    # Get the number of samples from the first array in the dictionary
+    num_samples = data_dict[first_key].shape[0]
 
-    for i in range(expected_ports):
-        for j in range(i, expected_ports):
-            key = f"S{i+1}{j+1}"
-            if np.iscomplexobj(s_dict[key]):
-                Sij = s_dict[key]
-            else:
-                Sij_real = s_dict[key][:, 0]
-                Sij_imag = s_dict[key][:, 1]
-                Sij = Sij_real + 1j * Sij_imag
+    matrices = np.zeros((num_samples, expected_ports, expected_ports), dtype=np.complex64)
 
-            s_matrices[:, i, j] = Sij
-            s_matrices[:, j, i] = Sij
-    return s_matrices
+    # Reconstruct the NxN matrices based on the detected format
+    if matrix_format == "upper_triangular":
+        for i in range(expected_ports):
+            for j in range(i, expected_ports):
+                key = f"{prefix}{i+1}{j+1}"
+                val = data_dict[key]
+                matrices[:, i, j] = np.squeeze(val)
+                matrices[:, j, i] = np.squeeze(val)  # Mirror to lower triangle
+    else: # matrix_format == "full"
+        for i in range(expected_ports):
+            for j in range(expected_ports):
+                key = f"{prefix}{i+1}{j+1}"
+                val = data_dict[key]
+                matrices[:, i, j] = np.squeeze(val)
+    return matrices
 
 
-def trans_param_mat2dict(matrices, prefix):
+def trans_param_mat2dict(matrices, prefix, symmetric=False):
     out_dict = {}
-    for i in range(matrices.shape[1]):
-        for j in range(matrices.shape[2]):
-            MATij = matrices[:, i, j]
-            
-            key = f"{prefix}{i+1}{j+1}"
-            out_dict[key] = MATij
+    if symmetric or prefix in ["L", "C", "S"]:
+        for i in range(matrices.shape[1]):
+            for j in range(i, matrices.shape[2]):
+                MATij = matrices[:, i, j]
+                
+                key = f"{prefix}{i+1}{j+1}"
+                out_dict[key] = MATij
+    else:
+        for i in range(matrices.shape[1]):
+            for j in range(matrices.shape[2]):
+                MATij = matrices[:, i, j]
+                
+                key = f"{prefix}{i+1}{j+1}"
+                out_dict[key] = MATij
     return out_dict
 
 
 def s2abcd_dict(s_dict, expected_ports=18, z0=50.0):
-    s_matrices = s_dict2mat(s_dict, expected_ports=expected_ports)
+    s_matrices = trans_param_dict2mat(s_dict)
     A, B, C, D = s2generalized_abcd(s_matrices, z0=z0)
 
     a_dict = trans_param_mat2dict(A, "A")
@@ -73,19 +116,21 @@ def s2abcd_dict(s_dict, expected_ports=18, z0=50.0):
     return a_dict, b_dict, c_dict, d_dict
 
 
-def s2lc(s, freq, lengths, z0=50.0):
+def s2rlcg(s, freq, lengths, z0=50.0):
     """
-    # s2lc()
-    ## Converts S-parameters to L and C matrices for the specified frequency
+    # s2rlcg()
+    ## Converts S-parameters to R, L, C, and G matrices for the specified frequency
 
     ## Args:
     - s: S-parameter matrices
-    - freq: Frequency value in GHz
-    - lengths: Array of lengths of the transmission lines
+    - freq: Frequency value in Hz
+    - lengths: Array of lengths of the transmission lines in meters
     - z0: Reference impedance (default: 50.0 Ohms)
     ## Returns:
     - L: Inductance matrices
     - C: Capacitance matrices
+    - R: Resistance matrices
+    - G: Conductance matrices
     """
     num_ports = s.shape[1]
     N = num_ports // 2 # dimention of L, C matrices
@@ -126,33 +171,51 @@ def s2lc(s, freq, lengths, z0=50.0):
     Zc = Z21 @ sinh_gamma_l_mat
     Zc_inv = np.linalg.pinv(Zc)
 
-    # Calculate L and C matrices
+    # Calculate LRCG matrices
+    R = np.real(Zc @ gamma_mat)
     L = np.imag(Zc @ gamma_mat) / omega
-    C = np.imag(gamma_mat @ Zc_inv) / omega
+    C = np.imag(gamma_mat @ Zc_inv) / omega   
+    G = np.real(gamma_mat @ Zc_inv)
 
-    return L, C
+    # Enforce symmetry 
+    R_sym = 0.5 * (R + np.transpose(R, axes=(0, 2, 1)))
+    L_sym = 0.5 * (L + np.transpose(L, axes=(0, 2, 1)))
+    C_sym = 0.5 * (C + np.transpose(C, axes=(0, 2, 1)))
+    G_sym = 0.5 * (G + np.transpose(G, axes=(0, 2, 1)))
+
+    # float32 conversion
+    R = R_sym.astype(np.float32)
+    L = L_sym.astype(np.float32)
+    C = C_sym.astype(np.float32)
+    G = G_sym.astype(np.float32)
+
+    return R, L, C, G
 
 
-def s2lc_dict(s, freq, lengths, z0=50.0):
+def s2rlcg_dict(s, freq, lengths, z0=50.0):
     """
-    # s2lc_dict()
-    ## Converts S-parameters to L and C matrices and returns them as dictionaries for the specified frequency
+    # s2rlcg_dict()
+    ## Converts S-parameters to R, L, C, and G matrices and returns them as dictionaries for the specified frequency
 
     ## Args:
     - s: S-parameter matrices
-    - freq: Frequency value in GHz
-    - lengths: Array of lengths of the transmission lines
+    - freq: Frequency value in Hz
+    - lengths: Array of lengths of the transmission lines in meters
     - z0: Reference impedance (default: 50.0 Ohms)
     ## Returns:
+    - r_dict: Dictionary of resistance matrices
     - l_dict: Dictionary of inductance matrices
     - c_dict: Dictionary of capacitance matrices
+    - g_dict: Dictionary of conductance matrices
     """
-    L, C = s2lc(s, freq, lengths, z0=z0)
+    R, L, C, G = s2rlcg(s, freq, lengths, z0=z0)
     
+    r_dict = trans_param_mat2dict(R, "R")
     l_dict = trans_param_mat2dict(L, "L")
     c_dict = trans_param_mat2dict(C, "C")
+    g_dict = trans_param_mat2dict(G, "G")
     
-    return l_dict, c_dict
+    return r_dict, l_dict, c_dict, g_dict
 
     
 
