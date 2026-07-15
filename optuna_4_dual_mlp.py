@@ -92,7 +92,7 @@ for element in elements:
     criterion=criterion,
     optimizer=optimizer,
     scheduler=scheduler,
-    epochs=1,
+    epochs=300,
     early_stopping=True,
     patience=10,
     y_scale_params=y_scale_params,
