@@ -1,7 +1,8 @@
-function run_transient_evaluation(filename_preds, filename_actuals, fs, t_step, rise_time, delay, Vhi, num_bits, bit_rate, precision)
+function run_transient_evaluation(filename_preds, filename_actuals,  title, fs, t_step, rise_time, delay, Vhi, num_bits, bit_rate, precision)
     arguments
         filename_preds (1,1) string
         filename_actuals (1,1) string
+        title (1,1) string = "Transient Evaluation"
         fs (1,1) double = 1e12
         t_step (1,1) double = 2e-9
         rise_time (1,1) double {mustBePositive} = 40e-12; % Default rise time is 40 ps
@@ -9,7 +10,7 @@ function run_transient_evaluation(filename_preds, filename_actuals, fs, t_step, 
         Vhi (1,1) double {mustBePositive} = 1; % Default high voltage is 1V
         num_bits (1,1) double {mustBeInteger, mustBePositive} = 1000; % Default number of bits is 1000
         bit_rate (1,1) double {mustBePositive} = 10e9; % Default bit rate is 10 Gbps
-        precision = -40; % Default precision is -40 dB
+        precision = -40; % Default precision is -40 dB  
     end
 
     % Setup time vectors 
@@ -177,7 +178,7 @@ function run_transient_evaluation(filename_preds, filename_actuals, fs, t_step, 
         plot_step_response_pred_vs_act(t, V_in_step, V_out_main_step_pred, V_out_main_step_actual, ...
             V_out_next1_step_pred, V_out_next1_step_actual, V_out_fext1_step_pred, V_out_fext1_step_actual, ...
             V_out_next2_step_pred, V_out_next2_step_actual, V_out_fext2_step_pred, V_out_fext2_step_actual, ...
-            sprintf('Step Response Prediction Vs Actual (Port %d)', port));
+            sprintf('%s - Step Response Prediction Vs Actual (Port %d)', title, port));
 
         % Evaluate PRBS responses
         V_out_main_prbs_pred = timeresp(fit_main_pred, V_in_prbs, Ts) / 2;
@@ -243,7 +244,7 @@ function run_transient_evaluation(filename_preds, filename_actuals, fs, t_step, 
         fprintf("[transient evaluation] \t- RMSE Eye Amplitude: %.4f V\n", rmse_eye_amp);
     
         t_eye = linspace(0, 2, samples_per_bit * 2);
-        plot_eye_pred_vs_act(t_eye, eye_matrix_Vout_pred, eye_matrix_Vout_actual, sprintf('Eye Diagram Prediction Vs Actual (Port %d)', port));    
+        plot_eye_pred_vs_act(t_eye, eye_matrix_Vout_pred, eye_matrix_Vout_actual, sprintf('%s - Eye Diagram Prediction Vs Actual (Port %d)', title, port));    
     end
 
     % Calculate average RMSE for each channel across all ports
