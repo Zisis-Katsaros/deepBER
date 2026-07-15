@@ -1,6 +1,6 @@
 import numpy as np
 import skrf as rf
-from prediction.s2abcd import s_dict2mat
+from prediction.s2abcd import trans_param_dict2mat
 import os
 import csv
 
@@ -73,7 +73,7 @@ def export_files_for_transient(geometries: list[np.ndarray], feature_names: list
         pred_save_path = os.path.join(preds_save_dir, f"geom{geom_idx}_pred.s18p")
 
         # Convert dictionaries to matrices and create touchstone files
-        s_label_matrices = s_dict2mat(s_labels_dict)
-        s_pred_matrices = s_dict2mat(s_preds_dict)
+        s_label_matrices = trans_param_dict2mat(s_labels_dict)
+        s_pred_matrices = trans_param_dict2mat(s_preds_dict)
         create_touchstone_file(s_label_matrices, geom_freq_array, filename=actual_save_path)
         create_touchstone_file(s_pred_matrices, geom_freq_array, filename=pred_save_path)

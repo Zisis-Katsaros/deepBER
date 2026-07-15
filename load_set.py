@@ -7,39 +7,8 @@ from torch.utils.data import DataLoader, TensorDataset
 from dataset_manipulation import extend_features, exclude_columns
 from classification.ber_to_class import ber_to_class
 from prediction.s2abcd import s2generalized_abcd
-from lhs import latin_hypercube_order
+from dataset_splitting import split_dataset, latin_hypercube_order, get_grouping
 from typing import Literal
-
-def get_grouping(x_array: NDArray, n_non_unique_feats: int = 7, round_decimals: int = 5):
-	"""
-	# get_grouping()
-	## For a given x_array containing mixed-up grouped samples, gets how samples are grouped and each set of unique features
-
-	## Args:
-	- x_array: 2D array of mixed-up grouped samples
-	- n_non_unique_feats: Number of non unique features, it is assumed that these are the frist n features
-	- round_decimal: Rounding will occur after this many digits after decimal point, if None no rounding will occur
-	## Returns:
-	- grouping_indices: List of lists, each containing the indices of samples belonging to the same group
-	- unique_feats: 2D array of unique features, each row is a unique set of features
-	"""
-	geometries = x_array[:, :n_non_unique_feats]
-
-	if round_decimals is not None:
-		geometries = np.round(geometries, decimals=round_decimals)
-
-	# Get each unique set of features and their positions
-	unique_feats, inverse_indices = np.unique(geometries, axis=0, return_inverse=True)
-
-	sort_idx = np.argsort(inverse_indices)
-	sorted_group_ids = inverse_indices[sort_idx]
-
-	# Find the boundries where group ID changes
-	split_indices = np.flatnonzero(np.diff(sorted_group_ids)) + 1
-
-	grouping_indices = np.split(sort_idx, split_indices)
-	return grouping_indices, unique_feats
-
 
 def create_arrays(csv_names, target_columns, thresholds, test_names, manipulate_features = None,  
 				  binary_classification = False, sample_percentage=1.0, seed=42, sampling_method="random"):
@@ -192,30 +161,7 @@ def create_param_prediction_arrays(csv_names: list[str], expected_ports:int = 18
 				key = f"{name}{i+1}{j+1}"
 				dict[key] = MATij	
 
-	# Selecting a percentage of the total dataset
-	if not 0.0 < sample_percentage <= 1.0:
-		raise ValueError("sample_percentage must be within the interval (0.0, 1.0].")
-
-	# Get grouping indices and unique geometries from x_array
-	grouping, unique_geoms = get_grouping(x_array)
-	
-	total_size = len(grouping)
-	sample_size = int(total_size * sample_percentage)
-	sample_size = min(total_size, max(1, sample_size))
-
-	if sampling_method == "random":
-		generator = torch.Generator().manual_seed(seed)
-		sampled_group_idxs = torch.randperm(total_size, generator=generator)[:sample_size].numpy()
-	elif sampling_method == "lhs":
-		sampled_group_idxs = latin_hypercube_order(unique_geoms, sample_size, seed=seed)
-	else:
-		raise ValueError("sampling_method must be 'random' or 'lhs'.")
-	
-	# Get indices of selected rows in x_array and sort to maintain original order
-	selected_row_indices = np.concatenate([grouping[i] for i in sampled_group_idxs])
-	selected_row_indices = np.sort(selected_row_indices)
-
-	x_array = x_array[selected_row_indices]
+	x_array, selected_row_indices = split_dataset(x_array, sample_percentage=sample_percentage, sampling_method=sampling_method, seed=seed)
 
 	for dict in [s_dict, a_dict, b_dict, c_dict, d_dict]:
 		for key in dict.keys():
