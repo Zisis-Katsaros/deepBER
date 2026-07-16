@@ -49,7 +49,7 @@ labels_dict_per_geom = np.array([{} for _ in range(geoms_tested)], dtype=dict)
 preds_dict_per_geom = np.array([{} for _ in range(geoms_tested)], dtype=dict)
 freq_arrays_per_geom = [None for _ in range(geoms_tested)]
 
-processed_elements = [key for idx, key in enumerate(s_dict.keys()) if idx < -1 and key != "all"] 
+processed_elements = [key for idx, key in enumerate(s_dict.keys()) if idx < 100 and key != "all"] 
 elements = list(key for key in s_dict.keys() if key != "all")
 for element in elements:
     if element in processed_elements:
