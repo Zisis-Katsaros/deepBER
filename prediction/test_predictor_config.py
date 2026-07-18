@@ -1,12 +1,14 @@
-from prediction.predictor_loops import train_pred_loop, test_pred_loop
+import sys
+from prediction.predictor_loops import train_pred_loop, test_pred_loop, train_pred_loop_pistcnn, test_pred_loop_pistcnn
 from prediction.s2abcd import s2abcd_dict
-from visualization import plot_error_distribution, plot_error_vs_feature, plot_predicted_vs_actual, plot_training_curves, plot_ber_vs_length, \
+from visualization import plot_error_distribution, plot_error_vs_feature, plot_predicted_vs_actual, plot_s_param_pred_vs_act_from_pistcnn, plot_training_curves, plot_ber_vs_length, \
                         plot_preds_vs_act_freq, plot_abcd_preds_vs_act_freq
 from load_set import get_grouping
 import torch
 import numpy as np
 import os
 from sklearn.metrics import mean_absolute_error
+import time
 
 def mae(labels, preds):
     is_complex = np.iscomplexobj(labels)
@@ -239,6 +241,204 @@ def test_predictor_configuration(title: str, device: torch.device, model, datalo
             )
     return test_preds, test_targets
 
+
+def test_predictor_configuration_pistcnn(title: str, device: torch.device, model, dataloader: list[torch.utils.data.DataLoader], 
+                                       learning_rate: float, batch_size: int, criterion: torch.nn.Module, 
+                                       optimizer: torch.optim.Optimizer, scheduler=None, epochs: int = 30, 
+                                       L_f: int = 10, early_stopping: bool = False, patience: int = 5, y_scale_params: tuple = None, 
+                                       training_curves: bool = False, predicted_vs_actual: bool = False, 
+                                       test_out_dir: str = '.', close_figures: bool = True, max_time_hours: float = 5.5):
+    """ 
+    # test_predictor_configuration_pistcnn()
+    ## Train model with given configuration and visualize/ save results PI-STCNN specific
+    
+    ## Args:
+    - title: Title of the test configuration (for visualization and logging)
+    - device: Device to run the model on (CPU or GPU)
+    - model: The neural network model to be trained and evaluated
+    - dataloader: [train_data, val_data, test_data]
+    - learning_rate: Learning rate for the optimizer
+    - batch_size: Batch size for training and evaluation
+    - criterion: Loss function
+    - optimizer: Optimization algorithm
+    - scheduler: Learning rate scheduler
+    - epochs: Maximum number of training epochs
+    - L_f: PEL is bypassed for the first L_f epochs
+    - early_stopping: If true training stops if there is no improvement
+    - patience: Number of epochs to wait for improvement before stopping (if early_stopping is true)
+    - training_curves: If true training curves will be plotted at the end of training
+    - predicted_vs_actual: If true a plot of predicted vs. actual values will be plotted at the end of training
+    - test_out_dir: Directory where output files are saved
+    - close_figures: If true, figures will be closed after saving to free memory
+    - max_time_hours: Maximum time allowed for training (in hours)
+    ## Returns:
+    - test_preds: Predictions of the test set
+    - test_targets: True labels of the test set
+    """
+    # Setup paths
+    os.makedirs(test_out_dir, exist_ok=True)
+    os.makedirs(os.path.join(test_out_dir, "weights"), exist_ok=True)
+    os.makedirs(os.path.join(test_out_dir, title), exist_ok=True)
+    model_save_path = os.path.join(test_out_dir, "weights", f"best_model_{title}.pth")
+    checkpoint_path = os.path.join(test_out_dir, "weights", f"resume_checkpoint_{title}.pth")
+    results_save_path = os.path.join(test_out_dir, title, f"test_results.npz")
+    training_curves_save_path = os.path.join(test_out_dir, title, f"training_curves_{title}.png")
+
+    train_data, val_data, test_data = dataloader
+
+    start_epoch = 0
+    best_val_loss = float('inf')
+    counter = 0
+    train_losses, val_losses, train_maes, val_maes = [], [], [], []
+
+    if os.path.exists(checkpoint_path):
+        print(f"Resuming training from checkpoint: {checkpoint_path}")
+        checkpoint = torch.load(checkpoint_path, map_location=device)
+
+        model.load_state_dict(checkpoint['model_state_dict'])
+        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        if scheduler is not None and 'scheduler_state_dict' in checkpoint:
+            scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
+        
+        start_epoch = checkpoint['epoch'] + 1
+        best_val_loss = checkpoint['best_val_loss']
+        counter = checkpoint['counter']
+        train_losses = checkpoint['train_losses']
+        val_losses = checkpoint['val_losses']
+        train_maes = checkpoint['train_maes']
+        val_maes = checkpoint['val_maes']
+        print(f"Resumed successfully at epoch {start_epoch+1}. Best Val Loss so far: {best_val_loss:.6f}")
+    else:
+        print(f"==================== Starting Training ====================")
+    
+    # Print test details 
+    print(f" Info:")
+    print(f'Using device: {device}')
+    print(f" - Model:")
+    print(model)
+    print(f" - Data Split:")
+    print(f"   - Train: {len(dataloader[0].dataset)} samples")
+    print(f"   - Validation: {len(dataloader[1].dataset)} samples")
+    print(f"   - Test: {len(dataloader[2].dataset)} samples")
+    print(f" - Criterion: {criterion}")
+    print(f" - Learning Rate: {learning_rate}")
+    print(f" - Batch Size: {batch_size}")
+    print(f" - Epochs: {epochs} | PEL Bypassed for first {L_f} epochs")
+    print(f" - Early Stopping: {early_stopping}")
+    if early_stopping:
+        print(f" - Patience: {patience}")
+    
+    start_time = time.time()
+    max_time_seconds = max_time_hours * 3600
+
+    for epoch in range(epochs):
+        # Determine PEL Bypass condition
+        bypass_pel = epoch < L_f
+        
+        train_loss, train_mae = train_pred_loop_pistcnn(model, train_data, optimizer, criterion, device, bypass_pel)
+        val_loss, val_mae, *_ = test_pred_loop_pistcnn(model, val_data, criterion, device)
+
+        if scheduler is not None:
+            try:    
+                scheduler.step(val_loss)
+            except TypeError:
+                scheduler.step()
+
+        train_losses.append(train_loss)
+        val_losses.append(val_loss)
+        train_maes.append(train_mae)
+        val_maes.append(val_mae)
+
+        if early_stopping and not bypass_pel:
+            if val_loss < best_val_loss:
+                best_val_loss = val_loss
+                best_model_epoch = epoch + 1
+                counter = 0
+                torch.save(model.state_dict(), model_save_path)
+            else:
+                counter += 1
+                if counter >= patience:
+                    print(f"Early stopping at epoch {epoch+1}. Best model at epoch {best_model_epoch}")
+                    model.load_state_dict(torch.load(model_save_path))
+                    break
+
+        if (epoch + 1) % 5 == 0 or epoch == 0 or epoch == epochs - 1:
+            print(f"Epoch {epoch+1} | PEL Bypassed: {bypass_pel}")
+            print(f" - Train Loss: {train_loss:.6f}, Train MAE: {train_mae:.6f}")
+            print(f" - Val Loss:   {val_loss:.6f}, Val MAE:   {val_mae:.6f}\n")
+
+        elapsed_time = time.time() - start_time
+        if elapsed_time > max_time_seconds:
+            print(f"\n[TIME LIMIT REACHED] {elapsed_time/3600:.2f} hours elapsed. Saving checkpoint and exiting...")
+            checkpoint = {
+                'epoch': epoch,
+                'model_state_dict': model.state_dict(),
+                'optimizer_state_dict': optimizer.state_dict(),
+                'scheduler_state_dict': scheduler.state_dict() if scheduler is not None else None,
+                'best_val_loss': best_val_loss,
+                'counter': counter,
+                'train_losses': train_losses,
+                'val_losses': val_losses,
+                'train_maes': train_maes,
+                'val_maes': val_maes
+            }
+            torch.save(checkpoint, checkpoint_path)
+            sys.exit(0)
+
+    print(f"==================== Training complete ====================")
+
+    if os.path.exists(checkpoint_path):
+        os.remove(checkpoint_path)
+        print(f"Checkpoint {checkpoint_path} removed after successful training completion.")
+        
+    # Final Test Evaluation
+    _, _, test_preds, test_targets = test_pred_loop_pistcnn(model, test_data, criterion, device)
+
+    if y_scale_params is not None:
+        test_preds = test_preds * y_scale_params[1] + y_scale_params[0]
+        test_targets = test_targets * y_scale_params[1] + y_scale_params[0]
+        
+    np.savez_compressed(results_save_path, preds=test_preds, targets=test_targets)
+
+    # test_preds is shape (Batch, 2*Channels, Freqs). We split to evaluate Real and Imag.
+    num_channels = test_preds.shape[1] // 2
+    preds_real = test_preds[:, :num_channels, :]
+    preds_imag = test_preds[:, num_channels:, :]
+    targets_real = test_targets[:, :num_channels, :]
+    targets_imag = test_targets[:, num_channels:, :]
+
+    # Flatten for global sklearn metric compatibility
+    test_mae = np.mean(np.abs(test_targets - test_preds))
+    print(f">>> Overall Test MAE: {test_mae:.6f}")
+    
+    mae_real = np.mean(np.abs(targets_real - preds_real))
+    mae_imag = np.mean(np.abs(targets_imag - preds_imag))
+    print(f" - Real -> MAE: {mae_real:.6f}")
+    print(f" - Imag -> MAE: {mae_imag:.6f}")
+
+    # Visualization
+    if training_curves:
+        plot_training_curves(train_losses, val_losses, train_maes, val_maes, title=title, save_path=training_curves_save_path, 
+                            close_figure=close_figures)
+        
+    if predicted_vs_actual:
+        for geom_idx in range(test_preds.shape[0]):
+            for port_i in range(num_channels):
+                for port_j in range(num_channels):
+                    plot_s_param_pred_vs_act_from_pistcnn(
+                        test_targets=test_targets[geom_idx, :, :], 
+                        test_preds=test_preds[geom_idx, :, :], 
+                        freq_array=np.linspace(0, 30, test_preds.shape[2]), 
+                        port_i=port_i, 
+                        port_j=port_j, 
+                        geom_idx=geom_idx, 
+                        save_dir=os.path.join(test_out_dir, title, "s_curves"),
+                        close_figures=close_figures
+                    )
+
+    return test_preds, test_targets
+
+
 def single_geometry_test(title: str, device: torch.device, model, test_data: torch.utils.data.DataLoader, x_scale_params, y_scale_params, max_geoms: int =None, 
                          pki: bool =False, n_non_unique_feats: int =7, visualization: bool = False, save_dir=None, close_figures: bool =True):
     model.eval()
@@ -460,15 +660,6 @@ def abcd_preds_vs_act_freq(s_labels_dict, s_preds_dict, freq_array, expected_por
 
         print(f"Overall RE({prefix}) - MAE: {mae_real:.6f} | sMAPE: {smape_real * 100:.4f}%")
         print(f"Overall IM({prefix}) - MAE: {mae_imag:.6f} | sMAPE: {smape_imag * 100:.4f}%")
-
-
-
-
-
-
-
-
-
 
 
 def ber_vs_length_test(model, feature_arrays, length_interval, number_of_points, feature_columns,

@@ -3,6 +3,54 @@ import matplotlib.pyplot as plt
 from sklearn.metrics import confusion_matrix
 import os
 
+def plot_s_param_pred_vs_act_from_pistcnn(test_targets: np.ndarray, test_preds: np.ndarray, freq_array: np.ndarray, 
+                          port_i: int, port_j: int, geom_idx: int = 0, num_ports: int = 18, 
+                          save_dir: str = "plots", close_figure: bool = True):
+    p1, p2 = min(port_i, port_j), max(port_i, port_j)
+    
+    idx = 0
+    channel_map = {}
+    for i in range(1, num_ports + 1):
+        for j in range(i, num_ports + 1):
+            channel_map[(i, j)] = idx
+            idx += 1
+            
+    target_idx = channel_map[(p1, p2)]
+    num_channels = len(channel_map) # 171 unique elements for 18 ports
+    
+    # Extract Real and Imaginary 1D arrays for the specific geometry
+    # Real parts are in the first half of the channels, Imaginary parts in the second half
+    real_idx = target_idx
+    imag_idx = target_idx + num_channels
+    
+    actual_real = test_targets[geom_idx, real_idx, :]
+    pred_real = test_preds[geom_idx, real_idx, :]
+    
+    actual_imag = test_targets[geom_idx, imag_idx, :]
+    pred_imag = test_preds[geom_idx, imag_idx, :]
+    
+    # Call your custom plotting function for both Real and Imaginary components
+    os.makedirs(save_dir, exist_ok=True)
+    
+    # Plot Real Part
+    plot_preds_vs_act_freq(
+        true_labels=actual_real,
+        predictions=pred_real,
+        freq_array=freq_array,
+        title=f"Sample {geom_idx} - Re(S{p1}{p2})",
+        save_path=os.path.join(save_dir, f"sample_{geom_idx}_Re_S{p1}_{p2}.png"),
+        close_figure=close_figure
+    )  
+    # Plot Imaginary Part
+    plot_preds_vs_act_freq(
+        true_labels=actual_imag,
+        predictions=pred_imag,
+        freq_array=freq_array,
+        title=f"Sample {geom_idx} - Im(S{p1}{p2})",
+        save_path=os.path.join(save_dir, f"sample_{geom_idx}_Im_S{p1}_{p2}.png"),
+        close_figure=close_figure
+    )
+
 
 def  plot_abcd_preds_vs_act_freq(a_labels_array, a_preds_array, b_labels_array, b_preds_array, c_labels_array, c_preds_array, d_labels_array, d_preds_array, 
                                 freq_array, title=None, save_path=None, close_figure: bool =True):

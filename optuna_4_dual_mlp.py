@@ -49,7 +49,7 @@ labels_dict_per_geom = np.array([{} for _ in range(geoms_tested)], dtype=dict)
 preds_dict_per_geom = np.array([{} for _ in range(geoms_tested)], dtype=dict)
 freq_arrays_per_geom = [None for _ in range(geoms_tested)]
 
-processed_elements = [key for idx, key in enumerate(s_dict.keys()) if idx < 100 and key != "all"] 
+processed_elements = [key for idx, key in enumerate(s_dict.keys()) if idx < 200 and key != "all"] 
 elements = list(key for key in s_dict.keys() if key != "all")
 for element in elements:
     if element in processed_elements:
@@ -102,7 +102,7 @@ for element in elements:
     close_figures=True
     )
 
-"""
+
 for element in elements:
     y_array = np.stack([s_dict[element].real, s_dict[element].imag], axis=1)
     out_size = y_array.shape[1] if y_array.ndim > 1 else 1
@@ -125,7 +125,7 @@ for element in elements:
         ).to(device) 
     predictor.load_state_dict(torch.load(f"out_files/dual_mlp/{element}/pki/best_model.pth" if pki else f"out_files/dual_mlp/{element}/no_pki/best_model.pth", map_location=device))
 # """
-""" 
+
     geometries, labels_per_geom, preds_per_geom, freq_arrays = single_geometry_test(
         title=f"{element}",
         device=device,
@@ -146,7 +146,7 @@ for element in elements:
             freq_arrays_per_geom[geom_idx] = geom_freq_array
 
 export_files_for_transient(geometries, feature_columns, labels_dict_per_geom, preds_dict_per_geom, freq_arrays_per_geom, save_dir="csv_files/export4transient")
-"""
+
 
 
 

@@ -227,3 +227,101 @@ def test_pred_loop(model, data: torch.utils.data.DataLoader, criterion: torch.nn
     
     return avg_loss, avg_mae, avg_mape, final_preds, final_labels, avg_mae_per_output, avg_mape_per_output, avg_mae_real, \
         avg_mae_imag, avg_mape_real, avg_mape_imag
+
+
+def train_pred_loop_pistcnn(model, data: torch.utils.data.DataLoader, optimizer: torch.optim.Optimizer, criterion: torch.nn.Module, device: torch.device, 
+                            bypass_pel: bool):
+    """
+    # train_pred_loop()
+    ## Loop used for training the model for one epoch adjusted for PI-STCNN and PEL bypassing
+    
+    ## Args:
+    - model: The neural network model to be trained
+    - data: Training data
+    - optimizer: Optimization algorithm 
+    - criterion: Loss function 
+    - device: Device to run the training on (CPU or GPU)
+    - bypass_pel: Indicates if PEL should be bypassed
+    ## Returns:
+    - avg_loss: Average loss over the epoch
+    - avg_mae: Average mean absolute error over the epoch
+    """
+
+    model.train() 
+    total_loss = 0.0
+    total_mae = 0.0 
+    total_elements = 0
+
+    for inputs, labels in data:
+        inputs = inputs.to(device) 
+        labels = labels.to(device)
+
+        # Pass bypass_pel flag to the model
+        outputs = model(inputs, bypass_pel=bypass_pel)
+        loss = criterion(outputs, labels)
+
+        optimizer.zero_grad() 
+        loss.backward() 
+        optimizer.step() 
+
+        total_loss += loss.item() * inputs.size(0) 
+        
+        # Calculate MAE over the entire 3D tensor (Batch, Channels, Freqs)
+        error = torch.abs(outputs - labels)
+        total_mae += torch.sum(error).item()
+        total_elements += outputs.numel() 
+        
+    avg_loss = total_loss / len(data.dataset)
+    avg_mae = total_mae / total_elements
+
+    return avg_loss, avg_mae
+
+
+def test_pred_loop_pistcnn(model, data: torch.utils.data.DataLoader, criterion: torch.nn.Module, device: torch.device):
+    """
+    # test_pred_loop()
+    ## Loop used for evaluating the model adjusted for PI-STCNN
+    
+    ## Args:
+    - model: The neural network model to be evaluated
+    - data: Validation or Test data
+    - criterion: Loss function
+    - device: Device to run the evaluation on (CPU or GPU)
+    ## Returns:
+    - avg_loss: Average loss over the evaluation
+    - avg_mae: Average mean absolute error over the evaluation
+    - all_preds: All predictions made by the model
+    - all_labels: All true labels corresponding to the predictions
+    """
+    model.eval() 
+    total_loss = 0.0
+    total_mae = 0.0 
+    total_elements = 0
+
+    all_preds = []
+    all_labels = []
+
+    with torch.no_grad():
+        for inputs, labels in data:
+            inputs = inputs.to(device)
+            labels = labels.to(device)
+
+            outputs = model(inputs, bypass_pel=False) 
+            loss = criterion(outputs, labels)
+            
+            total_loss += loss.item() * inputs.size(0) 
+            
+            error = torch.abs(outputs - labels)
+            total_mae += torch.sum(error).item()
+            total_elements += outputs.numel()
+
+            all_preds.append(outputs.cpu().numpy())
+            all_labels.append(labels.cpu().numpy())
+
+    avg_loss = total_loss / len(data.dataset)
+    avg_mae = total_mae / total_elements
+
+    final_preds = np.concatenate(all_preds, axis=0)
+    final_labels = np.concatenate(all_labels, axis=0)
+    
+    return avg_loss, avg_mae, final_preds, final_labels
