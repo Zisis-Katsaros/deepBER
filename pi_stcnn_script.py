@@ -44,7 +44,7 @@ predictor = PI_STCNN(
     N=num_freqs,
     M=1.5,
     K=2
-)
+).to(device)
 
 criterion = l_freq_loss()
 learning_rate = 0.01
