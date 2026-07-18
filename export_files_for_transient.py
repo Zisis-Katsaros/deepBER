@@ -77,3 +77,57 @@ def export_files_for_transient(geometries: list[np.ndarray], feature_names: list
         s_pred_matrices = trans_param_dict2mat(s_preds_dict)
         create_touchstone_file(s_label_matrices, geom_freq_array, filename=actual_save_path)
         create_touchstone_file(s_pred_matrices, geom_freq_array, filename=pred_save_path)
+
+
+def convert_stcnn_outputs_to_dicts(test_targets: np.ndarray, test_preds: np.ndarray, num_ports: int = 18):
+    """
+    # convert_stcnn_outputs_to_dicts()
+    ## Converts the outputs of the PI-STCNN model back into the list[dict] format required for exporting Touchstone files
+    
+    ## Args:
+    - test_targets: 3D array of actual labels (num_geoms, 2 * num_channels, num_freqs)
+    - test_preds: 3D array of model predictions (num_geoms, 2 * num_channels, num_freqs)
+    - num_ports: Total physical ports in the device (18 for a 9-bit MTL)
+    ## Returns:
+    - labels_dict_per_geom: List of dictionaries containing actual complex S-parameters
+    - preds_dict_per_geom: List of dictionaries containing predicted complex S-parameters
+    """
+    num_geoms = test_preds.shape[0]
+    
+    # The total channels are 2 * unique_elements (Real + Imaginary)
+    num_channels = test_preds.shape[1] // 2 
+    
+    labels_dict_per_geom = []
+    preds_dict_per_geom = []
+    
+    for g in range(num_geoms):
+        labels_dict = {}
+        preds_dict = {}
+        
+        idx = 0
+        # Reconstruct the upper-triangular indexing used in the model
+        for i in range(1, num_ports + 1):
+            for j in range(i, num_ports + 1):
+                # Construct the key exactly as expected by your trans_param_dict2mat function
+                key = f"S{i}{j}"
+                
+                # Extract Real and Imaginary parts for the targets
+                target_real = test_targets[g, idx, :]
+                target_imag = test_targets[g, idx + num_channels, :]
+                
+                # Combine into a complex numpy array
+                labels_dict[key] = target_real + 1j * target_imag
+                
+                # Extract Real and Imaginary parts for the predictions
+                pred_real = test_preds[g, idx, :]
+                pred_imag = test_preds[g, idx + num_channels, :]
+                
+                # Combine into a complex numpy array
+                preds_dict[key] = pred_real + 1j * pred_imag
+                
+                idx += 1
+                
+        labels_dict_per_geom.append(labels_dict)
+        preds_dict_per_geom.append(preds_dict)
+        
+    return labels_dict_per_geom, preds_dict_per_geom
