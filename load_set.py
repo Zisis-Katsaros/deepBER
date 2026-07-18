@@ -469,3 +469,83 @@ def create_param_dataloader(x_array: NDArray, y_array: NDArray, batch_size: int 
 		return dataloader, x_scale_params, y_scale_params
 	else:
 		return dataloader, None, None
+	
+
+def create_param_forward_dataloader(x_array: NDArray, batch_size: int =64, standard_scale: bool =False, 
+									x_scale_params: tuple[np.ndarray, np.ndarray] = None):
+	"""
+	# create_param_forward_dataloader()
+	## Creates dataloader for forward pass
+
+	## Args:
+	- x_array: 2D array of features
+	- batch_size: Batch size for dataloader
+	- standard_scale: If true standard scaling is applied to features and labels using mean and std of the training data
+	- x_scale_params: (x_train_mean, x_train_std) for standard scaling of features
+	## Returns:
+	- dataloader: DataLoader for forward pass
+	"""
+	# Standard scaling
+	if standard_scale:
+		# Fit scaling parameters on train split only to avoid leakage.
+		x_train_mean = x_scale_params[0]
+		x_train_std = x_scale_params[1]
+		x_array = ((x_array - x_train_mean) / x_train_std)
+
+	dataset = TensorDataset(torch.from_numpy(x_array))
+	dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False)
+	return dataloader
+
+
+def organize_dataset_for_pi_stcnn(x_array: NDArray, s_dict: dict, feature_columns: list[str]):
+	"""
+	# organize_dataset_for_pi_stcnn()
+	## Organizes the dataset for use alongside PI-STCNN model
+
+	## Args:
+	- x_array: 2D array of features
+	- s_dict: Dictionary of S-parameters with keys as "Sij" and values as complex arrays
+	- feature_columns: List of feature column names
+	## Returns:
+	- unique_x: 2D array of unique design geometries
+	- new_feature_columns: List of feature column names excluding "frequency_in_ghz"
+	- y_array: 3D array of complex S-parameters with shape (num_geoms, 2*num_channels, num_freqs)
+	"""
+	s_dict.pop("all", None)  # Remove the "all" key if it exists
+
+	# Locate the frequency column
+	try:
+		freq_idx = feature_columns.index("frequency_ghz")
+	except ValueError:
+		raise ValueError("The exact string 'frequency_ghz' must be present in feature_columns.")
+
+    # Extract frequency tracking information
+	freq_col = x_array[:, freq_idx]
+	unique_freqs = np.unique(freq_col)
+	num_freqs = len(unique_freqs)
+
+    # Map each frequency in the dataset to a spatial index (0 to num_freqs - 1)
+	freq_indices = np.searchsorted(unique_freqs, freq_col)
+
+    # Remove the frequency column from the input features
+	x_no_freq, new_feature_columns = exclude_columns(x_array, feature_columns, columns_to_exclude=["frequency_ghz"])
+
+    # Extract unique samples (collapse the dataset to one row per unique design geometry)
+    # inverse_indices maps the flat original array back to the unique geometry index
+	unique_x, inverse_indices = np.unique(x_no_freq, axis=0, return_inverse=True)
+	num_geoms = len(unique_x)
+
+    # Build Y
+	channel_keys = list(s_dict.keys())
+	num_channels = len(channel_keys)
+
+    # Initialize the complex 3D output tensor: (Batch_Size, Channels, Frequency_Points)
+	y_array = np.zeros((num_geoms, 2*num_channels, num_freqs), dtype=np.float32)
+
+    # Populate the tensor using advanced numpy indexing for high performance
+	for c_idx, key in enumerate(channel_keys):
+        # inverse_indices dictates the geometry row, freq_indices dictates the depth/sequence step
+		y_array[inverse_indices, c_idx, freq_indices] = s_dict[key].real
+		y_array[inverse_indices, c_idx + num_channels, freq_indices] = s_dict[key].imag
+	
+	return unique_x, new_feature_columns, y_array
