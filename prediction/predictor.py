@@ -143,7 +143,7 @@ class DeepBER_Param_Predictor_Complex(nn.Module):
 
 
 class PI_STCNN(nn.Module):
-    def __init__(self, input_size, mlp_hidden, mlp_activation_fn, tcnn_channels, tcnn_activation_fn, output_size, num_ports, N, M, K):
+    def __init__(self, input_size, mlp_hidden, mlp_activation_fn, tcnn_layer_params, tcnn_activation_fn, output_size, num_ports, N, M, K):
         """
         # Physics-Informed Transposed Convolutional Neural Network modular architecture for S-Parameter prediction
 
@@ -151,7 +151,7 @@ class PI_STCNN(nn.Module):
         - input_size: Number of input features
         - mlp_hidden: List of hidden layer sizes for the base-model 
         - mlp_activation_fn: Activation function for each of the hidden layers in the base-model
-        - tcnn_channels: List of output channels for the 1D Transposed Conv Layers
+        - tcnn_params: List of layer parameters for the 1D Transposed Conv Layers [out_channels, kernel_size, stride]
         - tcnn_activation_fn: Activation function for each of the transposed convolutional layers
         - output_size: Number of unique S-parameter elements
         - num_ports: Number of ports
@@ -175,18 +175,18 @@ class PI_STCNN(nn.Module):
 
         # Linear layer mapping to the initial shape for 1D Transposed Convs
         self.initial_seq_len = 10 
-        self.mlp_to_tcnn = nn.Linear(current_dim, tcnn_channels[0] * self.initial_seq_len)
+        self.mlp_to_tcnn = nn.Linear(current_dim, tcnn_layer_params[0][0] * self.initial_seq_len)
 
         self.tcnn = nn.ModuleList()
-        in_channels = tcnn_channels[0]
+        in_channels = tcnn_layer_params[0][0]
 
-        for out_channels in tcnn_channels[1:]:
-            self.tcnn.append(nn.ConvTranspose1d(in_channels, out_channels, kernel_size=4, stride=2, padding=1))
+        for out_channels, kernel_size, stride in tcnn_layer_params[1:]:
+            self.tcnn.append(nn.ConvTranspose1d(in_channels, out_channels, kernel_size=kernel_size, stride=stride, padding=1))
             self.tcnn.append(tcnn_activation_fn)
             in_channels = out_channels
 
         # Final transposed conv mapping to output channels
-        self.tcnn_final = nn.ConvTranspose1d(in_channels, self.Dy, kernel_size=4, stride=2, padding=1)
+        self.tcnn_final = nn.ConvTranspose1d(in_channels, self.Dy, kernel_size=tcnn_layer_params[-1][1], stride=tcnn_layer_params[-1][2], padding=1)
 
         # Adaptive pooling or interpolation to enforce exact N*M + 1 length dimension
         self.length_adjust = nn.AdaptiveAvgPool1d(self.extrapolated_pts)
