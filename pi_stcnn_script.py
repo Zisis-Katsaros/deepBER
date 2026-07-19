@@ -25,7 +25,7 @@ x_array, feature_columns, y_array = organize_dataset_for_pi_stcnn(x_array, s_dic
 dataloader, x_scale_params, y_scale_params = create_param_dataloader(
                     x_array,
                     y_array,
-                    batch_size=64,
+                    batch_size=16,
                     seed=42,
                     standard_scale=True,
                     split_method="lhs"
@@ -36,7 +36,13 @@ predictor = PI_STCNN(
     input_size=len(feature_columns),
     mlp_hidden=[30, 30],
     mlp_activation_fn=nn.ELU(),
-    tcnn_channels=[30, 30, 30, 30, 30],
+    tcnn_layer_params=[
+        [30, 32, 1],  # [out_channels, kernel_size, stride]
+        [30, 4, 2],
+        [30, 4, 2],
+        [30, 4, 4],
+        [30, 2, 3]
+    ],
     tcnn_activation_fn=nn.ELU(),
     output_size=num_channels_times2 // 2,
     num_ports=18,
@@ -49,7 +55,7 @@ criterion = l_freq_loss()
 learning_rate = 0.01
 weight_decay = 0.0 # 5.976118759714283e-06
 optimizer = torch.optim.Adam(predictor.parameters(), lr=learning_rate, weight_decay=weight_decay)
-scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=500, gamma=0.5) # ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=10)
+scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=300, gamma=0.5) # ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=10)
 
 test_preds, test_labels = test_predictor_configuration_pistcnn(
     title=f"S-Parameters Prediction with PI-STCNN",
@@ -62,7 +68,7 @@ test_preds, test_labels = test_predictor_configuration_pistcnn(
     optimizer=optimizer,
     scheduler=scheduler,
     epochs=3000,
-    L_f=300,
+    L_f=200,
     early_stopping=True,
     patience=200,
     y_scale_params=y_scale_params,
