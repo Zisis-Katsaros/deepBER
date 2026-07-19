@@ -76,15 +76,11 @@ test_preds, test_labels = test_predictor_configuration_pistcnn(
     predicted_vs_actual=True,
     test_out_dir = f"out_files/pi_stcnn",
     close_figures=True,
-    max_figures=5,
+    max_figures=2,
     max_time_hours=5.5
     )
 
-labels_dict_list, preds_dict_list = convert_stcnn_outputs_to_dicts(
-    test_targets=test_labels, 
-    test_preds=test_preds, 
-    num_ports=18
-)
+labels_dict_list, preds_dict_list = convert_stcnn_outputs_to_dicts(test_targets=test_labels, test_preds=test_preds, num_ports=18)
 
 num_geometries = test_preds.shape[0]
 freq_array = np.linspace(0, 30, 601)
@@ -98,9 +94,3 @@ export_files_for_transient(
     freq_arrays_per_geom=freq_arrays_per_geom,
     save_dir="out_files/pi_stcnn/touchstone_files"
 )
-
-
-
-
-
-
