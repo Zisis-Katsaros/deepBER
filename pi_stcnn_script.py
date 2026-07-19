@@ -7,7 +7,6 @@ from prediction.predictor import PI_STCNN
 from prediction.l_freq_loss import l_freq_loss
 from prediction.test_predictor_config import test_predictor_configuration_pistcnn
 import numpy as np
-from visualization import plot_s_param_pred_vs_act_from_pistcnn
 from export_files_for_transient import export_files_for_transient, convert_stcnn_outputs_to_dicts
 
 # ============================================= Initializing Dataset ============================================= #
@@ -50,7 +49,7 @@ criterion = l_freq_loss()
 learning_rate = 0.01
 weight_decay = 0.0 # 5.976118759714283e-06
 optimizer = torch.optim.Adam(predictor.parameters(), lr=learning_rate, weight_decay=weight_decay)
-scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=10)
+scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=500, gamma=0.5) # ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=10)
 
 test_preds, test_labels = test_predictor_configuration_pistcnn(
     title=f"S-Parameters Prediction with PI-STCNN",
@@ -65,12 +64,13 @@ test_preds, test_labels = test_predictor_configuration_pistcnn(
     epochs=3000,
     L_f=300,
     early_stopping=True,
-    patience=10,
+    patience=200,
     y_scale_params=y_scale_params,
     training_curves=True,
     predicted_vs_actual=True,
     test_out_dir = f"out_files/pi_stcnn",
     close_figures=True,
+    max_figures=5,
     max_time_hours=5.5
     )
 
