@@ -37,8 +37,8 @@ def plot_s_param_pred_vs_act_from_pistcnn(test_targets: np.ndarray, test_preds: 
         true_labels=actual_real,
         predictions=pred_real,
         freq_array=freq_array,
-        title=f"Sample {geom_idx} - Re(S{p1}{p2})",
-        save_path=os.path.join(save_dir, f"sample_{geom_idx}_Re_S{p1}_{p2}.png"),
+        title=f"Sample {geom_idx+1} - Re(S{p1}{p2})",
+        save_path=os.path.join(save_dir, f"sample_{geom_idx+1}_Re_S{p1}_{p2}.png"),
         close_figure=close_figure
     )  
     # Plot Imaginary Part
@@ -46,8 +46,8 @@ def plot_s_param_pred_vs_act_from_pistcnn(test_targets: np.ndarray, test_preds: 
         true_labels=actual_imag,
         predictions=pred_imag,
         freq_array=freq_array,
-        title=f"Sample {geom_idx} - Im(S{p1}{p2})",
-        save_path=os.path.join(save_dir, f"sample_{geom_idx}_Im_S{p1}_{p2}.png"),
+        title=f"Sample {geom_idx+1} - Im(S{p1}{p2})",
+        save_path=os.path.join(save_dir, f"sample_{geom_idx+1}_Im_S{p1}_{p2}.png"),
         close_figure=close_figure
     )
 

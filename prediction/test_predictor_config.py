@@ -247,7 +247,7 @@ def test_predictor_configuration_pistcnn(title: str, device: torch.device, model
                                        optimizer: torch.optim.Optimizer, scheduler=None, epochs: int = 30, 
                                        L_f: int = 10, early_stopping: bool = False, patience: int = 5, y_scale_params: tuple = None, 
                                        training_curves: bool = False, predicted_vs_actual: bool = False, 
-                                       test_out_dir: str = '.', close_figures: bool = True, max_time_hours: float = 5.5):
+                                       test_out_dir: str = '.', close_figures: bool = True, max_figures: int = 2, max_time_hours: float = 5.5):
     """ 
     # test_predictor_configuration_pistcnn()
     ## Train model with given configuration and visualize/ save results PI-STCNN specific
@@ -336,7 +336,7 @@ def test_predictor_configuration_pistcnn(title: str, device: torch.device, model
         bypass_pel = epoch < L_f
         
         train_loss, train_mae = train_pred_loop_pistcnn(model, train_data, optimizer, criterion, device, bypass_pel)
-        val_loss, val_mae, *_ = test_pred_loop_pistcnn(model, val_data, criterion, device)
+        val_loss, val_mae, *_ = test_pred_loop_pistcnn(model, val_data, criterion, device, bypass_pel)
 
         if scheduler is not None:
             try:    
@@ -422,18 +422,21 @@ def test_predictor_configuration_pistcnn(title: str, device: torch.device, model
                             close_figure=close_figures)
         
     if predicted_vs_actual:
-        for geom_idx in range(test_preds.shape[0]):
-            for port_i in range(num_channels):
-                for port_j in range(num_channels):
+        expected_ports = int((np.sqrt(8 * num_channels + 1) - 1) / 2)
+        for geom_idx in range(min(test_preds.shape[0], max_figures)):
+            for i in range(expected_ports):
+                for j in range(i, expected_ports):
+                    port_i = i + 1
+                    port_j = j + 1
                     plot_s_param_pred_vs_act_from_pistcnn(
-                        test_targets=test_targets[geom_idx, :, :], 
-                        test_preds=test_preds[geom_idx, :, :], 
+                        test_targets=test_targets, 
+                        test_preds=test_preds, 
                         freq_array=np.linspace(0, 30, test_preds.shape[2]), 
                         port_i=port_i, 
                         port_j=port_j, 
                         geom_idx=geom_idx, 
-                        save_dir=os.path.join(test_out_dir, title, "s_curves"),
-                        close_figures=close_figures
+                        save_dir=os.path.join(test_out_dir, title, f"s_curves/sample_{geom_idx+1}"),
+                        close_figure=close_figures
                     )
 
     return test_preds, test_targets

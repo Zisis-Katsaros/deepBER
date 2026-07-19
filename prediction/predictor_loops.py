@@ -277,7 +277,8 @@ def train_pred_loop_pistcnn(model, data: torch.utils.data.DataLoader, optimizer:
     return avg_loss, avg_mae
 
 
-def test_pred_loop_pistcnn(model, data: torch.utils.data.DataLoader, criterion: torch.nn.Module, device: torch.device):
+def test_pred_loop_pistcnn(model, data: torch.utils.data.DataLoader, criterion: torch.nn.Module, device: torch.device, 
+                           bypass_pel: bool = False):
     """
     # test_pred_loop()
     ## Loop used for evaluating the model adjusted for PI-STCNN
@@ -306,7 +307,7 @@ def test_pred_loop_pistcnn(model, data: torch.utils.data.DataLoader, criterion: 
             inputs = inputs.to(device)
             labels = labels.to(device)
 
-            outputs = model(inputs, bypass_pel=False) 
+            outputs = model(inputs, bypass_pel=bypass_pel) 
             loss = criterion(outputs, labels)
             
             total_loss += loss.item() * inputs.size(0) 
