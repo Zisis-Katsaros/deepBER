@@ -191,6 +191,9 @@ class PI_STCNN(nn.Module):
         # Adaptive pooling or interpolation to enforce exact N*M + 1 length dimension
         self.length_adjust = nn.AdaptiveAvgPool1d(self.extrapolated_pts)
 
+        # CoordConv Layer: Maps (Dy channels + 1 coordinate channel) back down to Dy channels
+        self.coord_layer = nn.Conv1d(self.Dy + 1, self.Dy, kernel_size=1)
+
         # Causality and Passivity enforcement layers
         self.smoothing_layer = GaussianSmoothingLayer(channels=self.Dy)
         self.cel = CausalityEnforcementLayer(N=N, M=M, K=K)
@@ -213,8 +216,17 @@ class PI_STCNN(nn.Module):
         # Enforce exact length for extrapolated Re{S}
         y_bn = self.length_adjust(x)
 
+        # CoordConv logic
+        batch_size, _, current_k = y_bn.size()
+
+        coords = torch.linspace(-1, 1, steps=current_k, device=y_bn.device) # -1 to 1 due to standard scaling
+        coords = coords.view(1, 1, current_k).expand(batch_size, 1, current_k)
+
+        y_bn_with_coords = torch.cat([y_bn, coords], dim=1)
+        y_cc = self.coord_layer(y_bn_with_coords)
+
         # Apply smoothing layer
-        y_sl = self.smoothing_layer(y_bn)
+        y_sl = self.smoothing_layer(y_cc)
 
         # Causality enforcement
         S_cel_real, S_cel_imag = self.cel(y_sl)
