@@ -27,7 +27,7 @@ dataloader, x_scale_params, y_scale_params = create_param_dataloader(
                     y_array,
                     batch_size=16,
                     seed=42,
-                    standard_scale=True,
+                    standard_scale=(True, False),  # (scale_features, scale_labels)
                     split_method="lhs"
                     )
 

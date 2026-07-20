@@ -367,7 +367,7 @@ def create_dataloader(
 	return [train_data, val_data, test_data]
 
 
-def create_param_dataloader(x_array: NDArray, y_array: NDArray, batch_size: int =64, seed: int =42, standard_scale: bool =False,
+def create_param_dataloader(x_array: NDArray, y_array: NDArray, batch_size: int =64, seed: int =42, standard_scale: tuple[bool, bool]| bool = False,
 							split_method: Literal["random", "lhs"] = "random", split_percentages: list[float]=[0.8, 0.1]):
 	"""
 	# create_param_dataloader()
@@ -386,6 +386,11 @@ def create_param_dataloader(x_array: NDArray, y_array: NDArray, batch_size: int 
 	- x_scale_params: (x_train_mean, x_train_std)
 	- y_scale_params: (y_train_mean, y_train_std)
 	"""
+
+	if isinstance(standard_scale, (bool, bool)):
+		scale_features, scale_labels = standard_scale
+	else:
+		scale_features, scale_labels = standard_scale, standard_scale
 
 	if len(y_array) == 0:
 		raise ValueError("No samples found inside the provided label array.")
@@ -433,17 +438,26 @@ def create_param_dataloader(x_array: NDArray, y_array: NDArray, batch_size: int 
 	test_idx = np.sort(test_idx)
 
 	# Standard scaling
-	if standard_scale:
+	if scale_features:
 		# Fit scaling parameters on train split only to avoid leakage.
 		x_train_mean = x_array[train_idx].mean(axis=0)
 		x_train_std = x_array[train_idx].std(axis=0)
 		x_train_std = np.where(x_train_std == 0.0, 1.0, x_train_std)
 		x_array = ((x_array - x_train_mean) / x_train_std)
 
+		x_scale_params = (x_train_mean, x_train_std)
+	else:
+		x_scale_params = (0, 1)
+
+	if scale_labels:
 		y_train_mean = y_array[train_idx].mean(axis=0)
 		y_train_std = y_array[train_idx].std(axis=0)
 		y_train_std = np.where(y_train_std == 0.0, 1.0, y_train_std)
 		y_array = ((y_array - y_train_mean) / y_train_std)
+
+		y_scale_params = (y_train_mean, y_train_std)
+	else:
+		y_scale_params = (0, 1)
 
 	train_set = TensorDataset(
 		torch.from_numpy(x_array[train_idx]),
@@ -463,12 +477,8 @@ def create_param_dataloader(x_array: NDArray, y_array: NDArray, batch_size: int 
 	test_data = DataLoader(test_set, batch_size=batch_size, shuffle=False)
 
 	dataloader = [train_data, val_data, test_data]
-	x_scale_params = (x_train_mean, x_train_std)
-	y_scale_params = (y_train_mean, y_train_std)
-	if standard_scale:
-		return dataloader, x_scale_params, y_scale_params
-	else:
-		return dataloader, None, None
+		
+	return dataloader, x_scale_params, y_scale_params
 	
 
 def create_param_forward_dataloader(x_array: NDArray, batch_size: int =64, standard_scale: bool =False, 
