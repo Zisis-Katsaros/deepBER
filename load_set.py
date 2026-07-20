@@ -367,7 +367,7 @@ def create_dataloader(
 	return [train_data, val_data, test_data]
 
 
-def create_param_dataloader(x_array: NDArray, y_array: NDArray, batch_size: int =64, seed: int =42, standard_scale: tuple[bool, bool]| bool = False,
+def create_param_dataloader(x_array: NDArray, y_array: NDArray, batch_size: int =64, seed: int =42, standard_scale = False,
 							split_method: Literal["random", "lhs"] = "random", split_percentages: list[float]=[0.8, 0.1]):
 	"""
 	# create_param_dataloader()
