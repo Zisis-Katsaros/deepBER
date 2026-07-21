@@ -15,14 +15,14 @@ from export_files_for_transient import export_files_for_transient, convert_stcnn
 torch.manual_seed(42)
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
-pred_arrays_dict = torch.load("csv_files/s_params/pt/pred_arrays_dict.pt", weights_only=False)
+pred_arrays_dict = torch.load("csv_files/s_params/pt/pred_arrays_dict_30perc.pt", weights_only=False)
 
 x_array = pred_arrays_dict["x_array"].astype(np.float32)
 s_dict = pred_arrays_dict["s_dict"]
 feature_columns = pred_arrays_dict["feature_columns"]
 
 s_non_causal_dict = {}
-processed_elements = [key for idx, key in enumerate(s_dict.keys()) if idx < -1 and key != "all"]
+processed_elements = [key for idx, key in enumerate(s_dict.keys()) if idx < 200 and key != "all"]
 elements = list(key for key in s_dict.keys() if key != "all") 
 for element in elements:   
     if element in processed_elements:
@@ -105,6 +105,19 @@ for element in elements:
         ).to(device)
     predictor.load_state_dict(torch.load(f"out_files/single_mlp/weights/best_model_{element}.pth", map_location=device))
     
+    # Per element act vs pred plots on frequency domain
+    single_geometry_test(
+        title=f"{element}",
+        device=device,
+        model=predictor,
+        test_data = dataloader[2],
+        x_scale_params=x_scale_params,
+        y_scale_params=y_scale_params,
+        max_geoms=3,
+        save_dir = f"out_files/single_mlp/{element}",
+        close_figures=True
+    )
+
     all_preds = []
     # Forward pass with extrapolated test data
     predictor.eval()

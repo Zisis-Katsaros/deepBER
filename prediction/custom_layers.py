@@ -25,7 +25,7 @@ class GaussianSmoothingLayer(nn.Module):
         # Calculate Gaussian kernel dynamically based on the learnable sigma
         varience = self.sigma ** 2
         gaussian_kernel = torch.exp(-0.5 * (self.grid ** 2) / varience)
-        gaussian_kernel = gaussian_kernel / torch.sqrt(2 * math.pi * varience)
+        gaussian_kernel = gaussian_kernel / (torch.sqrt(2 * math.pi * varience) + 1e-8)
 
         # Channel-wise filtering
         return nn.functional.conv1d(x, gaussian_kernel, padding=self.padding, groups=self.channels)
