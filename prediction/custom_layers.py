@@ -58,20 +58,23 @@ class CausalityEnforcementLayer(nn.Module):
 
         # FFT along the frequency axis
         Y_tilde = torch.fft.fft(y_double, dim=2)
+        og_length = Y_tilde.shape[2]
+
+        padded_length = og_length * self.K
 
         # Create discrete analytic signal in v-domain
-        Z_v = torch.zeros_like(Y_tilde)
+        Z_v = torch.zeros(Ny, Dy, padded_length, dtype=Y_tilde.dtype, device=Y_tilde.device)
 
-        Z_v[:, :, 0] = Y_tilde[:, :, 0]  # DC component remains unchanged
-        Z_v[:, :, 1:seq_len] = 2 * Y_tilde[:, :, 1:seq_len]  # Positive frequencies doubled
-        # Negative frequencies remain zero
+        Z_v[:, :, 0] = Y_tilde[:, :, 0]  # v = 0
+        Z_v[:, :, 1:seq_len] = 2 * Y_tilde[:, :, 1:seq_len]  # 1 <= v <= (NM + 1)
+        #  0, (NM + 1) < v <= (2NMK + K)
 
         # IFFT to transform back and extract real and imaginary parts
         z_analytic = torch.fft.ifft(Z_v, dim=2)
 
         # Apply factor K for interpolation
         y_cel = self.K * z_analytic.real
-        z_cel = self.K * z_analytic.imag
+        z_cel = -self.K * z_analytic.imag
 
         # Truncate to N*K + 1, discarding out-of-band predictions
         target_len = int(self.N * self.K + 1)
