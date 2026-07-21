@@ -66,7 +66,7 @@ for element in elements:
     scheduler=scheduler,
     epochs=300,
     early_stopping=True,
-    patience=1,
+    patience=10,
     y_scale_params=y_scale_params,
     training_curves=True,
     predicted_vs_actual=True,
@@ -105,6 +105,19 @@ for element in elements:
         ).to(device)
     predictor.load_state_dict(torch.load(f"out_files/single_mlp/weights/best_model_{element}.pth", map_location=device))
     
+    # Per element act vs pred plots on frequency domain
+    single_geometry_test(
+        title=f"{element}",
+        device=device,
+        model=predictor,
+        test_data = dataloader[2],
+        x_scale_params=x_scale_params,
+        y_scale_params=y_scale_params,
+        max_geoms=3,
+        save_dir = f"out_files/single_mlp/{element}",
+        close_figures=True
+    )
+
     all_preds = []
     # Forward pass with extrapolated test data
     predictor.eval()

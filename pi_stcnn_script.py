@@ -52,7 +52,7 @@ predictor = PI_STCNN(
 ).to(device)
 
 criterion = l_freq_loss()
-learning_rate = 0.01
+learning_rate = 0.001
 weight_decay = 0.0 # 5.976118759714283e-06
 optimizer = torch.optim.Adam(predictor.parameters(), lr=learning_rate, weight_decay=weight_decay)
 scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=300, gamma=0.5) # ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=10)
@@ -68,7 +68,7 @@ test_preds, test_labels = test_predictor_configuration_pistcnn(
     optimizer=optimizer,
     scheduler=scheduler,
     epochs=3000,
-    L_f=200,
+    L_f=1000,
     early_stopping=True,
     patience=200,
     y_scale_params=y_scale_params,

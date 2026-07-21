@@ -223,24 +223,23 @@ def s_param_imag_part_hilbert_construction(s: np.ndarray, num_og_freq: int, K: i
     NM = seq_len - 1
     N = num_og_freq - 1
     
-    s_rev = s[:, :, NM-1::-1]
+    s_rev = np.flip(s[:, :, 1:], axis=-1)  # Reverse the sequence dimension
     s_double_sided = np.concatenate((s, s_rev), axis=-1)
 
     Y_tilde = np.fft.fft(s_double_sided, axis=-1)
+    og_length = Y_tilde.shape[-1]
 
-    Z = np.zeros_like(Y_tilde, dtype=np.complex64)
+    padded_length = og_length * K
+
+    Z = np.zeros((Nd, Dy, padded_length), dtype=np.complex64)
     Z[:, :, 0] = Y_tilde[:, :, 0]
-    Z[:, :, 1:NM+2] = 2 * Y_tilde[:, :, 1:NM+2]
+    Z[:, :, 1:seq_len] = 2 * Y_tilde[:, :, 1:seq_len]
 
-    if K > 1:
-        pad_length = (K-1) * (2* NM + 1)
-        zeros = np.zeros((Nd, Dy, pad_length), dtype=np.complex64)
-        Z = np.concatenate([Z, zeros], axis=-1)
+    # IFFT to transform back and extract real and imaginary parts
+    z_analytic = np.fft.ifft(Z, axis=-1)
 
-    s_cel = np.fft.ifft(Z, axis=-1)
-
-    s_cel_full_real = K * np.real(s_cel)
-    s_cel_full_imag = -K * np.imag(s_cel)
+    s_cel_full_real = K * np.real(z_analytic)
+    s_cel_full_imag = -K * np.imag(z_analytic)
 
     truncation_idx = N*K + 1
 
