@@ -217,5 +217,40 @@ def s2rlcg_dict(s, freq, lengths, z0=50.0):
     
     return r_dict, l_dict, c_dict, g_dict
 
+
+def s_param_imag_part_hilbert_construction(s: np.ndarray, num_og_freq: int, K: int=1):
+    Nd, Dy, seq_len = s.shape
+    NM = seq_len - 1
+    N = num_og_freq - 1
+    
+    s_rev = s[:, :, NM-1::-1]
+    s_double_sided = np.concatenate((s, s_rev), axis=-1)
+
+    Y_tilde = np.fft.fft(s_double_sided, axis=-1)
+
+    Z = np.zeros_like(Y_tilde, dtype=np.complex64)
+    Z[:, :, 0] = Y_tilde[:, :, 0]
+    Z[:, :, 1:NM+2] = 2 * Y_tilde[:, :, 1:NM+2]
+
+    if K > 1:
+        pad_length = (K-1) * (2* NM + 1)
+        zeros = np.zeros((Nd, Dy, pad_length), dtype=np.complex64)
+        Z = np.concatenate([Z, zeros], axis=-1)
+
+    s_cel = np.fft.ifft(Z, axis=-1)
+
+    s_cel_full_real = K * np.real(s_cel)
+    s_cel_full_imag = -K * np.imag(s_cel)
+
+    truncation_idx = N*K + 1
+
+    s_cell_real = s_cel_full_real[:, :, :truncation_idx]
+    s_cell_imag = s_cel_full_imag[:, :, :truncation_idx]
+
+    return s_cell_real + 1j * s_cell_imag
+
+    
+
+
     
 
