@@ -387,7 +387,7 @@ def create_param_dataloader(x_array: NDArray, y_array: NDArray, batch_size: int 
 	- y_scale_params: (y_train_mean, y_train_std)
 	"""
 
-	if isinstance(standard_scale, (bool, bool)):
+	if isinstance(standard_scale, tuple) and len(standard_scale) == 2:
 		scale_features, scale_labels = standard_scale
 	else:
 		scale_features, scale_labels = standard_scale, standard_scale
@@ -507,7 +507,7 @@ def create_param_forward_dataloader(x_array: NDArray, batch_size: int =64, stand
 	return dataloader
 
 
-def organize_dataset_for_pi_stcnn(x_array: NDArray, s_dict: dict, feature_columns: list[str]):
+def organize_dataset_for_pi_stcnn(x_array: NDArray, s_dict: dict, feature_columns: list[str], only_real: bool = False, freq_round_decimals: int = 2):
 	"""
 	# organize_dataset_for_pi_stcnn()
 	## Organizes the dataset for use alongside PI-STCNN model
@@ -516,6 +516,7 @@ def organize_dataset_for_pi_stcnn(x_array: NDArray, s_dict: dict, feature_column
 	- x_array: 2D array of features
 	- s_dict: Dictionary of S-parameters with keys as "Sij" and values as complex arrays
 	- feature_columns: List of feature column names
+	- only_real: If true, only the real part of the S-parameters is used
 	## Returns:
 	- unique_x: 2D array of unique design geometries
 	- new_feature_columns: List of feature column names excluding "frequency_in_ghz"
@@ -530,7 +531,7 @@ def organize_dataset_for_pi_stcnn(x_array: NDArray, s_dict: dict, feature_column
 		raise ValueError("The exact string 'frequency_ghz' must be present in feature_columns.")
 
     # Extract frequency tracking information
-	freq_col = x_array[:, freq_idx]
+	freq_col = np.round(x_array[:, freq_idx], decimals=freq_round_decimals)
 	unique_freqs = np.unique(freq_col)
 	num_freqs = len(unique_freqs)
 
@@ -549,13 +550,83 @@ def organize_dataset_for_pi_stcnn(x_array: NDArray, s_dict: dict, feature_column
 	channel_keys = list(s_dict.keys())
 	num_channels = len(channel_keys)
 
-    # Initialize the complex 3D output tensor: (Batch_Size, Channels, Frequency_Points)
-	y_array = np.zeros((num_geoms, 2*num_channels, num_freqs), dtype=np.float32)
+	if only_real:
+		# Initialize the complex 3D output tensor: (Batch_Size, Channels, Frequency_Points)
+		y_array = np.zeros((num_geoms, num_channels, num_freqs), dtype=np.float32)
 
-    # Populate the tensor using advanced numpy indexing for high performance
-	for c_idx, key in enumerate(channel_keys):
-        # inverse_indices dictates the geometry row, freq_indices dictates the depth/sequence step
-		y_array[inverse_indices, c_idx, freq_indices] = s_dict[key].real
-		y_array[inverse_indices, c_idx + num_channels, freq_indices] = s_dict[key].imag
-	
+		# Populate the tensor using advanced numpy indexing for high performance
+		for c_idx, key in enumerate(channel_keys):
+			# inverse_indices dictates the geometry row, freq_indices dictates the depth/sequence step
+			y_array[inverse_indices, c_idx, freq_indices] = np.squeeze(s_dict[key])
+	else:
+		# Initialize the complex 3D output tensor: (Batch_Size, Channels, Frequency_Points)
+		y_array = np.zeros((num_geoms, 2*num_channels, num_freqs), dtype=np.float32)
+
+		# Populate the tensor using advanced numpy indexing for high performance
+		for c_idx, key in enumerate(channel_keys):
+			# inverse_indices dictates the geometry row, freq_indices dictates the depth/sequence step
+			y_array[inverse_indices, c_idx, freq_indices] = s_dict[key].real
+			y_array[inverse_indices, c_idx + num_channels, freq_indices] = s_dict[key].imag
 	return unique_x, new_feature_columns, y_array
+
+
+def add_samples_for_extrapolation(test_data: torch.utils.data.DataLoader, M: float, feature_columns: list[str], x_scale_params: 
+								  tuple[np.ndarray, np.ndarray] = None, n_non_unique_feats: int=7):
+	x_list, y_list = [], []
+	for x_batch, y_batch in test_data:
+		x_list.append(x_batch.numpy())
+		y_list.append(y_batch.numpy())
+
+	if not x_list:
+		return test_data # if empty return as-is
+
+	x_array = np.vstack(x_list)
+	y_array = np.vstack(y_list)
+	num_labels = y_array.shape[1]
+	batch_size = test_data.batch_size
+
+	try:
+		freq_idx = feature_columns.index("frequency_ghz")
+	except ValueError:
+		raise ValueError("'frequency_ghz' must be present in feature_columns.")
+	
+	freq_unscaled = x_array[:, freq_idx] * x_scale_params[1][freq_idx] + x_scale_params[0][freq_idx] if x_scale_params \
+		else x_array[:, freq_idx]
+	
+	unique_freqs = np.sort(np.unique(np.round(freq_unscaled, decimals=2)))
+
+	max_og_freq = unique_freqs[-1] # since it is sorted
+	step = np.median(np.diff(unique_freqs)) # median step size
+	max_extrap_freq = max_og_freq * M
+
+	f_extrap_unscaled = np.arange(max_og_freq + step, max_extrap_freq + (step/2), step)
+
+	f_extap_scaled = (f_extrap_unscaled - x_scale_params[0][freq_idx]) / x_scale_params[1][freq_idx] if x_scale_params \
+		else f_extrap_unscaled
+	
+	grouping_indices, _ = get_grouping(x_array, n_non_unique_feats=n_non_unique_feats)
+
+	x_extrap_list = []
+
+	for group_idx in grouping_indices:
+		rep_idx = group_idx[0]  # Representative index for the group
+		rep_x = x_array[rep_idx].copy()
+		
+		for f_scaled in f_extap_scaled:
+			new_x = rep_x.copy()
+			new_x[freq_idx] = f_scaled # Inject the extrapolated frequency
+			x_extrap_list.append(new_x)
+
+	if x_extrap_list:
+		x_extrap_array = np.vstack(x_extrap_list)
+
+		# Combine original and extrapolated data
+		x_combined = np.vstack([x_array, x_extrap_array])
+	else:
+		x_combined = x_array
+
+	new_dataset = TensorDataset(torch.from_numpy(x_combined))
+	return DataLoader(new_dataset, batch_size=batch_size, shuffle=False), x_combined, x_array
+	
+
+	
