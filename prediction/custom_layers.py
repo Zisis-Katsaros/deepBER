@@ -105,7 +105,7 @@ class PassivityEnforcementLayer(nn.Module):
                 mat_real[:, i, j, :] = S_real[:, idx, :]
                 mat_real[:, j, i, :] = S_real[:, idx, :] # due to symmetry
                 mat_imag[:, i, j, :] = S_imag[:, idx, :]
-                mat_imag[:, j, i, :] = -S_imag[:, idx, :] # due to symmetry
+                mat_imag[:, j, i, :] = S_imag[:, idx, :] # due to symmetry
                 idx += 1
         return mat_real, mat_imag
     

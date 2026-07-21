@@ -27,7 +27,7 @@ dataloader, x_scale_params, y_scale_params = create_param_dataloader(
                     y_array,
                     batch_size=16,
                     seed=42,
-                    standard_scale=(True, False),  # (scale_features, scale_labels)
+                    standard_scale=(True, True),  # (scale_features, scale_labels)
                     split_method="lhs"
                     )
 
@@ -68,7 +68,7 @@ test_preds, test_labels = test_predictor_configuration_pistcnn(
     optimizer=optimizer,
     scheduler=scheduler,
     epochs=3000,
-    L_f=20000,
+    L_f=200,
     early_stopping=True,
     patience=200,
     y_scale_params=y_scale_params,
