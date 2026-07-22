@@ -143,7 +143,7 @@ class DeepBER_Param_Predictor_Complex(nn.Module):
 
 
 class PI_STCNN(nn.Module):
-    def __init__(self, input_size, mlp_hidden, mlp_activation_fn, tcnn_layer_params, tcnn_activation_fn, output_size, num_ports, N, M, K):
+    def __init__(self, input_size, mlp_hidden, mlp_activation_fn, mlp_dropout, tcnn_layer_params, tcnn_activation_fn, output_size, num_ports, N, M, K):
         """
         # Physics-Informed Transposed Convolutional Neural Network modular architecture for S-Parameter prediction
 
@@ -151,6 +151,7 @@ class PI_STCNN(nn.Module):
         - input_size: Number of input features
         - mlp_hidden: List of hidden layer sizes for the base-model 
         - mlp_activation_fn: Activation function for each of the hidden layers in the base-model
+        - mlp_dropout: Dropout rate for the base-model
         - tcnn_params: List of layer parameters for the 1D Transposed Conv Layers [out_channels, kernel_size, stride]
         - tcnn_activation_fn: Activation function for each of the transposed convolutional layers
         - output_size: Number of unique S-parameter elements
@@ -171,6 +172,8 @@ class PI_STCNN(nn.Module):
         for hidden in mlp_hidden:
             self.mlp.append(nn.Linear(current_dim, hidden))
             self.mlp.append(mlp_activation_fn)
+            if mlp_dropout > 0.0:
+                self.mlp.append(nn.Dropout(mlp_dropout))
             current_dim = hidden
 
         # Linear layer mapping to the initial shape for 1D Transposed Convs
