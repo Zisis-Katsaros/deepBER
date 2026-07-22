@@ -4,7 +4,7 @@ import torch.fft
 import math
 
 class GaussianSmoothingLayer(nn.Module):
-    def __init__(self, channels, kernel_size=11):
+    def __init__(self, channels, kernel_size=11, varience_min=None):
         """
         # GaussianSmoothingLayer
 
@@ -15,6 +15,7 @@ class GaussianSmoothingLayer(nn.Module):
         self.channels = channels
         self.kernel_size = kernel_size
         self.padding = kernel_size // 2
+        self.varience_min = varience_min
 
         # Learnable standard deviation per channel
         self.sigma = nn.Parameter(torch.ones(channels, 1, 1))
@@ -24,6 +25,9 @@ class GaussianSmoothingLayer(nn.Module):
     def forward(self, x):
         # Calculate Gaussian kernel dynamically based on the learnable sigma
         varience = self.sigma ** 2
+        if self.varience_min is not None:
+            varience = torch.clamp(varience, min=self.varience_min)
+
         gaussian_kernel = torch.exp(-0.5 * (self.grid ** 2) / varience)
         gaussian_kernel = gaussian_kernel / (torch.sqrt(2 * math.pi * varience) + 1e-8)
 
