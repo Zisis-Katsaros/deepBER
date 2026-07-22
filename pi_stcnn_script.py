@@ -22,7 +22,7 @@ feature_columns = pred_arrays_dict["feature_columns"]
 
 x_array, feature_columns, y_array = organize_dataset_for_pi_stcnn(x_array, s_dict, feature_columns)
 
-dataloader, x_scale_params, y_scale_params = create_param_dataloader(
+dataloader, x_scale_params, y_scale_params, y_weights = create_param_dataloader(
                     x_array,
                     y_array,
                     batch_size=16,
@@ -34,15 +34,15 @@ dataloader, x_scale_params, y_scale_params = create_param_dataloader(
 _, num_channels_times2, num_freqs = y_array.shape
 predictor = PI_STCNN(
     input_size=len(feature_columns),
-    mlp_hidden=[30, 30],
+    mlp_hidden=[32, 64, 128],
     mlp_activation_fn=nn.ELU(),
-    mlp_dropout=0.02,
+    mlp_dropout=0.05,
     tcnn_layer_params=[
-        [30, 32, 1],  # [out_channels, kernel_size, stride]
-        [30, 4, 2],
-        [30, 4, 2],
-        [30, 4, 4],
-        [30, 2, 3]
+        [128, 32, 1],  # [out_channels, kernel_size, stride]
+        [128, 4, 2],
+        [128, 4, 2],
+        [128, 4, 4],
+        [128, 2, 3]
     ],
     tcnn_activation_fn=nn.ELU(),
     output_size=num_channels_times2 // 2,
@@ -52,7 +52,7 @@ predictor = PI_STCNN(
     K=2
 ).to(device)
 
-criterion = l_freq_loss()
+criterion = l_freq_loss(weight=y_weights).to(device)
 learning_rate = 0.001
 weight_decay = 0.0 # 5.976118759714283e-06
 optimizer = torch.optim.Adam(predictor.parameters(), lr=learning_rate, weight_decay=weight_decay)

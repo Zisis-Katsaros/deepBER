@@ -85,7 +85,7 @@ class CausalityEnforcementLayer(nn.Module):
     
 
 class PassivityEnforcementLayer(nn.Module):
-    def __init__(self, num_ports):
+    def __init__(self, num_ports, passivity_margin=1.03):
         """
         # PassivityEnforcementLayer
 
@@ -93,9 +93,11 @@ class PassivityEnforcementLayer(nn.Module):
 
         ## Args:
         - num_ports: Number of ports
+        - passivity_margin: Margin for passivity enforcement (>1)
         """
         super(PassivityEnforcementLayer, self).__init__()
         self.P = num_ports
+        self.passivity_margin = passivity_margin
 
     def reconstruct_symmetric_mat(self, S_real, S_imag):
         Nd, Dy, F = S_real.shape
@@ -140,8 +142,8 @@ class PassivityEnforcementLayer(nn.Module):
         term2 = torch.clamp(term2, min=0.0)  # Prevent NaNs from numerical instability
         sigma_bound = torch.sqrt(term1 + torch.sqrt(term2))
 
-        # Enforce passivity using minimum-phase filter: 1/sigma_bound if > 1, else 1
-        mag_filter = torch.where(sigma_bound > 1.0, 1.0 / sigma_bound, torch.ones_like(sigma_bound))
+        # Enforce passivity using minimum-phase filter: 1/sigma_bound if > passivity_margin, else 1
+        mag_filter = torch.where(sigma_bound > self.passivity_margin, 1.0 / sigma_bound, torch.ones_like(sigma_bound))
 
         # FFT-based Hilbert Transform to compute find minimum phase
         log_mag = torch.log(mag_filter + 1e-12)  # Avoid log(0)

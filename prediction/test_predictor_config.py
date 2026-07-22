@@ -243,7 +243,7 @@ def test_predictor_configuration(title: str, device: torch.device, model, datalo
 
 
 def test_predictor_configuration_pistcnn(title: str, device: torch.device, model, dataloader: list[torch.utils.data.DataLoader], 
-                                       learning_rate: float, batch_size: int, criterion: torch.nn.Module, 
+                                       learning_rate: float, batch_size: int, criterion: torch.nn.Module,
                                        optimizer: torch.optim.Optimizer, scheduler=None, epochs: int = 30, 
                                        L_f: int = 10, early_stopping: bool = False, patience: int = 5, y_scale_params: tuple = None, 
                                        training_curves: bool = False, predicted_vs_actual: bool = False, 
