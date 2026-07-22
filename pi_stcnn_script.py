@@ -36,13 +36,13 @@ predictor = PI_STCNN(
     input_size=len(feature_columns),
     mlp_hidden=[64, 128, 256],
     mlp_activation_fn=nn.ELU(),
-    mlp_dropout=0.05,
+    mlp_dropout=0.2,
     tcnn_layer_params=[
         [128, 32, 1],  # [out_channels, kernel_size, stride]
         [128, 4, 2],
         [128, 4, 2],
         [128, 4, 4],
-        [128, 2, 3]
+        [128, 2, 2]
     ],
     tcnn_activation_fn=nn.ELU(),
     output_size=num_channels_times2 // 2,
