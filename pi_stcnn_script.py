@@ -38,11 +38,11 @@ predictor = PI_STCNN(
     mlp_activation_fn=nn.ELU(),
     mlp_dropout=0.2,
     tcnn_layer_params=[
-        [128, 32, 1],  # [out_channels, kernel_size, stride]
-        [128, 4, 2],
-        [128, 4, 2],
-        [128, 4, 4],
-        [128, 2, 2]
+        [64, 32, 1],  # [out_channels, kernel_size, stride]
+        [64, 4, 2],
+        [64, 4, 2],
+        [64, 4, 4],
+        [64, 2, 2]
     ],
     tcnn_activation_fn=nn.ELU(),
     output_size=num_channels_times2 // 2,
@@ -69,7 +69,7 @@ test_preds, test_labels = test_predictor_configuration_pistcnn(
     optimizer=optimizer,
     scheduler=scheduler,
     epochs=3000,
-    L_f=1000,
+    L_f=500,
     early_stopping=True,
     patience=200,
     y_scale_params=y_scale_params,
