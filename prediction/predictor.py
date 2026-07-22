@@ -143,7 +143,7 @@ class DeepBER_Param_Predictor_Complex(nn.Module):
 
 
 class PI_STCNN(nn.Module):
-    def __init__(self, input_size, mlp_hidden, mlp_activation_fn, mlp_dropout, tcnn_layer_params, tcnn_activation_fn, output_size, num_ports, N, M, K, passivity_margin=1.03):
+    def __init__(self, input_size, mlp_hidden, mlp_activation_fn, mlp_dropout, tcnn_layer_params, tcnn_activation_fn, output_size, num_ports, N, M, K, varience_min=1.0, passivity_margin=1.03):
         """
         # Physics-Informed Transposed Convolutional Neural Network modular architecture for S-Parameter prediction
 
@@ -199,7 +199,7 @@ class PI_STCNN(nn.Module):
         self.coord_layer = nn.Conv1d(self.Dy + 1, self.Dy, kernel_size=1)
 
         # Causality and Passivity enforcement layers
-        self.smoothing_layer = GaussianSmoothingLayer(channels=self.Dy)
+        self.smoothing_layer = GaussianSmoothingLayer(channels=self.Dy, varience_min=varience_min)
         self.cel = CausalityEnforcementLayer(N=N, M=M, K=K)
         self.pel = PassivityEnforcementLayer(num_ports=num_ports, passivity_margin=passivity_margin)
     
