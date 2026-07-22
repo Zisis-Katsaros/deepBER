@@ -385,6 +385,7 @@ def create_param_dataloader(x_array: NDArray, y_array: NDArray, batch_size: int 
 	- dataloader: [train_data, val_data, test_data]
 	- x_scale_params: (x_train_mean, x_train_std)
 	- y_scale_params: (y_train_mean, y_train_std)
+	- y_weights: Tensor of weights for balancing loss function based on label distribution
 	"""
 
 	if isinstance(standard_scale, tuple) and len(standard_scale) == 2:
@@ -459,6 +460,28 @@ def create_param_dataloader(x_array: NDArray, y_array: NDArray, batch_size: int 
 	else:
 		y_scale_params = (0, 1)
 
+	# Extract weights for balancing loss function
+	y_train_abs = np.abs(y_array[train_idx])
+
+	if y_train_abs.ndim == 3:
+		peak_mags = np.max(y_train_abs, axis=(0,2))
+	elif y_train_abs.ndim == 2:
+		peak_mags = np.max(y_train_abs, axis=0)
+	else:
+		peak_mags = np.max(y_train_abs)
+
+	y_weights = 1.0 / (peak_mags + 1e-8)
+	y_weights = y_weights / np.mean(y_weights) # normalize
+
+	# Convert to Tensor
+	y_weights = torch.from_numpy(y_weights).float()
+
+	# Ensure correct shape for broadcasting
+	if y_weights.ndim == 1:
+		y_weights = y_weights.view(1, -1)
+	elif y_weights.ndim == 0:
+		y_weights = y_weights.view(1, 1)
+
 	train_set = TensorDataset(
 		torch.from_numpy(x_array[train_idx]),
 		torch.from_numpy(y_array[train_idx]),
@@ -478,7 +501,7 @@ def create_param_dataloader(x_array: NDArray, y_array: NDArray, batch_size: int 
 
 	dataloader = [train_data, val_data, test_data]
 		
-	return dataloader, x_scale_params, y_scale_params
+	return dataloader, x_scale_params, y_scale_params, y_weights
 	
 
 def create_param_forward_dataloader(x_array: NDArray, batch_size: int =64, standard_scale: bool =False, 
