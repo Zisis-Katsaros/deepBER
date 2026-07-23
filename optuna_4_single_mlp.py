@@ -10,6 +10,7 @@ from dataset_manipulation import pki_extend
 import numpy as np
 from prediction.s2abcd import s_param_imag_part_hilbert_construction
 from export_files_for_transient import export_files_for_transient, convert_stcnn_outputs_to_dicts
+from visualization import plot_preds_vs_act_freq
 
 # ============================================= Initializing Dataset ============================================= #
 torch.manual_seed(42)
@@ -22,7 +23,7 @@ s_dict = pred_arrays_dict["s_dict"]
 feature_columns = pred_arrays_dict["feature_columns"]
 
 s_non_causal_dict = {}
-processed_elements = [key for idx, key in enumerate(s_dict.keys()) if idx < -1 and key != "all"]
+processed_elements = [key for idx, key in enumerate(s_dict.keys()) if idx < 200 and key != "all"]
 elements = list(key for key in s_dict.keys() if key != "all") 
 for element in elements:   
     if element in processed_elements:
@@ -43,7 +44,7 @@ for element in elements:
     
     predictor = DeepBER_Param_Predictor(
         input_size=x_array.shape[1],
-        hidden=[128, 128, 128, 128],
+        hidden=[32, 48, 64, 48, 32],
         activation_fn=nn.GELU(),
         output_size=out_size,
         dropout=0.04
@@ -90,7 +91,7 @@ for element in elements:
     
     test_data, x_extrap, x_test_original = add_samples_for_extrapolation(
         test_data=dataloader[2],
-        M=1.5,
+        M=2,
         feature_columns=feature_columns,
         x_scale_params=x_scale_params,
         n_non_unique_feats=7
@@ -105,20 +106,6 @@ for element in elements:
         ).to(device)
     predictor.load_state_dict(torch.load(f"out_files/single_mlp/weights/best_model_{element}.pth", map_location=device))
     
-    # Per element act vs pred plots on frequency domain
-    single_geometry_test(
-        title=f"{element}",
-        device=device,
-        model=predictor,
-        test_data = dataloader[2],
-        x_scale_params=x_scale_params,
-        y_scale_params=y_scale_params,
-        max_geoms=3,
-        visualization=True,
-        save_dir = f"out_files/single_mlp/{element}",
-        close_figures=True
-    )
-
     all_preds = []
     # Forward pass with extrapolated test data
     predictor.eval()
@@ -156,7 +143,37 @@ _, _, test_targets = organize_dataset_for_pi_stcnn(x_array=x_test_original, s_di
 # Convert to per geometry dictionary
 labels_dict_per_geom, preds_dict_per_geom = convert_stcnn_outputs_to_dicts(test_targets=test_targets, test_preds=test_preds, num_ports=18)
 
+# Visualize predictions vs actuals for each S-parameter element
 freq_array = np.linspace(0, 30, 601)
+max_geoms = 2
+for element in elements:
+    for geometry_idx in range(len(labels_dict_per_geom)):
+        if geometry_idx >= max_geoms:
+            break
+
+        label_array_real = labels_dict_per_geom[geometry_idx][element].real
+        label_array_imag = labels_dict_per_geom[geometry_idx][element].imag
+
+        pred_array_real = preds_dict_per_geom[geometry_idx][element].real
+        pred_array_imag = preds_dict_per_geom[geometry_idx][element].imag
+
+        plot_preds_vs_act_freq(
+                    label_array_real, 
+                    pred_array_real, 
+                    freq_array, 
+                    title= f"Geometry {geometry_idx}: Re({element})",
+                    save_path=f"out_files/single_mlp/{element}/geom{geometry_idx}_Re_{element}.png",
+                    close_figure=True
+                )
+        plot_preds_vs_act_freq(
+                    label_array_imag, 
+                    pred_array_imag, 
+                    freq_array, 
+                    title= f"Geometry {geometry_idx}: Im({element})",
+                    save_path=f"out_files/single_mlp/{element}/geom{geometry_idx}_Im_{element}.png",
+                    close_figure=True
+                )
+
 # Duplicate the frequency array for every unique geometry in the batch
 freq_arrays_per_geom = [freq_array for _ in range(len(unique_geoms))]
 
