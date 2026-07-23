@@ -99,7 +99,7 @@ for element in elements:
 
     predictor = DeepBER_Param_Predictor(
         input_size=x_array.shape[1],
-        hidden=[128, 128, 128, 128],
+        hidden=[32, 48, 64, 48, 32],
         activation_fn=nn.GELU(),
         output_size=out_size,
         dropout=0.04
