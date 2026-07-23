@@ -23,7 +23,7 @@ s_dict = pred_arrays_dict["s_dict"]
 feature_columns = pred_arrays_dict["feature_columns"]
 
 s_non_causal_dict = {}
-processed_elements = [key for idx, key in enumerate(s_dict.keys()) if idx < 200 and key != "all"]
+processed_elements = [key for idx, key in enumerate(s_dict.keys()) if idx < -1 and key != "all"]
 elements = list(key for key in s_dict.keys() if key != "all") 
 for element in elements:   
     if element in processed_elements:
