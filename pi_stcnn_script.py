@@ -38,18 +38,19 @@ predictor = PI_STCNN(
     mlp_activation_fn=nn.ELU(),
     mlp_dropout=0.2,
     tcnn_layer_params=[
-        [64, 32, 1],  # [out_channels, kernel_size, stride]
-        [64, 4, 2],
-        [64, 4, 2],
-        [64, 4, 4],
-        [64, 2, 2]
+        [256, 32, 1],  # [out_channels, kernel_size, stride]
+        [256, 4, 2],
+        [256, 4, 2],
+        [256, 4, 4],
+        [256, 2, 2]
     ],
     tcnn_activation_fn=nn.ELU(),
     output_size=num_channels_times2 // 2,
     num_ports=18,
     N=num_freqs,
-    M=1.5,
-    K=2
+    M=2,
+    K=2,
+    varience_min=2.0
 ).to(device)
 
 criterion = l_freq_loss()
