@@ -528,8 +528,8 @@ def single_geometry_test(title: str, device: torch.device, model, test_data: tor
                     pki_imag = group_x[:, -2 * num_outputs + 2 * out_idx + 1]
 
                 if save_dir is not None:
-                    plot_save_path_re = os.path.join(save_dir, f"pred_vs_act_freq_Re_{i+1}")
-                    plot_save_path_im = os.path.join(save_dir, f"pred_vs_act_freq_Im_{i+1}")
+                    plot_save_path_re = os.path.join(save_dir, f"pred_vs_act_freq_Re_{i+1}.png")
+                    plot_save_path_im = os.path.join(save_dir, f"pred_vs_act_freq_Im_{i+1}.png")
                 else:
                     plot_save_path_re, plot_save_path_im = None, None
 
@@ -552,7 +552,7 @@ def single_geometry_test(title: str, device: torch.device, model, test_data: tor
                         pki=pki_imag,
                         title=f"{title} | Geom {i+1} [Imag]" if num_outputs == 1 else f"{title} | Geom {i+1} Out{out_idx+1} [Imag]",
                         save_path=plot_save_path_im,
-                        close_figures=close_figures
+                        close_figure=close_figures
                     )    
             # If outputs are single or dual
             else:
@@ -561,7 +561,7 @@ def single_geometry_test(title: str, device: torch.device, model, test_data: tor
                     pki_feat = group_x[:, -num_outputs + out_idx] 
 
                 if save_dir is not None:
-                    plot_save_path = os.path.join(save_dir, f"pred_vs_act_freq_Out{out_idx+1}_{i+1}")
+                    plot_save_path = os.path.join(save_dir, f"pred_vs_act_freq_Out{out_idx+1}_{i+1}.png")
                 else:
                     plot_save_path = None
                 
@@ -573,7 +573,7 @@ def single_geometry_test(title: str, device: torch.device, model, test_data: tor
                         pki=pki_feat,
                         title=f"{title} | Geom {i+1}" if num_outputs == 1 else f"{title} | Geom {i+1} - Out{out_idx+1}",
                         save_path=plot_save_path,
-                        close_figures=close_figures
+                        close_figure=close_figures
                     )
     return geometries, labels_per_geom, preds_per_geom, freq_arrays_per_geom
 

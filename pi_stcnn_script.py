@@ -15,6 +15,7 @@ torch.manual_seed(seed)
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
 pred_arrays_dict = torch.load("csv_files/s_params/pt/pred_arrays_dict.pt", weights_only=False)
+s_coarse_dict = torch.load("csv_files/s_params/pt/s_coarse_dict.pt", weights_only=False)
 
 x_array = pred_arrays_dict["x_array"].astype(np.float32)
 s_dict = pred_arrays_dict["s_dict"]
@@ -38,11 +39,11 @@ predictor = PI_STCNN(
     mlp_activation_fn=nn.ELU(),
     mlp_dropout=0.2,
     tcnn_layer_params=[
-        [256, 32, 1],  # [out_channels, kernel_size, stride]
-        [256, 4, 2],
-        [256, 4, 2],
-        [256, 4, 4],
-        [256, 2, 2]
+        [64, 32, 1],  # [out_channels, kernel_size, stride]
+        [64, 4, 2],
+        [64, 4, 2],
+        [64, 4, 4],
+        [64, 2, 2]
     ],
     tcnn_activation_fn=nn.ELU(),
     output_size=num_channels_times2 // 2,

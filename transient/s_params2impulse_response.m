@@ -36,10 +36,10 @@ function [fit_main, fit_next1, fit_fext1, fit_next2, fit_fext2] = s_params2impul
 
     % Convert S-parameters to time-domain impulse responses (Vector Fitting)
     fprintf('Fitting rational models. This may take a moment...\n');
-    fit_main = rationalfit(freq, S_main, 'Tolerance', precision);
-    fit_next1 = rationalfit(freq, S_next1, 'Tolerance', precision);
-    fit_fext1 = rationalfit(freq, S_fext1, 'Tolerance', precision);
-    fit_next2 = rationalfit(freq, S_next2, 'Tolerance', precision);
-    fit_fext2 = rationalfit(freq, S_fext2, 'Tolerance', precision);
+    fit_main = rationalfit(freq, S_main, 'Tolerance', precision, 'NPoles', [0, 60]);
+    fit_next1 = rationalfit(freq, S_next1, 'Tolerance', precision, 'NPoles', [0, 60]);
+    fit_fext1 = rationalfit(freq, S_fext1, 'Tolerance', precision, 'NPoles', [0, 60]);
+    fit_next2 = rationalfit(freq, S_next2, 'Tolerance', precision, 'NPoles', [0, 60]);
+    fit_fext2 = rationalfit(freq, S_fext2, 'Tolerance', precision, 'NPoles', [0, 60]);
     fprintf('Models fitted successfully.\n');
 end
