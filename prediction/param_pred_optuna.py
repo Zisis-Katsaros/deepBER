@@ -30,7 +30,7 @@ def run_optuna(model_architecture, x_array, s_dict, feature_columns, batch_size=
             "pyramid_large_long": [64, 128, 256, 128, 64, 32],
         }
 
-    print(f"[optuna] Starting study '{study_name}' with n_trials={n_trials}, n_epochs={n_epochs}, seed={seed}")
+    print(f"[optuna] Starting study '{study_name}' with n_trials={n_trials}, n_epochs={n_epochs}, seed={seed}")    
    
     groups = x_array[:, 0]
     gss = GroupShuffleSplit(n_splits=1, test_size=0.2, random_state=seed)

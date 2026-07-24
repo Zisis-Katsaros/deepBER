@@ -1,12 +1,13 @@
 import random
 import numpy as np
+import optuna
 import torch
 from torch import nn
 from complexNN import nn as cvnn
 from optuna.exceptions import TrialPruned
 from torch.utils.data import DataLoader, TensorDataset
-from prediction.predictor import DeepBER_Param_Predictor, DeepBER_Param_Predictor_Complex
-
+from prediction.predictor import DeepBER_Param_Predictor, DeepBER_Param_Predictor_Complex, PI_STCNN
+from dataset_splitting import split_dataset
 
 def set_seed(seed: int):
     random.seed(seed)
@@ -62,6 +63,40 @@ def build_fold_loaders(x_array, y_array, train_idx, val_idx, batch_size, batch_n
 
     return train_loader, val_loader
 
+def build_fold_loaders_pi_stcnn(x_array, y_array, train_idx, val_idx, batch_size):
+    x_train = x_array[train_idx]
+    y_train = y_array[train_idx]
+    x_val = x_array[val_idx]
+    y_val = y_array[val_idx]
+
+    train_mean = x_train.mean(axis=0)
+    train_std = x_train.std(axis=0)
+    train_std = np.where(train_std == 0.0, 1.0, train_std)
+
+    x_train = ((x_train - train_mean) / train_std).astype(np.float32)
+    x_val = ((x_val - train_mean) / train_std).astype(np.float32)
+    y_train = np.asarray(y_train, dtype=np.float32)
+    y_val = np.asarray(y_val, dtype=np.float32)
+
+    effective_batch_size = min(batch_size, len(train_idx))
+    if effective_batch_size < 1:
+        raise ValueError("Training fold is empty.")
+
+    train_dataset = TensorDataset(torch.from_numpy(x_train), torch.from_numpy(y_train))
+    val_dataset = TensorDataset(torch.from_numpy(x_val), torch.from_numpy(y_val))
+
+    train_loader = DataLoader(
+        train_dataset,
+        batch_size=effective_batch_size,
+        shuffle=True,
+    )
+    val_loader = DataLoader(
+        val_dataset,
+        batch_size=min(batch_size, len(val_idx)) if len(val_idx) > 0 else 1,
+        shuffle=False,
+    )
+    return train_loader, val_loader
+
 
 def build_model(model_architecture, input_size, hidden_sizes, batch_norm, dropout, activation_name="relu"):
     # Map activation name to a PyTorch activation module
@@ -108,7 +143,7 @@ def build_model(model_architecture, input_size, hidden_sizes, batch_norm, dropou
     else:
         raise ValueError("model_architecture should be either 'single_mlp', 'dual_mlp' or 'cv_mlp'.")
 
-
+   
 def run_trial(trial, device, model_architecture, selected_elements, x_pure, feat_cols_pure, s_dict, train_idx, val_idx, batch_size, 
               batch_norm, hidden_sizes, dropout, activation, lr, wd, scheduler_name, step_size, gamma, t_max, n_epochs, criterion, patience):
     current_losses = []
@@ -278,5 +313,80 @@ def run_trial(trial, device, model_architecture, selected_elements, x_pure, feat
             print(f"[optuna] Trial {trial.number}: pruned after step {step_idx}")
             raise TrialPruned()
         step_idx += 1
-    return current_losses            
-    
+    return current_losses       
+
+
+def run_pi_stcnn_trial(trial, device, x_array, feature_columns, y_array, batch_size, mlp_hidden, tcnn_hidden, dropout, M, varience_min, lr, n_epochs, criterion, seed):
+    _, train_idx = split_dataset(x_array, 0.8, seed=seed)
+    val_idx = [idx for idx in range(x_array.shape[0]) if idx not in train_idx]
+
+    try:
+        train_loader, val_loader = build_fold_loaders_pi_stcnn(
+            x_array,
+            y_array,
+            train_idx,
+            val_idx,
+            batch_size,
+        )
+    except ValueError as exc:
+        print(f"[optuna] Trial {trial.number} invalid - {exc}")
+        raise optuna.exceptions.TrialPruned() from exc
+
+    _, num_channels_times2, num_freqs = y_array.shape
+    model = PI_STCNN(
+        input_size=len(feature_columns),
+            mlp_hidden=mlp_hidden,
+            mlp_activation_fn=nn.ELU(),
+            mlp_dropout=dropout,
+            tcnn_layer_params=tcnn_hidden,
+            tcnn_activation_fn=nn.ELU(),
+            output_size=num_channels_times2 // 2,
+            num_ports=18,
+            N=num_freqs,
+            M=M,
+            K=2,
+            varience_min=varience_min,
+        ).to(device)
+
+    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+
+    bypass_PEL = True
+    # Training Loop
+    for epoch in range(n_epochs):
+        if epoch >= 500:
+            bypass_PEL = False
+
+        model.train()
+        for xb, yb in train_loader:
+            xb = xb.to(device).float()
+            yb = yb.to(device).float()
+
+            optimizer.zero_grad()
+            preds = model(xb, bypass_PEL=bypass_PEL)
+            loss = criterion(preds, yb)
+            loss.backward()
+            optimizer.step()
+
+        # Validation Loop
+        model.eval()
+        val_losses = []
+        with torch.no_grad():
+            for xb, yb in val_loader:
+                xb = xb.to(device).float()
+                yb = yb.to(device).float()
+                preds = model(xb)
+                val_losses.append(criterion(preds, yb).item())
+
+        val_loss = float(np.mean(val_losses))
+        print(
+            f"[optuna] Trial {trial.number}:, "
+            f"epoch {epoch + 1}/{n_epochs}, val_loss={val_loss:.6f}"
+        )
+
+        trial.report(val_loss, epoch)
+        if trial.should_prune():
+            print(f"[optuna] Trial {trial.number}: pruned after {epoch+1}")
+            raise optuna.exceptions.TrialPruned()
+    return val_loss
+
+
