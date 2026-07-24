@@ -362,7 +362,7 @@ def run_pi_stcnn_trial(trial, device, x_array, feature_columns, y_array, batch_s
             yb = yb.to(device).float()
 
             optimizer.zero_grad()
-            preds = model(xb, bypass_PEL=bypass_PEL)
+            preds = model(xb, bypass_pel=bypass_PEL)
             loss = criterion(preds, yb)
             loss.backward()
             optimizer.step()
@@ -374,7 +374,7 @@ def run_pi_stcnn_trial(trial, device, x_array, feature_columns, y_array, batch_s
             for xb, yb in val_loader:
                 xb = xb.to(device).float()
                 yb = yb.to(device).float()
-                preds = model(xb)
+                preds = model(xb, bypass_pel=bypass_PEL)
                 val_losses.append(criterion(preds, yb).item())
 
         val_loss = float(np.mean(val_losses))

@@ -15,7 +15,6 @@ torch.manual_seed(seed)
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
 pred_arrays_dict = torch.load("csv_files/s_params/pt/pred_arrays_dict.pt", weights_only=False)
-s_coarse_dict = torch.load("csv_files/s_params/pt/s_coarse_dict.pt", weights_only=False)
 
 x_array = pred_arrays_dict["x_array"].astype(np.float32)
 s_dict = pred_arrays_dict["s_dict"]
