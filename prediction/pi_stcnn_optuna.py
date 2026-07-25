@@ -72,8 +72,8 @@ def run_pi_stcnn_optuna(x_array, y_array, feature_columns, batch_size=16, mlp_hi
 
     sampler = optuna.samplers.TPESampler(seed=seed, multivariate=True)
     pruner = optuna.pruners.HyperbandPruner(
-        min_resource=5,
-        reduction_factor=3 
+        min_resource=100,
+        reduction_factor=2
         )
 
     if storage:
