@@ -25,7 +25,7 @@ x_array, feature_columns, y_array = organize_dataset_for_pi_stcnn(x_array, s_dic
 
 db_path = "out_files/pi_stcnn/pi_stcnn_study.db"
 storage_url = f"sqlite:///{db_path}"
-run_pi_stcnn_optuna(x_array, y_array, feature_columns, n_trials=150, n_epochs=600, storage=storage_url)
+run_pi_stcnn_optuna(x_array, y_array, feature_columns, n_trials=175, n_epochs=600, storage=storage_url)
 
 """
 dataloader, x_scale_params, y_scale_params, y_weights = create_param_dataloader(
