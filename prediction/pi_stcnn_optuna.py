@@ -3,7 +3,6 @@ import os
 import torch
 import optuna
 from prediction.l_freq_loss import l_freq_loss
-from dataset_manipulation import extend_features, exclude_columns
 from prediction.param_pred_optuna_helpers import *
 
 def run_pi_stcnn_optuna(x_array, y_array, feature_columns, batch_size=16, mlp_hidden_map=None, tcnn_hidden_map=None, n_trials=20, n_epochs=550, seed=42,
@@ -13,10 +12,7 @@ def run_pi_stcnn_optuna(x_array, y_array, feature_columns, batch_size=16, mlp_hi
 
     if mlp_hidden_map is None:
         mlp_hidden_map = {
-            "rect_short_small": [32, 32],
-            "rect_short_large": [64, 64],
             "rect_long": [64, 64, 64],
-            "funnel_short_small": [32, 64],
             "funnel_short_large": [64, 128],
             "funnel_med_small": [32, 64, 128],
             "funnel_med_med": [64, 128, 256],
@@ -27,7 +23,6 @@ def run_pi_stcnn_optuna(x_array, y_array, feature_columns, batch_size=16, mlp_hi
 
         if tcnn_hidden_map is None:
             tcnn_hidden_map = {
-                "rect_small": [32, 32, 32, 32, 32],
                 "rect_med": [64, 64, 64, 64, 64],
                 "rect_large": [128, 128, 128, 128, 128],
                 "rect_xl": [256, 256, 256, 256, 256]
@@ -38,18 +33,14 @@ def run_pi_stcnn_optuna(x_array, y_array, feature_columns, batch_size=16, mlp_hi
     def objective(trial: optuna.trial.Trial):
 
         # Search Space
-        exclude_features = trial.suggest_categorical ("exclude_features", [False, True])
         mlp_hidden_shape_name = trial.suggest_categorical("mlp_hidden_shape_name", list(mlp_hidden_map.keys()))
         tcnn_hidden_shape_name = trial.suggest_categorical("tcnn_hidden_shape_name", list(tcnn_hidden_map.keys()))
         dropout = trial.suggest_float("dropout", 0.0, 0.2, step=0.02)
+        weight_decay = trial.suggest_float("weight_decay", 0.0, 1e-4, log=True)
         tcnn_1st_layer_kernel_size = trial.suggest_int("tcnn_1st_layer_kernel_size", 5, 16)
         M = trial.suggest_categorical("M", [1.5, 2.0])
-        enable_var_min = trial.suggest_categorical("enable_var_min", [True, False])
-        if enable_var_min:
-            # If enabled, test physical bounds
-            varience_min = trial.suggest_float("varience_min", 0.4, 2.8, step=0.4)
-        else:
-            varience_min = None
+
+        varience_min = 1.0
 
         mlp_hidden = mlp_hidden_map[mlp_hidden_shape_name]
         tcnn_out_channels = tcnn_hidden_map[tcnn_hidden_shape_name]
@@ -61,25 +52,20 @@ def run_pi_stcnn_optuna(x_array, y_array, feature_columns, batch_size=16, mlp_hi
             [tcnn_out_channels[4], 4, 2],
         ]
 
-        if exclude_features:
-            x_trial, feature_cols_trial = exclude_columns(x_array, feature_columns, ["unshield_length", "via_thickness"])
-        else:
-            x_trial, feature_cols_trial = x_array, feature_columns
-
         lr = 0.001
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         criterion = l_freq_loss()
         
         print(f"[optuna] Trial {trial.number}:")
-        print(f"exclude_features: {exclude_features}")
         print(f"mlp_hidden:")
         print(mlp_hidden)
         print(f"tcnn_hidden:")
         print(tcnn_hidden)
         print(f"dropout: {dropout}")
-
-        trial_loss = run_pi_stcnn_trial(trial, device, x_trial, feature_cols_trial, y_array, batch_size, mlp_hidden, tcnn_hidden,
-                        dropout, M, varience_min, lr, n_epochs, criterion, seed)
+        print(f"weight_decay: {weight_decay}")
+        print(f"varience_min: {varience_min}")
+        trial_loss = run_pi_stcnn_trial(trial, device, x_array, feature_columns, y_array, batch_size, mlp_hidden, tcnn_hidden,
+                        dropout, M, varience_min, lr, weight_decay, n_epochs, criterion, seed)
 
         print(f"[optuna] Trial {trial.number}: completed with loss={trial_loss:.6f}")
         return trial_loss

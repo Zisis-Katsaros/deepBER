@@ -316,7 +316,7 @@ def run_trial(trial, device, model_architecture, selected_elements, x_pure, feat
     return current_losses       
 
 
-def run_pi_stcnn_trial(trial, device, x_array, feature_columns, y_array, batch_size, mlp_hidden, tcnn_hidden, dropout, M, varience_min, lr, n_epochs, criterion, seed):
+def run_pi_stcnn_trial(trial, device, x_array, feature_columns, y_array, batch_size, mlp_hidden, tcnn_hidden, dropout, M, varience_min, lr, weight_decay, n_epochs, criterion, seed):
     _, train_idx = split_dataset(x_array, 0.8, seed=seed)
     val_idx = [idx for idx in range(x_array.shape[0]) if idx not in train_idx]
 
@@ -348,14 +348,17 @@ def run_pi_stcnn_trial(trial, device, x_array, feature_columns, y_array, batch_s
             varience_min=varience_min,
         ).to(device)
 
-    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+    optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
 
+    phase = 1
+    patience = 50
+    non_improving_epochs = 0
+    best_val_loss = float("inf")
+    best_model_state = None
     bypass_PEL = True
+
     # Training Loop
     for epoch in range(n_epochs):
-        if epoch >= 500:
-            bypass_PEL = False
-
         model.train()
         for xb, yb in train_loader:
             xb = xb.to(device).float()
@@ -378,10 +381,28 @@ def run_pi_stcnn_trial(trial, device, x_array, feature_columns, y_array, batch_s
                 val_losses.append(criterion(preds, yb).item())
 
         val_loss = float(np.mean(val_losses))
-        print(
-            f"[optuna] Trial {trial.number}:, "
-            f"epoch {epoch + 1}/{n_epochs}, val_loss={val_loss:.6f}"
-        )
+
+        # Phase switching logic
+        if val_loss < best_val_loss - 1e-8:
+            best_val_loss = val_loss
+            non_improving_epochs = 0
+            best_model_state = model.state_dict().copy()
+        else:
+            non_improving_epochs += 1
+
+        if non_improving_epochs >= patience:
+            if phase == 1:
+                print(f"[optuna] Trial {trial.number}: Phase 1 converged at epoch {epoch}. Switching to Phase 2 (PEL ON).")
+                model.load_state_dict(best_model_state)
+                bypass_PEL = False
+                phase = 2
+                non_improving_epochs = 0
+                best_val_loss = float("inf")     
+            else:
+                print(f"[optuna] Trial {trial.number}: Phase 2 converged at epoch {epoch}. Ending trial early.")
+                break
+            
+        print(f"[optuna] Trial {trial.number}: epoch {epoch + 1}/{n_epochs}, val_loss={val_loss:.6f}")
 
         trial.report(val_loss, epoch)
         if trial.should_prune():
