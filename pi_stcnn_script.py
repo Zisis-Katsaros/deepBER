@@ -22,7 +22,7 @@ feature_columns = pred_arrays_dict["feature_columns"]
 
 x_array, feature_columns, y_array = organize_dataset_for_pi_stcnn(x_array, s_dict, feature_columns)
 
-
+"""
 db_path = "out_files/pi_stcnn/pi_stcnn_study.db"
 storage_url = f"sqlite:///{db_path}"
 run_pi_stcnn_optuna(x_array, y_array, feature_columns, n_trials=175, n_epochs=600, storage=storage_url)
@@ -40,28 +40,28 @@ dataloader, x_scale_params, y_scale_params, y_weights = create_param_dataloader(
 _, num_channels_times2, num_freqs = y_array.shape
 predictor = PI_STCNN(
     input_size=len(feature_columns),
-    mlp_hidden=[128, 256, 512],
+    mlp_hidden=[64, 64, 64],
     mlp_activation_fn=nn.ELU(),
     mlp_dropout=0.0,
     tcnn_layer_params=[
-        [64, 6, 1],  # [out_channels, kernel_size, stride]
-        [64, 4, 2],
-        [64, 4, 2],
-        [64, 8, 2],
-        [64, 4, 2]
+        [256, 5, 1],  # [out_channels, kernel_size, stride]
+        [256, 4, 2],
+        [256, 4, 2],
+        [256, 8, 2],
+        [256, 4, 2]
     ],
     tcnn_activation_fn=nn.ELU(),
     output_size=num_channels_times2 // 2,
     num_ports=18,
     N=num_freqs,
-    M=1.5,
+    M=2,
     K=2,
     varience_min=None
 ).to(device)
 
 criterion = l_freq_loss()
 learning_rate = 0.001
-weight_decay = 0.0 # 5.976118759714283e-06
+weight_decay = 5.1635e-05
 optimizer = torch.optim.Adam(predictor.parameters(), lr=learning_rate, weight_decay=weight_decay)
 scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=700, gamma=0.5) # ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=10)
 
@@ -76,7 +76,7 @@ test_preds, test_labels = test_predictor_configuration_pistcnn(
     optimizer=optimizer,
     scheduler=scheduler,
     epochs=3000,
-    L_f=500,
+    phase1_patience=50,
     early_stopping=True,
     patience=200,
     y_scale_params=y_scale_params,
@@ -102,4 +102,3 @@ export_files_for_transient(
     freq_arrays_per_geom=freq_arrays_per_geom,
     save_dir="out_files/pi_stcnn/touchstone_files"
 )
-"""

@@ -64,6 +64,7 @@ def run_pi_stcnn_optuna(x_array, y_array, feature_columns, batch_size=16, mlp_hi
         print(f"dropout: {dropout}")
         print(f"weight_decay: {weight_decay}")
         print(f"varience_min: {varience_min}")
+        
         trial_loss = run_pi_stcnn_trial(trial, device, x_array, feature_columns, y_array, batch_size, mlp_hidden, tcnn_hidden,
                         dropout, M, varience_min, lr, weight_decay, n_epochs, criterion, seed)
 
