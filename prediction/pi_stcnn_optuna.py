@@ -36,7 +36,7 @@ def run_pi_stcnn_optuna(x_array, y_array, feature_columns, batch_size=16, mlp_hi
         mlp_hidden_shape_name = trial.suggest_categorical("mlp_hidden_shape_name", list(mlp_hidden_map.keys()))
         tcnn_hidden_shape_name = trial.suggest_categorical("tcnn_hidden_shape_name", list(tcnn_hidden_map.keys()))
         dropout = trial.suggest_float("dropout", 0.0, 0.2, step=0.02)
-        weight_decay = trial.suggest_float("weight_decay", 0.0, 1e-4, log=True)
+        weight_decay = trial.suggest_float("weight_decay", 1e-8, 1e-3, log=True)
         tcnn_1st_layer_kernel_size = trial.suggest_int("tcnn_1st_layer_kernel_size", 5, 16)
         M = trial.suggest_categorical("M", [1.5, 2.0])
 
