@@ -280,6 +280,7 @@ def test_predictor_configuration_pistcnn(title: str, device: torch.device, model
     os.makedirs(os.path.join(test_out_dir, "weights"), exist_ok=True)
     os.makedirs(os.path.join(test_out_dir, title), exist_ok=True)
     model_save_path = os.path.join(test_out_dir, "weights", f"best_model_{title}.pth")
+    optimizer_save_path = os.path.join(test_out_dir, f"best_model_optimizer_{title}.pth")
     checkpoint_path = os.path.join(test_out_dir, "weights", f"resume_checkpoint_{title}.pth")
     results_save_path = os.path.join(test_out_dir, title, f"test_results.npz")
     training_curves_save_path = os.path.join(test_out_dir, title, f"training_curves_{title}.png")
@@ -344,14 +345,16 @@ def test_predictor_configuration_pistcnn(title: str, device: torch.device, model
             best_val_loss = val_loss
             non_improving_epochs = 0
             torch.save(model.state_dict(), model_save_path)
+            torch.save(optimizer.state_dict(), optimizer_save_path)
             best_model_epoch = epoch + 1
         else:
             non_improving_epochs += 1
 
         if phase == 1:
             if non_improving_epochs >= phase1_patience:
-                print(f"Phase 1 converged at epoch {epoch}. Switching to Phase 2 (PEL ON).")
+                print(f"Phase 1 converged at epoch {best_model_epoch}. Switching to Phase 2 (PEL ON).")
                 model.load_state_dict(torch.load(model_save_path))
+                optimizer.load_state_dict(torch.load(optimizer_save_path))
                 bypass_pel = False
                 phase = 2
                 non_improving_epochs = 0
