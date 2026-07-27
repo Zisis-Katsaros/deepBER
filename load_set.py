@@ -368,7 +368,7 @@ def create_dataloader(
 
 
 def create_param_dataloader(x_array: NDArray, y_array: NDArray, batch_size: int =64, seed: int =42, standard_scale = False,
-							split_method: Literal["random", "lhs"] = "random", split_percentages: list[float]=[0.8, 0.1]):
+							split_method: Literal["random", "lhs"] = "random", split_percentages: list[float]=[0.8, 0.1], pki_array: NDArray = None):
 	"""
 	# create_param_dataloader()
 	## Creates train/val/test dataloader
@@ -456,6 +456,9 @@ def create_param_dataloader(x_array: NDArray, y_array: NDArray, batch_size: int 
 		y_train_std = np.where(y_train_std == 0.0, 1.0, y_train_std)
 		y_array = ((y_array - y_train_mean) / y_train_std)
 
+		if pki_array is not None:
+			pki_array = ((pki_array - y_train_mean) / y_train_std)
+
 		y_scale_params = (y_train_mean, y_train_std)
 	else:
 		y_scale_params = (0, 1)
@@ -482,18 +485,35 @@ def create_param_dataloader(x_array: NDArray, y_array: NDArray, batch_size: int 
 	elif y_weights.ndim == 0:
 		y_weights = y_weights.view(1, 1)
 
-	train_set = TensorDataset(
-		torch.from_numpy(x_array[train_idx]),
-		torch.from_numpy(y_array[train_idx]),
-	)
-	val_set = TensorDataset(
-		torch.from_numpy(x_array[val_idx]),
-		torch.from_numpy(y_array[val_idx]),
-	)
-	test_set = TensorDataset(
-		torch.from_numpy(x_array[test_idx]),
-		torch.from_numpy(y_array[test_idx]),
-	)
+	if pki_array is not None:
+		train_set = TensorDataset(
+			torch.from_numpy(x_array[train_idx]), 
+			torch.from_numpy(y_array[train_idx]), 
+			torch.from_numpy(pki_array[train_idx])
+			)
+		val_set = TensorDataset(
+			torch.from_numpy(x_array[val_idx]), 
+			torch.from_numpy(y_array[val_idx]), 
+			torch.from_numpy(pki_array[val_idx])
+			)
+		test_set = TensorDataset(
+			torch.from_numpy(x_array[test_idx]), 
+			torch.from_numpy(y_array[test_idx]), 
+			torch.from_numpy(pki_array[test_idx])
+			)
+	else:
+		train_set = TensorDataset(
+			torch.from_numpy(x_array[train_idx]), 
+			torch.from_numpy(y_array[train_idx])
+			)
+		val_set = TensorDataset(
+			torch.from_numpy(x_array[val_idx]), 
+			torch.from_numpy(y_array[val_idx])
+			)
+		test_set = TensorDataset(
+			torch.from_numpy(x_array[test_idx]), 
+			torch.from_numpy(y_array[test_idx])
+			)
 
 	train_data = DataLoader(train_set, batch_size=batch_size, shuffle=True)
 	val_data = DataLoader(val_set, batch_size=batch_size, shuffle=False)
@@ -530,7 +550,7 @@ def create_param_forward_dataloader(x_array: NDArray, batch_size: int =64, stand
 	return dataloader
 
 
-def organize_dataset_for_pi_stcnn(x_array: NDArray, s_dict: dict, feature_columns: list[str], only_real: bool = False, freq_round_decimals: int = 2):
+def organize_dataset_for_pi_stcnn(x_array: NDArray, s_dict: dict, feature_columns: list[str], only_real: bool = False, freq_round_decimals: int = 2, pki_dict: dict = None):
 	"""
 	# organize_dataset_for_pi_stcnn()
 	## Organizes the dataset for use alongside PI-STCNN model
@@ -576,20 +596,32 @@ def organize_dataset_for_pi_stcnn(x_array: NDArray, s_dict: dict, feature_column
 	if only_real:
 		# Initialize the complex 3D output tensor: (Batch_Size, Channels, Frequency_Points)
 		y_array = np.zeros((num_geoms, num_channels, num_freqs), dtype=np.float32)
+		if pki_dict is not None:
+			pki_array = np.zeros((num_geoms, num_channels, num_freqs), dtype=np.float32)
 
 		# Populate the tensor using advanced numpy indexing for high performance
 		for c_idx, key in enumerate(channel_keys):
 			# inverse_indices dictates the geometry row, freq_indices dictates the depth/sequence step
 			y_array[inverse_indices, c_idx, freq_indices] = np.squeeze(s_dict[key])
+			if pki_dict is not None:
+				pki_array[inverse_indices, c_idx, freq_indices] = pki_dict[key][:, 0]
 	else:
 		# Initialize the complex 3D output tensor: (Batch_Size, Channels, Frequency_Points)
 		y_array = np.zeros((num_geoms, 2*num_channels, num_freqs), dtype=np.float32)
+		if pki_dict is not None:
+			pki_array = np.zeros((num_geoms, 2*num_channels, num_freqs), dtype=np.float32)
 
 		# Populate the tensor using advanced numpy indexing for high performance
 		for c_idx, key in enumerate(channel_keys):
 			# inverse_indices dictates the geometry row, freq_indices dictates the depth/sequence step
 			y_array[inverse_indices, c_idx, freq_indices] = s_dict[key].real
 			y_array[inverse_indices, c_idx + num_channels, freq_indices] = s_dict[key].imag
+
+			if pki_dict is not None:
+				pki_array[inverse_indices, c_idx, freq_indices] = pki_dict[key][:, 0]
+				pki_array[inverse_indices, c_idx + num_channels, freq_indices] = pki_dict[key][:, 1]
+	if pki_dict is not None:
+		return unique_x, new_feature_columns, y_array, pki_array
 	return unique_x, new_feature_columns, y_array
 
 

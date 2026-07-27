@@ -1,5 +1,6 @@
 import torch
 from torch import nn
+import torch.nn.functional as F
 from complexNN import nn as cvnn
 from prediction.custom_layers import GaussianSmoothingLayer, CausalityEnforcementLayer, PassivityEnforcementLayer
 
@@ -143,7 +144,8 @@ class DeepBER_Param_Predictor_Complex(nn.Module):
 
 
 class PI_STCNN(nn.Module):
-    def __init__(self, input_size, mlp_hidden, mlp_activation_fn, mlp_dropout, tcnn_layer_params, tcnn_activation_fn, output_size, num_ports, N, M, K, varience_min=1.0, passivity_margin=1.03):
+    def __init__(self, input_size, mlp_hidden, mlp_activation_fn, mlp_dropout, tcnn_layer_params, tcnn_activation_fn, output_size, num_ports, N, M, K, varience_min=1.0, 
+                 passivity_margin=1.03, use_pki=False):
         """
         # Physics-Informed Transposed Convolutional Neural Network modular architecture for S-Parameter prediction
 
@@ -166,6 +168,7 @@ class PI_STCNN(nn.Module):
         self.num_ports = num_ports
         self.Dy = output_size
         self.extrapolated_pts = int(N*M + 1)
+        self.use_pki = use_pki
 
         # Base-model
         self.mlp = nn.ModuleList()
@@ -195,15 +198,18 @@ class PI_STCNN(nn.Module):
         # Adaptive pooling or interpolation to enforce exact N*M + 1 length dimension
         self.length_adjust = nn.AdaptiveAvgPool1d(self.extrapolated_pts)
 
-        # CoordConv Layer: Maps (Dy channels + 1 coordinate channel) back down to Dy channels
-        self.coord_layer = nn.Conv1d(self.Dy + 1, self.Dy, kernel_size=1)
+        # CoordConv Layer: Maps features back down to Dy channels
+        coord_in_channels = self.Dy + 1  # +1 for the coordinate channel
+        if use_pki:
+            coord_in_channels += 2*self.Dy
+        self.coord_layer = nn.Conv1d(coord_in_channels, self.Dy, kernel_size=1)
 
         # Causality and Passivity enforcement layers
         self.smoothing_layer = GaussianSmoothingLayer(channels=self.Dy, varience_min=varience_min)
         self.cel = CausalityEnforcementLayer(N=N, M=M, K=K)
         self.pel = PassivityEnforcementLayer(num_ports=num_ports, passivity_margin=passivity_margin)
     
-    def forward(self, x, bypass_pel=False, match_training_grid=True):
+    def forward(self, x, bypass_pel=False, match_training_grid=True, pki=None):
         # Forward pass through the base-model (MLP)
         for layer in self.mlp:
             x = layer(x)
@@ -226,7 +232,23 @@ class PI_STCNN(nn.Module):
         coords = torch.linspace(-1, 1, steps=current_k, device=y_bn.device) # -1 to 1 due to standard scaling
         coords = coords.view(1, 1, current_k).expand(batch_size, 1, current_k)
 
-        y_bn_with_coords = torch.cat([y_bn, coords], dim=1)
+        if self.use_pki:
+            if pki is None:
+                raise ValueError("PKI data must be provided when use_pki is True.")
+            pki_len = pki.size(2)
+            
+            # If the PKI only covers the base band (N), pad the rest with zeros
+            if pki_len < current_k:
+                pad_amount = current_k - pki_len
+                # F.pad for 1D spatial tensors takes a tuple: (padding_left, padding_right)
+                pki_padded = F.pad(pki, (0, pad_amount), mode='constant', value=0.0)
+            else:
+                pki_padded = pki
+
+            y_bn_with_coords = torch.cat([y_bn, coords, pki_padded], dim=1)
+        else:
+            y_bn_with_coords = torch.cat([y_bn, coords], dim=1)
+
         y_cc = self.coord_layer(y_bn_with_coords)
 
         # Apply smoothing layer
