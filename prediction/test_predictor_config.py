@@ -281,6 +281,7 @@ def test_predictor_configuration_pistcnn(title: str, device: torch.device, model
     os.makedirs(os.path.join(test_out_dir, title), exist_ok=True)
     model_save_path = os.path.join(test_out_dir, "weights", f"best_model_{title}.pth")
     optimizer_save_path = os.path.join(test_out_dir, f"best_model_optimizer_{title}.pth")
+    scheduler_save_path = os.path.join(test_out_dir, f"best_model_scheduler_{title}.pth") if scheduler is not None else None
     checkpoint_path = os.path.join(test_out_dir, "weights", f"resume_checkpoint_{title}.pth")
     results_save_path = os.path.join(test_out_dir, title, f"test_results.npz")
     training_curves_save_path = os.path.join(test_out_dir, title, f"training_curves_{title}.png")
@@ -346,6 +347,8 @@ def test_predictor_configuration_pistcnn(title: str, device: torch.device, model
             non_improving_epochs = 0
             torch.save(model.state_dict(), model_save_path)
             torch.save(optimizer.state_dict(), optimizer_save_path)
+            if scheduler is not None:
+                torch.save(scheduler.state_dict(), scheduler_save_path)
             best_model_epoch = epoch + 1
         else:
             non_improving_epochs += 1
@@ -355,6 +358,8 @@ def test_predictor_configuration_pistcnn(title: str, device: torch.device, model
                 print(f"Phase 1 converged at epoch {best_model_epoch}. Switching to Phase 2 (PEL ON).")
                 model.load_state_dict(torch.load(model_save_path))
                 optimizer.load_state_dict(torch.load(optimizer_save_path))
+                if scheduler is not None:
+                    scheduler.load_state_dict(torch.load(scheduler_save_path))
                 bypass_pel = False
                 phase = 2
                 non_improving_epochs = 0
@@ -363,12 +368,15 @@ def test_predictor_configuration_pistcnn(title: str, device: torch.device, model
             if early_stopping and non_improving_epochs >= patience:
                 print(f"Early stopping at epoch {epoch+1}. Best model at epoch {best_model_epoch}")
                 model.load_state_dict(torch.load(model_save_path))
+                os.remove(optimizer_save_path)
+                if scheduler is not None:
+                    os.remove(scheduler_save_path)
                 break
 
         if scheduler is not None:
-            try:    
+            if isinstance(scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
                 scheduler.step(val_loss)
-            except TypeError:
+            else:
                 scheduler.step()
 
         train_losses.append(train_loss)

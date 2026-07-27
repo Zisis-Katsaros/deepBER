@@ -8,19 +8,30 @@ from prediction.l_freq_loss import l_freq_loss
 from prediction.test_predictor_config import test_predictor_configuration_pistcnn
 import numpy as np
 from export_files_for_transient import export_files_for_transient, convert_stcnn_outputs_to_dicts
+from dataset_splitting import split_dataset
 
 # ============================================= Initializing Dataset ============================================= #
 seed = 42
 torch.manual_seed(seed)
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
+pki = True
 pred_arrays_dict = torch.load("csv_files/s_params/pt/pred_arrays_dict.pt", weights_only=False)
 
 x_array = pred_arrays_dict["x_array"].astype(np.float32)
 s_dict = pred_arrays_dict["s_dict"]
 feature_columns = pred_arrays_dict["feature_columns"]
 
-x_array, feature_columns, y_array = organize_dataset_for_pi_stcnn(x_array, s_dict, feature_columns)
+if pki:
+    s_coarse_dict = torch.load("csv_files/s_params/pt/s_coarse_dict.pt", weights_only=False)
+    _, pred_row_indices = split_dataset(x_array, sample_percentage=0.5, sampling_method="lhs", seed=seed)
+    physics_row_indices = [idx for idx in range(x_array.shape[0]) if idx not in pred_row_indices]
+    x_array_physics = x_array[physics_row_indices]
+    s_dict_physics = {key: s_dict[key][physics_row_indices] for key in s_dict.keys()}
+
+    x_array, feature_columns, y_array, pki_array = organize_dataset_for_pi_stcnn(x_array_physics, s_dict_physics, feature_columns, pki_dict=s_coarse_dict)
+else:
+    x_array, feature_columns, y_array = organize_dataset_for_pi_stcnn(x_array, s_dict, feature_columns)
 
 """
 db_path = "out_files/pi_stcnn/pi_stcnn_study.db"
@@ -34,7 +45,8 @@ dataloader, x_scale_params, y_scale_params, y_weights = create_param_dataloader(
                     batch_size=16,
                     seed=42,
                     standard_scale=(True, False),  # (scale_features, scale_labels)
-                    split_method="lhs"
+                    split_method="lhs",
+                    pki_array=pki_array if pki else None
                     )
 
 _, num_channels_times2, num_freqs = y_array.shape

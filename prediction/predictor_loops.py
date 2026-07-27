@@ -252,12 +252,17 @@ def train_pred_loop_pistcnn(model, data: torch.utils.data.DataLoader, optimizer:
     total_mae = 0.0 
     total_elements = 0
 
-    for inputs, labels in data:
+    for batch in data:
+        if len(batch) == 3:
+            inputs, labels, pkis = batch
+            pkis = pkis.to(device)
+        else:
+            inputs, labels = batch  
         inputs = inputs.to(device) 
         labels = labels.to(device)
 
         # Pass bypass_pel flag to the model
-        outputs = model(inputs, bypass_pel=bypass_pel)
+        outputs = model(inputs, pki=pkis, bypass_pel=bypass_pel)
         loss = criterion(outputs, labels)
 
         optimizer.zero_grad() 
@@ -303,9 +308,9 @@ def test_pred_loop_pistcnn(model, data: torch.utils.data.DataLoader, criterion: 
     all_labels = []
 
     with torch.no_grad():
-        for inputs, labels in data:
-            inputs = inputs.to(device)
-            labels = labels.to(device)
+        for batch in data:
+            inputs = batch[0].to(device)
+            labels = batch[1].to(device)
 
             outputs = model(inputs, bypass_pel=bypass_pel) 
             loss = criterion(outputs, labels)
