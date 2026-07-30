@@ -2,7 +2,7 @@ import torch
 from torch import nn
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from prediction.param_pred_optuna import run_optuna
-from load_set import create_param_dataloader
+from load_set import create_param_dataloader, cut_dataset_at_specified_freq
 from dataset_splitting import split_dataset
 from prediction.predictor import DeepBER_Param_Predictor
 from rmse import RMSELoss
@@ -23,13 +23,17 @@ x_array = pred_arrays_dict["x_array"].astype(np.float32)
 s_dict = pred_arrays_dict["s_dict"]
 feature_columns = pred_arrays_dict["feature_columns"]
 
-# Split the dataset into two parts: one for s-parameter (per-element) prediction and one for post-prediction physics enforcing
-x_array_pred, pred_row_indices = split_dataset(x_array, sample_percentage=0.5, sampling_method="lhs", seed=seed)
-s_dict_pred = {key: s_dict[key][pred_row_indices] for key in s_dict.keys()}
+x_array, s_dict = cut_dataset_at_specified_freq(x_array, s_dict, feature_columns, cutoff_freq_ghz=20.0)
 
-# physics_row_indices = [idx for idx in range(x_array.shape[0]) if idx not in pred_row_indices]
-# x_array_physics = x_array[physics_row_indices]
-# s_dict_physics = {key: s_dict[key][physics_row_indices] for key in s_dict.keys()}
+split = False
+# Split the dataset into two parts: one for s-parameter (per-element) prediction and one for post-prediction physics enforcing
+if split:
+    x_array_pred, pred_row_indices = split_dataset(x_array, sample_percentage=0.5, sampling_method="lhs", seed=seed)
+    s_dict_pred = {key: s_dict[key][pred_row_indices] for key in s_dict.keys()}
+
+    physics_row_indices = [idx for idx in range(x_array.shape[0]) if idx not in pred_row_indices]
+    x_array_physics = x_array[physics_row_indices]
+    s_dict_physics = {key: s_dict[key][physics_row_indices] for key in s_dict.keys()}
 
 """
 hidden_map = {
@@ -49,18 +53,21 @@ labels_dict_per_geom = np.array([{} for _ in range(geoms_tested)], dtype=dict)
 preds_dict_per_geom = np.array([{} for _ in range(geoms_tested)], dtype=dict)
 freq_arrays_per_geom = [None for _ in range(geoms_tested)]
 
-processed_elements = [key for idx, key in enumerate(s_dict.keys()) if idx < 200 and key != "all"] 
+processed_elements = [key for idx, key in enumerate(s_dict.keys()) if idx < -1 and key != "all"] 
 elements = list(key for key in s_dict.keys() if key != "all")
 for element in elements:
     if element in processed_elements:
         continue
     print(f"Training and testing for {element}\n")
-    
-    y_array = np.stack([s_dict_pred[element].real, s_dict_pred[element].imag], axis=1)
+
+    if split:
+        y_array = np.stack([s_dict_pred[element].real, s_dict_pred[element].imag], axis=1)
+    else: 
+        y_array = np.stack([s_dict[element].real, s_dict[element].imag], axis=1)
     out_size = y_array.shape[1] if y_array.ndim > 1 else 1
 
-    dataloader, x_scale_params, y_scale_params = create_param_dataloader(
-                    x_array_pred,
+    dataloader, x_scale_params, y_scale_params, *_ = create_param_dataloader(
+                    x_array_pred if split else x_array,
                     y_array,
                     batch_size=128,
                     seed=42,
@@ -107,7 +114,7 @@ for element in elements:
     y_array = np.stack([s_dict[element].real, s_dict[element].imag], axis=1)
     out_size = y_array.shape[1] if y_array.ndim > 1 else 1
 
-    dataloader, x_scale_params, y_scale_params = create_param_dataloader(
+    dataloader, x_scale_params, y_scale_params, *_ = create_param_dataloader(
                     x_array,
                     y_array,
                     batch_size=128,
@@ -123,7 +130,7 @@ for element in elements:
         output_size=out_size,
         dropout=0.02
         ).to(device) 
-    predictor.load_state_dict(torch.load(f"out_files/dual_mlp/{element}/pki/best_model.pth" if pki else f"out_files/dual_mlp/{element}/no_pki/best_model.pth", map_location=device))
+    predictor.load_state_dict(torch.load(f"out_files/dual_mlp/weights/best_model_{element}.pth", map_location=device))
 # """
 
     geometries, labels_per_geom, preds_per_geom, freq_arrays = single_geometry_test(
@@ -134,8 +141,7 @@ for element in elements:
         x_scale_params=x_scale_params,
         y_scale_params=y_scale_params,
         max_geoms=geoms_tested,
-        pki=pki,
-        save_dir = f"out_files/dual_mlp/{element}/pki" if pki else f"out_files/dual_mlp/{element}/no_pki",
+        save_dir = f"out_files/dual_mlp/weights/best_model_{element}",
         close_figures=True
     )
 
@@ -145,7 +151,7 @@ for element in elements:
         if freq_arrays_per_geom[geom_idx] is None:
             freq_arrays_per_geom[geom_idx] = geom_freq_array
 
-export_files_for_transient(geometries, feature_columns, labels_dict_per_geom, preds_dict_per_geom, freq_arrays_per_geom, save_dir="csv_files/export4transient")
+export_files_for_transient(geometries, feature_columns, labels_dict_per_geom, preds_dict_per_geom, freq_arrays_per_geom, save_dir=f"out_files/dual_mlp/touchstone")
 
 
 
