@@ -2,7 +2,7 @@ import torch
 from torch import nn
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from prediction.pi_stcnn_optuna import run_pi_stcnn_optuna
-from load_set import organize_dataset_for_pi_stcnn, create_param_dataloader
+from load_set import organize_dataset_for_pi_stcnn, create_param_dataloader, cut_dataset_at_specified_freq
 from prediction.predictor import PI_STCNN
 from prediction.l_freq_loss import l_freq_loss
 from prediction.test_predictor_config import test_predictor_configuration_pistcnn
@@ -15,12 +15,14 @@ seed = 42
 torch.manual_seed(seed)
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
-pki = True
+pki = False
 pred_arrays_dict = torch.load("csv_files/s_params/pt/pred_arrays_dict.pt", weights_only=False)
 
 x_array = pred_arrays_dict["x_array"].astype(np.float32)
 s_dict = pred_arrays_dict["s_dict"]
 feature_columns = pred_arrays_dict["feature_columns"]
+
+x_array, s_dict = cut_dataset_at_specified_freq(x_array, s_dict, feature_columns, cutoff_freq_ghz=20.0)
 
 if pki:
     s_coarse_dict = torch.load("csv_files/s_params/pt/s_coarse_dict.pt", weights_only=False)

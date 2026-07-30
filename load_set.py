@@ -684,4 +684,38 @@ def add_samples_for_extrapolation(test_data: torch.utils.data.DataLoader, M: flo
 	return DataLoader(new_dataset, batch_size=batch_size, shuffle=False), x_combined, x_array
 	
 
+def cut_dataset_at_specified_freq(x_array: NDArray, s_dict: dict, feature_columns: list[str], cutoff_freq_ghz: float):
+    """
+    # cut_dataset_at_specified_freq()
+    ## Removes samples from the dataset that correspond to frequencies higher than the cutoff.
+
+    ## Args:
+    - x_array: 2D array of features
+    - s_dict: Dictionary of S-parameters with keys as "Sij" and values as arrays
+    - feature_columns: List of feature column names
+    - cutoff_freq_ghz: The maximum frequency limit (in GHz) to keep in the dataset.    
+    ## Returns:
+    - x_array_filtered: 2D array of features containing only allowed frequencies
+    - s_dict_filtered: Dictionary of S-parameters matching the filtered features
+    """
+    
+    # Locate the frequency column
+    try:
+        freq_idx = feature_columns.index("frequency_ghz")
+    except ValueError:
+        raise ValueError("The exact string 'frequency_ghz' must be present in feature_columns.")
+
+    # Extract the frequency column
+    freq_col = x_array[:, freq_idx]
+
+    # Create a boolean mask for rows where the frequency is less than or equal to the cutoff
+    valid_freq_mask = freq_col <= cutoff_freq_ghz
+
+    # Apply the mask to filter the feature array
+    x_array_filtered = x_array[valid_freq_mask]
+
+    # Apply the mask to filter every array in the S-parameter dictionary
+    s_dict_filtered = {key: value[valid_freq_mask] for key, value in s_dict.items()}
+
+    return x_array_filtered, s_dict_filtered
 	

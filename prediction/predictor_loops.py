@@ -257,7 +257,8 @@ def train_pred_loop_pistcnn(model, data: torch.utils.data.DataLoader, optimizer:
             inputs, labels, pkis = batch
             pkis = pkis.to(device)
         else:
-            inputs, labels = batch  
+            inputs, labels = batch
+            pkis = None 
         inputs = inputs.to(device) 
         labels = labels.to(device)
 
@@ -309,10 +310,16 @@ def test_pred_loop_pistcnn(model, data: torch.utils.data.DataLoader, criterion: 
 
     with torch.no_grad():
         for batch in data:
-            inputs = batch[0].to(device)
-            labels = batch[1].to(device)
+            if len(batch) == 3:
+                inputs, labels, pkis = batch
+                pkis = pkis.to(device)
+            else:
+                inputs, labels = batch
+                pkis = None 
+            inputs = inputs.to(device) 
+            labels = labels.to(device)
 
-            outputs = model(inputs, bypass_pel=bypass_pel) 
+            outputs = model(inputs, bypass_pel=bypass_pel, pki=pkis) 
             loss = criterion(outputs, labels)
             
             total_loss += loss.item() * inputs.size(0) 
