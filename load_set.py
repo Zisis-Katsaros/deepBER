@@ -368,7 +368,8 @@ def create_dataloader(
 
 
 def create_param_dataloader(x_array: NDArray, y_array: NDArray, batch_size: int =64, seed: int =42, standard_scale = False,
-							split_method: Literal["random", "lhs"] = "random", split_percentages: list[float]=[0.8, 0.1], pki_array: NDArray = None):
+							split_method: Literal["random", "lhs"] = "random", split_percentages: list[float]=[0.8, 0.1], pki_array: NDArray = None,
+							weight_type: Literal["balanced", "low_freq"] = None):
 	"""
 	# create_param_dataloader()
 	## Creates train/val/test dataloader
@@ -463,18 +464,33 @@ def create_param_dataloader(x_array: NDArray, y_array: NDArray, batch_size: int 
 	else:
 		y_scale_params = (0, 1)
 
-	# Extract weights for balancing loss function
-	y_train_abs = np.abs(y_array[train_idx])
+	if weight_type is None:
+		y_weights = np.ones(y_array[train_idx].shape[1], dtype=np.float32)
+	elif weight_type == "balanced":
+		# Extract weights for balancing loss function
+		y_train_abs = np.abs(y_array[train_idx])
 
-	if y_train_abs.ndim == 3:
-		peak_mags = np.max(y_train_abs, axis=(0,2))
-	elif y_train_abs.ndim == 2:
-		peak_mags = np.max(y_train_abs, axis=0)
-	else:
-		peak_mags = np.max(y_train_abs)
+		if y_train_abs.ndim == 3:
+			peak_mags = np.max(y_train_abs, axis=(0,2))
+		elif y_train_abs.ndim == 2:
+			peak_mags = np.max(y_train_abs, axis=0)
+		else:
+			peak_mags = np.max(y_train_abs)
 
-	y_weights = 1.0 / (peak_mags + 1e-8)
-	y_weights = y_weights / np.mean(y_weights) # normalize
+		y_weights = 1.0 / (peak_mags + 1e-8)
+		y_weights = y_weights / np.mean(y_weights) # normalize
+	elif weight_type == "low_freq":
+		num_freqs = y_array.shape[-1]
+		freqs = np.linspace(0, 1, num_freqs)
+		y_weights = np.ones(num_freqs, dtype=np.float32)
+
+		# Prioritize lower 6.667% of frequencies
+		y_weights[freqs <= 0.06667] = 50.0
+
+		# Linearly reduce weight for 6.667% to 16.667% and after that W=1
+		transition_mask = (freqs > 0.06667) & (freqs < 0.16667)
+		fraction = (freqs[transition_mask] - 0.06667) / (0.16667 - 0.06667)
+		y_weights[transition_mask] = 50.0 - (49.0 * fraction) 
 
 	# Convert to Tensor
 	y_weights = torch.from_numpy(y_weights).float()

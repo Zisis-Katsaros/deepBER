@@ -22,7 +22,7 @@ x_array = pred_arrays_dict["x_array"].astype(np.float32)
 s_dict = pred_arrays_dict["s_dict"]
 feature_columns = pred_arrays_dict["feature_columns"]
 
-x_array, s_dict = cut_dataset_at_specified_freq(x_array, s_dict, feature_columns, cutoff_freq_ghz=20.0)
+# x_array, s_dict = cut_dataset_at_specified_freq(x_array, s_dict, feature_columns, cutoff_freq_ghz=20.0)
 
 if pki:
     s_coarse_dict = torch.load("csv_files/s_params/pt/s_coarse_dict.pt", weights_only=False)
@@ -48,7 +48,8 @@ dataloader, x_scale_params, y_scale_params, y_weights = create_param_dataloader(
                     seed=42,
                     standard_scale=(True, False),  # (scale_features, scale_labels)
                     split_method="lhs",
-                    pki_array=pki_array if pki else None
+                    pki_array=pki_array if pki else None,
+                    weight_type="low_freq"
                     )
 
 _, num_channels_times2, num_freqs = y_array.shape
