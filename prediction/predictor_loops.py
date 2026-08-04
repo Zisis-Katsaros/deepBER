@@ -266,6 +266,7 @@ def train_pred_loop_pistcnn(model, data: torch.utils.data.DataLoader, optimizer:
         outputs = model(inputs, pki=pkis, bypass_pel=bypass_pel)
         loss = criterion(outputs, labels)
 
+        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
         optimizer.zero_grad() 
         loss.backward() 
         optimizer.step() 
