@@ -384,7 +384,7 @@ def test_predictor_configuration_pistcnn(title: str, device: torch.device, model
         train_maes.append(train_mae)
         val_maes.append(val_mae)
 
-        if (epoch + 1) % 5 == 0 or epoch == 0 or epoch == epochs - 1:
+        if True: # (epoch + 1) % 5 == 0 or epoch == 0 or epoch == epochs - 1:
             print(f"Epoch {epoch+1} | PEL Bypassed: {bypass_pel}")
             print(f" - Train Loss: {train_loss:.6f}, Train MAE: {train_mae:.6f}")
             print(f" - Val Loss:   {val_loss:.6f}, Val MAE:   {val_mae:.6f}\n")
