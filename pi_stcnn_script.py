@@ -71,10 +71,10 @@ predictor = PI_STCNN(
     N=num_freqs,
     M=2,
     K=2,
-    varience_min=None
+    varience_min=1.0
 ).to(device)
 
-criterion = l_freq_loss()
+criterion = l_freq_loss(weight=y_weights).to(device)
 learning_rate = 0.001
 weight_decay = 5.1635e-05
 optimizer = torch.optim.Adam(predictor.parameters(), lr=learning_rate, weight_decay=weight_decay)

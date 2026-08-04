@@ -362,10 +362,8 @@ def test_predictor_configuration_pistcnn(title: str, device: torch.device, model
         if phase == 1:
             if non_improving_epochs >= phase1_patience:
                 print(f"Phase 1 converged at epoch {best_model_epoch}. Switching to Phase 2 (PEL ON).")
-                model.load_state_dict(torch.load(model_save_path))
-                optimizer.load_state_dict(torch.load(optimizer_save_path))
-                if scheduler is not None:
-                    scheduler.load_state_dict(torch.load(scheduler_save_path))
+                model.load_state_dict(torch.load(model_save_path, map_location=device))
+                optimizer.state.clear()
                 bypass_pel = False
                 phase = 2
                 non_improving_epochs = 0
@@ -373,7 +371,7 @@ def test_predictor_configuration_pistcnn(title: str, device: torch.device, model
         else:
             if early_stopping and non_improving_epochs >= patience:
                 print(f"Early stopping at epoch {epoch+1}. Best model at epoch {best_model_epoch}")
-                model.load_state_dict(torch.load(model_save_path))
+                model.load_state_dict(torch.load(model_save_path, map_location=device))
                 os.remove(optimizer_save_path)
                 if scheduler is not None:
                     os.remove(scheduler_save_path)
