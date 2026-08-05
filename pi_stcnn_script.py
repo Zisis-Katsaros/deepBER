@@ -71,7 +71,8 @@ predictor = PI_STCNN(
     N=num_freqs,
     M=2,
     K=2,
-    varience_min=1.0
+    varience_min=1.0,
+    layer_norm=True,
 ).to(device)
 
 criterion = l_freq_loss(weight=y_weights).to(device)
