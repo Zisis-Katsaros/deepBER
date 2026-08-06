@@ -92,18 +92,18 @@ function run_transient_evaluation(filename_preds, filename_actuals,  title, fs, 
 
         % Evaludate step responses
         % Prediction
-        V_out_main_step_pred = timeresp(fit_main_pred, V_in_step, Ts) / 2;
-        V_out_next1_step_pred = timeresp(fit_next1_pred, V_in_step, Ts) / 2;
-        V_out_fext1_step_pred = timeresp(fit_fext1_pred, V_in_step, Ts) / 2;
-        V_out_next2_step_pred = timeresp(fit_next2_pred, V_in_step, Ts) / 2;
-        V_out_fext2_step_pred = timeresp(fit_fext2_pred, V_in_step, Ts) / 2;
+        V_out_main_step_pred = timeresp(fit_main_pred, V_in_step, Ts);
+        V_out_next1_step_pred = timeresp(fit_next1_pred, V_in_step, Ts);
+        V_out_fext1_step_pred = timeresp(fit_fext1_pred, V_in_step, Ts);
+        V_out_next2_step_pred = timeresp(fit_next2_pred, V_in_step, Ts);
+        V_out_fext2_step_pred = timeresp(fit_fext2_pred, V_in_step, Ts);
 
         % Actual
-        V_out_main_step_actual = timeresp(fit_main_actual, V_in_step, Ts) / 2;
-        V_out_next1_step_actual = timeresp(fit_next1_actual, V_in_step, Ts) / 2;
-        V_out_fext1_step_actual = timeresp(fit_fext1_actual, V_in_step, Ts) / 2;
-        V_out_next2_step_actual = timeresp(fit_next2_actual, V_in_step, Ts) / 2;
-        V_out_fext2_step_actual = timeresp(fit_fext2_actual, V_in_step, Ts) / 2;
+        V_out_main_step_actual = timeresp(fit_main_actual, V_in_step, Ts);
+        V_out_next1_step_actual = timeresp(fit_next1_actual, V_in_step, Ts);
+        V_out_fext1_step_actual = timeresp(fit_fext1_actual, V_in_step, Ts);
+        V_out_next2_step_actual = timeresp(fit_next2_actual, V_in_step, Ts);
+        V_out_fext2_step_actual = timeresp(fit_fext2_actual, V_in_step, Ts);
 
         % Overwrite for ports 1 and 9
         if port == 1
@@ -181,8 +181,8 @@ function run_transient_evaluation(filename_preds, filename_actuals,  title, fs, 
             sprintf('%s - Step Response Prediction Vs Actual (Port %d)', title, port));
 
         % Evaluate PRBS responses
-        V_out_main_prbs_pred = timeresp(fit_main_pred, V_in_prbs, Ts) / 2;
-        V_out_main_prbs_actual = timeresp(fit_main_actual, V_in_prbs, Ts) / 2;
+        V_out_main_prbs_pred = timeresp(fit_main_pred, V_in_prbs, Ts);
+        V_out_main_prbs_actual = timeresp(fit_main_actual, V_in_prbs, Ts);
 
         % Reshape the PRBS vector to fold it over itself based on the bit period
         samples_per_bit = round(bit_period * fs);
