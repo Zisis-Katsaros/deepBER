@@ -192,7 +192,7 @@ class PI_STCNN(nn.Module):
         for out_channels, kernel_size, stride in tcnn_layer_params[1:]:
             self.tcnn.append(nn.ConvTranspose1d(in_channels, out_channels, kernel_size=kernel_size, stride=stride, padding=1))
             if layer_norm:
-                self.tcnn.append(nn.LayerNorm(out_channels))
+                self.tcnn.append(nn.GroupNorm(num_groups=1, num_channels=out_channels))
             self.tcnn.append(tcnn_activation_fn)
             in_channels = out_channels
 

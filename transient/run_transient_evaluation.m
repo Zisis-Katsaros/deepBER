@@ -7,7 +7,7 @@ function run_transient_evaluation(filename_preds, filename_actuals,  title, fs, 
         t_step (1,1) double = 2e-9
         rise_time (1,1) double {mustBePositive} = 40e-12; % Default rise time is 40 ps
         delay (1,1) double {mustBeNonnegative} = 100e-12; % Default delay is 100 ps
-        Vhi (1,1) double {mustBePositive} = 1; % Default high voltage is 1V
+        Vhi (1,1) double {mustBePositive} = 0.625; % Default high voltage is 0.625 V (middle of 0.4-0.85 V range)
         num_bits (1,1) double {mustBeInteger, mustBePositive} = 1000; % Default number of bits is 1000
         bit_rate (1,1) double {mustBePositive} = 10e9; % Default bit rate is 10 Gbps
         precision = -40; % Default precision is -40 dB  

@@ -333,10 +333,10 @@ def test_predictor_configuration_pistcnn(title: str, device: torch.device, model
     start_time = time.time()
     max_time_seconds = max_time_hours * 3600
 
-    phase = 1
+    phase = 2 # phase = 1
     non_improving_epochs = 0
     best_val_loss = float("inf")
-    bypass_pel = True
+    bypass_pel = False # bypass_pel = True
     for epoch in range(epochs):    
         train_loss, train_mae = train_pred_loop_pistcnn(model, train_data, optimizer, criterion, device, bypass_pel)
         val_loss, val_mae, *_ = test_pred_loop_pistcnn(model, val_data, criterion, device, bypass_pel)
