@@ -342,10 +342,10 @@ def test_predictor_configuration_pistcnn(title: str, device: torch.device, model
         val_loss, val_mae, *_ = test_pred_loop_pistcnn(model, val_data, criterion, device, bypass_pel)
 
         if scheduler is not None:
-                    if isinstance(scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
-                        scheduler.step(val_loss)
-                    else:
-                        scheduler.step()
+            if isinstance(scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
+                scheduler.step(val_loss)
+            else:
+                scheduler.step()
     
         # Phase switching logic
         if val_loss < best_val_loss - 1e-8:
