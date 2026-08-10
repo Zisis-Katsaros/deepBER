@@ -75,7 +75,7 @@ predictor = PI_STCNN(
     layer_norm=True,
 ).to(device)
 
-criterion = l_freq_loss(weight=y_weights).to(device)
+criterion = l_freq_loss() # l_freq_loss(weight=y_weights).to(device)
 learning_rate = 0.001
 weight_decay = 5.1635e-05
 optimizer = torch.optim.Adam(predictor.parameters(), lr=learning_rate, weight_decay=weight_decay)
@@ -100,7 +100,7 @@ test_preds, test_labels = test_predictor_configuration_pistcnn(
     predicted_vs_actual=True,
     test_out_dir = f"out_files/pi_stcnn",
     close_figures=True,
-    max_figures=2,
+    max_figures=3,
     max_time_hours=5.5
     )
 
