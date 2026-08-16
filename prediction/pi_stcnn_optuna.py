@@ -12,7 +12,11 @@ def run_pi_stcnn_optuna(x_array, y_array, feature_columns, batch_size=16, mlp_hi
 
     if mlp_hidden_map is None:
         mlp_hidden_map = {
-            "rect_long": [64, 64, 64],
+            "rect_long_small": [32, 32, 32],
+            "rect_long_large": [64, 64, 64],
+            "rect_xlong_small": [32, 32, 32, 32],
+            "rect_xlong_large": [64, 64, 64, 64],
+            "rect_short_xlarge": [128, 128, 128],
             "funnel_short_large": [64, 128],
             "funnel_med_small": [32, 64, 128],
             "funnel_med_med": [64, 128, 256],

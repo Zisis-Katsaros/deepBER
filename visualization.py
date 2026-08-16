@@ -1,7 +1,9 @@
+import os
+import matplotlib
+matplotlib.use("Agg")
 import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.metrics import confusion_matrix
-import os
 
 def plot_s_param_pred_vs_act_from_pistcnn(test_targets: np.ndarray, test_preds: np.ndarray, freq_array: np.ndarray, 
                           port_i: int, port_j: int, geom_idx: int = 0, num_ports: int = 18, 

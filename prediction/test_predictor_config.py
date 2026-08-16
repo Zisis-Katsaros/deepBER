@@ -28,7 +28,7 @@ def smape(labels, preds, epsilon=1e-8):
 
 def test_predictor_configuration(title: str, device: torch.device, model, dataloader: list[torch.utils.data.DataLoader], learning_rate: float, 
                                 batch_size: int, criterion: torch.nn.Module, optimizer: torch.optim.Optimizer, scheduler=None, epochs: int =30, 
-                                early_stopping: bool =False, patience: int =5, y_scale_params: tuple =None, training_curves: bool =False,
+                                early_stopping: bool =False, patience: int =5, x_scale_params: tuple =None, y_scale_params: tuple =None, training_curves: bool =False,
                                 predicted_vs_actual: bool =False, error_distribution: bool =False, error_vs_feature: bool =None,
                                 feature_columns=None, output_names = None, test_out_dir: str ='.', close_figures: bool =True):
     """ 
@@ -140,16 +140,20 @@ def test_predictor_configuration(title: str, device: torch.device, model, datalo
 
     print(f"==================== Training complete ====================")
 
-    _, _, _, test_preds, test_targets, *_, = test_pred_loop(model, test_data, criterion, device)
+    _, _, _, test_inputs, test_preds, test_targets, *_, = test_pred_loop(model, test_data, criterion, device)
 
+    if x_scale_params is not None:
+        if torch.is_tensor(test_inputs):
+            test_inputs = test_inputs.cpu().numpy()
+        test_inputs = test_inputs * x_scale_params[1] + x_scale_params[0]
+        test_inputs = np.round(test_inputs, decimals=2)  # Round to avoid floating point precision issues
     if y_scale_params is not None:
         if torch.is_tensor(test_preds):
             test_preds = test_preds.cpu().numpy()
-            test_targets = test_targets.cpu().numpy()
-            
+            test_targets = test_targets.cpu().numpy()  
         test_preds = test_preds * y_scale_params[1] + y_scale_params[0]
         test_targets = test_targets * y_scale_params[1] + y_scale_params[0]
-    np.savez_compressed(results_save_path, preds=test_preds, targets=test_targets)
+    np.savez_compressed(results_save_path, inputs=test_inputs, preds=test_preds, targets=test_targets)
 
     is_complex = np.iscomplexobj(test_preds)
     
@@ -239,7 +243,7 @@ def test_predictor_configuration(title: str, device: torch.device, model, datalo
                 title=title,
                 feature_name=feature_name,
             )
-    return test_preds, test_targets
+    return test_inputs, test_preds, test_targets
 
 
 def test_predictor_configuration_pistcnn(title: str, device: torch.device, model, dataloader: list[torch.utils.data.DataLoader], 

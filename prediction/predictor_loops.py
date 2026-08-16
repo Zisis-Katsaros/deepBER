@@ -109,8 +109,9 @@ def test_pred_loop(model, data: torch.utils.data.DataLoader, criterion: torch.nn
     ## Returns:
     - avg_loss: Average loss over the evaluation
     - avg_mae: Average mean absolute error over the evaluation
-    - all_preds: All predictions made by the model
-    - all_labels: All true labels corresponding to the predictions
+    - test_inputs: All inputs from the test set
+    - test_preds: All predictions made by the model during testing
+    - test_labels: All true labels corresponding to the predictions during testing
     - avg_mae_per_output: Average mae for each output
     - avg_mape_per_output: Average mape for each output
     - avg_mae_real: Average mae for Re(Out)
@@ -139,6 +140,7 @@ def test_pred_loop(model, data: torch.utils.data.DataLoader, criterion: torch.nn
     total_mae_per_output = None
     total_mape_per_output = None
 
+    all_inputs = []
     all_preds = []
     all_labels = []
 
@@ -174,6 +176,7 @@ def test_pred_loop(model, data: torch.utils.data.DataLoader, criterion: torch.nn
 
             total_samples += inputs.size(0)
 
+            all_inputs.append(inputs.cpu().numpy()) # store all inputs
             all_preds.append(outputs.cpu().numpy()) # store all predictions
             all_labels.append(labels.cpu().numpy()) # store all true labels
 
@@ -222,10 +225,11 @@ def test_pred_loop(model, data: torch.utils.data.DataLoader, criterion: torch.nn
     avg_mape_imag = total_mape_imag / total_elements
     avg_mape_per_output = (total_mape_per_output / total_samples).cpu().tolist()
 
+    final_inputs = np.concatenate(all_inputs, axis=0)
     final_preds = np.concatenate(all_preds, axis=0)
     final_labels = np.concatenate(all_labels, axis=0)
     
-    return avg_loss, avg_mae, avg_mape, final_preds, final_labels, avg_mae_per_output, avg_mape_per_output, avg_mae_real, \
+    return avg_loss, avg_mae, avg_mape, final_inputs, final_preds, final_labels, avg_mae_per_output, avg_mape_per_output, avg_mae_real, \
         avg_mae_imag, avg_mape_real, avg_mape_imag
 
 
