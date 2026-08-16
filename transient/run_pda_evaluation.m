@@ -1,24 +1,16 @@
-function run_pda_evaluation(filename_preds, filename_actuals, title_str, fs, bit_rate, Vhi, alpha_correction)
+function run_pda_evaluation(filename_preds, filename_actuals, amplitude_correction_data, title_str, fs, bit_rate, Vhi)
     %{
     Runs Peak Distortion Analysis (PDA) on predicted and actual S-parameters.
     Identifies the worst-case channel and evaluates pass/fail against the UCIe mask.
-    
-    Inputs:
-    - filename_preds, filename_actuals: Paths to the Touchstone files.
-    - title_str: Title for plotting/logging.
-    - fs: Sampling frequency in Hz (e.g., 1e12 for 1 ps resolution).
-    - bit_rate: Data rate in bits per second (e.g., 32e9 for 32 GT/s).
-    - Vhi: High voltage level for the transmitter (e.g., 0.625 V).
-    - alpha_correction: (Optional) A scalar from the DNN to scale the predicted amplitude.
     %}
     arguments
         filename_preds (1,1) string
         filename_actuals (1,1) string
+        amplitude_correction_data = []
         title_str (1,1) string = "PDA Evaluation"
-        fs (1,1) double = 2e12 % 0.5 ps resolution for accurate 20ps window tracking
+        fs (1,1) double = 2e12 % 0.5 ps resolution
         bit_rate (1,1) double = 32e9 % 32 GT/s UCIe Standard
         Vhi (1,1) double = 0.625
-        alpha_correction (1,1) double = 1.0 % Defaults to 1 (no correction yet)
     end
 
     Ts = 1/fs;
@@ -35,19 +27,17 @@ function run_pda_evaluation(filename_preds, filename_actuals, title_str, fs, bit
     min_global_eye_height = inf;
 
     % Arrays to hold metrics for reporting
-    results = struct('EH_pred', {}, 'EW_pred', {}, 'Pass_pred', {}, ...
+    results = struct('EH_pred_raw', {}, 'EW_pred_raw', {}, 'Pass_pred_raw', {}, ...
+                     'EH_pred_adj', {}, 'EW_pred_adj', {}, 'Pass_pred_adj', {}, ...
                      'EH_act', {}, 'EW_act', {}, 'Pass_act', {});
 
     for port = 1:9
         fprintf('\n[PDA] Evaluating Port %d...\n', port);
         
         % Map ports (Main, NEXT, FEXT)
-        tx = port; 
-        rx = tx + 9;
-        next1 = tx - 1; 
-        next2 = tx + 1;
-        fext1 = rx - 1; 
-        fext2 = rx + 1;
+        tx = port; rx = tx + 9;
+        next1 = tx - 1; next2 = tx + 1;
+        fext1 = rx - 1; fext2 = rx + 1;
         
         if port == 1
             next1 = []; fext1 = [];
@@ -55,38 +45,72 @@ function run_pda_evaluation(filename_preds, filename_actuals, title_str, fs, bit
             next2 = []; fext2 = [];
         end
 
-        % Extract VTF rational models (Using the UCIe 30-Ohm/50-Ohm & 125fF defaults)
+        % Extract VTF rational models 
         [fit_main_pred, fit_next1_pred, fit_fext1_pred, fit_next2_pred, fit_fext2_pred] = ...
             s_params2vtf_models(filename_preds, tx, rx, next1, fext1, next2, fext2);
             
         [fit_main_act, fit_next1_act, fit_fext1_act, fit_next2_act, fit_fext2_act] = ...
             s_params2vtf_models(filename_actuals, tx, rx, next1, fext1, next2, fext2);
 
-        % Group crosstalk models into cell arrays for easy passing
+        % Group crosstalk models into cell arrays
         xtalk_fits_pred = {fit_next1_pred, fit_fext1_pred, fit_next2_pred, fit_fext2_pred};
         xtalk_fits_act = {fit_next1_act, fit_fext1_act, fit_next2_act, fit_fext2_act};
+        
+        % Calculate Alpha Correction (by simulating a 5ns step response for steady state)
+        if ~isempty(amplitude_correction_data) && isfield(amplitude_correction_data, 'V_out_pred')
+            t_ss = (0:Ts:5e-9)';
+            v_in_ss = min(t_ss / 15e-12, 1) * Vhi; % Quick 15ps step
+            v_out_ss = timeresp(fit_main_pred, v_in_ss, Ts);
+            
+            target_amplitude = amplitude_correction_data.V_out_pred * Vhi;
+            alpha_correction = target_amplitude / v_out_ss(end);
+        else
+            alpha_correction = [];
+        end
 
-        % Run PDA
-        [s1_pred, s0_pred, metrics_pred] = perform_pda(fit_main_pred, xtalk_fits_pred, Ts, bit_rate, Vhi, mask_height, mask_width, alpha_correction);
-        [s1_act, s0_act, metrics_act] = perform_pda(fit_main_act, xtalk_fits_act, Ts, bit_rate, Vhi, mask_height, mask_width, 1.0); % Actuals don't get corrected
+        % Run PDA for Actual and Raw Prediction
+        [s1_act, s0_act, metrics_act] = perform_pda(fit_main_act, xtalk_fits_act, Ts, bit_rate, Vhi, mask_height, mask_width, 1.0);
+        [s1_pred_raw, s0_pred_raw, metrics_pred_raw] = perform_pda(fit_main_pred, xtalk_fits_pred, Ts, bit_rate, Vhi, mask_height, mask_width, 1.0);
+
+        % Run PDA for Adjusted Prediction (if available)
+        if ~isempty(alpha_correction)
+            [s1_pred_adj, s0_pred_adj, metrics_pred_adj] = perform_pda(fit_main_pred, xtalk_fits_pred, Ts, bit_rate, Vhi, mask_height, mask_width, alpha_correction);
+        else
+            s1_pred_adj = []; s0_pred_adj = []; metrics_pred_adj = [];
+        end
 
         % Store metrics
-        results(port).EH_pred = metrics_pred.eye_height;
-        results(port).EW_pred = metrics_pred.eye_width;
-        results(port).Pass_pred = metrics_pred.passes_mask;
         results(port).EH_act = metrics_act.eye_height;
         results(port).EW_act = metrics_act.eye_width;
         results(port).Pass_act = metrics_act.passes_mask;
-
-        % Print Port Comparison
-        fprintf('\t          PREDICTED   |   ACTUAL\n');
-        fprintf('\tEye Height: %.4f V  |   %.4f V \n', metrics_pred.eye_height, metrics_act.eye_height);
-        fprintf('\tEye Width:  %.2f ps  |   %.2f ps \n', metrics_pred.eye_width*1e12, metrics_act.eye_width*1e12);
-        fprintf('\tJitter:     %.2f ps   |   %.2f ps \n', metrics_pred.jitter*1e12, metrics_act.jitter*1e12);
-        fprintf('\tUCIe Mask:  %-9s |   %-9s \n', string(metrics_pred.passes_mask), string(metrics_act.passes_mask));
+        
+        results(port).EH_pred_raw = metrics_pred_raw.eye_height;
+        results(port).EW_pred_raw = metrics_pred_raw.eye_width;
+        results(port).Pass_pred_raw = metrics_pred_raw.passes_mask;
+        
+        if ~isempty(metrics_pred_adj)
+            results(port).EH_pred_adj = metrics_pred_adj.eye_height;
+            results(port).EW_pred_adj = metrics_pred_adj.eye_width;
+            results(port).Pass_pred_adj = metrics_pred_adj.passes_mask;
+            
+            % Print 3-way Comparison
+            fprintf('\t           PREDICTED (RAW) | PREDICTED (ADJ) |   ACTUAL\n');
+            fprintf('\tEye Height: %.4f V       |  %.4f V       |   %.4f V \n', metrics_pred_raw.eye_height, metrics_pred_adj.eye_height, metrics_act.eye_height);
+            fprintf('\tEye Width:  %.2f ps       |  %.2f ps       |   %.2f ps \n', metrics_pred_raw.eye_width*1e12, metrics_pred_adj.eye_width*1e12, metrics_act.eye_width*1e12);
+            fprintf('\tJitter:     %.2f ps       |  %.2f ps       |   %.2f ps \n', metrics_pred_raw.jitter*1e12, metrics_pred_adj.jitter*1e12, metrics_act.jitter*1e12);
+            fprintf('\tUCIe Mask:  %-14s |  %-14s |   %-9s \n', string(metrics_pred_raw.passes_mask), string(metrics_pred_adj.passes_mask), string(metrics_act.passes_mask));
+        else
+            % Print 2-way Comparison
+            fprintf('\t           PREDICTED |   ACTUAL\n');
+            fprintf('\tEye Height: %.4f V   |   %.4f V \n', metrics_pred_raw.eye_height, metrics_act.eye_height);
+            fprintf('\tEye Width:  %.2f ps   |   %.2f ps \n', metrics_pred_raw.eye_width*1e12, metrics_act.eye_width*1e12);
+            fprintf('\tJitter:     %.2f ps   |   %.2f ps \n', metrics_pred_raw.jitter*1e12, metrics_act.jitter*1e12);
+            fprintf('\tUCIe Mask:  %-9s |   %-9s \n', string(metrics_pred_raw.passes_mask), string(metrics_act.passes_mask));
+        end
         
         plot_title_str = sprintf('%s - PDA Worst-Case Eye (Port %d)', title_str, port);
-        plot_pda_eye(Ts, s1_pred, s0_pred, s1_act, s0_act, metrics_pred, metrics_act, mask_height, mask_width, plot_title_str);
+        plot_pda_eye(Ts, s1_pred_raw, s0_pred_raw, metrics_pred_raw, s1_act, s0_act, metrics_act, ...
+            mask_height, mask_width, plot_title_str, s1_pred_adj, s0_pred_adj, metrics_pred_adj);
         
         % Track Worst Channel (Based on Actual Eye Height)
         if metrics_act.eye_height < min_global_eye_height
@@ -101,6 +125,12 @@ function run_pda_evaluation(filename_preds, filename_actuals, title_str, fs, bit
     fprintf('>> The worst-case bottleneck is PORT %d.\n', worst_port);
     fprintf('>> Actual Eye Height: %.4f V\n', results(worst_port).EH_act);
     fprintf('>> Actual Eye Width:  %.2f ps\n', results(worst_port).EW_act*1e12);
-    fprintf('>> Predicted Verdict: %s | Actual Verdict: %s\n', ...
-            string(results(worst_port).Pass_pred), string(results(worst_port).Pass_act));
+    
+    if ~isempty(amplitude_correction_data)
+        fprintf('>> Predicted Verdict (Raw): %s | Predicted (Adj): %s | Actual: %s\n', ...
+                string(results(worst_port).Pass_pred_raw), string(results(worst_port).Pass_pred_adj), string(results(worst_port).Pass_act));
+    else
+        fprintf('>> Predicted Verdict: %s | Actual Verdict: %s\n', ...
+                string(results(worst_port).Pass_pred_raw), string(results(worst_port).Pass_act));
+    end
 end
