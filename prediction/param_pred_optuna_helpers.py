@@ -350,13 +350,14 @@ def run_pi_stcnn_trial(trial, device, x_array, feature_columns, y_array, batch_s
         ).to(device)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
+    scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=150)
 
-    phase = 1
-    patience = 50
+    phase = 2
+    patience = 300
     non_improving_epochs = 0
     best_val_loss = float("inf")
     best_model_state = None
-    bypass_PEL = True
+    bypass_PEL = False
 
     # Training Loop
     for epoch in range(n_epochs):
