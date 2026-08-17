@@ -2,7 +2,7 @@ import torch
 from torch import nn
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from prediction.pi_stcnn_optuna import run_pi_stcnn_optuna
-from load_set import organize_dataset_for_pi_stcnn, create_param_dataloader, cut_dataset_at_specified_freq
+from load_set import organize_dataset_for_pi_stcnn, create_param_dataloader
 from prediction.predictor import PI_STCNN
 from prediction.l_freq_loss import l_freq_loss
 from prediction.test_predictor_config import test_predictor_configuration_pistcnn
