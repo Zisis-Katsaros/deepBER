@@ -3,6 +3,8 @@ import skrf as rf
 from prediction.s2abcd import trans_param_dict2mat
 import os
 import csv
+import scipy.io as sio
+from typing import List, Optional
 
 def create_touchstone_file(s_matrices, freqs, filename="my_dnn_output.s18p"):
     freqs = np.asarray(freqs, dtype=np.float64).reshape(-1)
@@ -37,6 +39,55 @@ def create_geometry_mapping_file(geometries: list[np.ndarray], feature_names: li
         for i, geom in enumerate(geometries):
             writer.writerow([i+1] + geom.tolist()) 
     print(f"Saved CSV mapping to {csv_save_path}")
+
+
+def export_amplitude_correction(test_inputs: np.ndarray, test_preds: np.ndarray, test_targets: np.ndarray, feature_names: Optional[List[str]] = None,
+    save_dir: str = "export_files"):
+    """
+    Exports test geometries to a CSV and predicted/target amplitudes to a MAT file 
+    for use in MATLAB transient analysis.
+    """
+    os.makedirs(save_dir, exist_ok=True)
+    csv_save_path = os.path.join(save_dir, "geometry_mapping.csv")
+    mat_save_path = os.path.join(save_dir, "amplitude_predictions.mat")
+
+    # Export CSV File (Geometry Mapping)
+    num_features = test_inputs.shape[1]
+    
+    if feature_names is None:
+        feature_names = [f"Feature_{j+1}" for j in range(num_features)]
+    elif len(feature_names) > num_features:
+        feature_names = feature_names[:num_features]
+
+    with open(csv_save_path, 'w', newline='', encoding='utf-8') as f:
+        writer = csv.writer(f)
+        
+        # Write the header row
+        writer.writerow(["Geom_Index"] + feature_names)
+        
+        # Write the data rows (1-based index for MATLAB compatibility)
+        for i, geom in enumerate(test_inputs):
+            formatted_geom = [f"{val:.2f}" for val in geom] # Format to 2 decimal places
+            writer.writerow([i + 1] + formatted_geom)
+            
+    print(f"Saved CSV mapping to: {csv_save_path}")
+
+    # Export MAT File (Predictions & Targets)
+    # Convert arrays to 64-bit floats and force column-vector shape (N, 1) for MATLAB
+    v_preds_mat = np.asarray(test_preds, dtype=np.float64).reshape(-1, 1)
+    v_targets_mat = np.asarray(test_targets, dtype=np.float64).reshape(-1, 1)
+    
+    # Save the Geom_Index in the .mat file too, so MATLAB can cross-reference the CSV
+    geom_indices_mat = np.arange(1, len(test_inputs) + 1, dtype=np.float64).reshape(-1, 1)
+    
+    mat_data = {
+        'Geom_Index': geom_indices_mat,
+        'V_out_pred': v_preds_mat,
+        'V_out_target': v_targets_mat
+    }
+    
+    sio.savemat(mat_save_path, mat_data)
+    print(f"Saved MAT predictions to: {mat_save_path}")
 
 
 def export_files_for_transient(geometries: list[np.ndarray], feature_names: list[str], labels_dict_per_geom: list[dict], preds_dict_per_geom: list[dict], freq_arrays_per_geom: list[np.ndarray], save_dir: str="csv_files/transient_input_files"):

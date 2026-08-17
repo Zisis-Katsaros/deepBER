@@ -3,12 +3,13 @@ from pathlib import Path
 import numpy as np
 from numpy.typing import NDArray
 import torch
-from torch.utils.data import DataLoader, TensorDataset
+from torch.utils.data import DataLoader, TensorDataset, RandomSampler
 from dataset_manipulation import extend_features, exclude_columns
 from classification.ber_to_class import ber_to_class
 from prediction.s2abcd import s2generalized_abcd
 from dataset_splitting import split_dataset, latin_hypercube_order, get_grouping
-from typing import Literal
+from typing import Literal, List, Tuple, Union
+from scipy.spatial import cKDTree
 
 def create_arrays(csv_names, target_columns, thresholds, test_names, manipulate_features = None,  
 				  binary_classification = False, sample_percentage=1.0, seed=42, sampling_method="random"):
@@ -169,6 +170,44 @@ def create_param_prediction_arrays(csv_names: list[str], expected_ports:int = 18
 			
 	# Return
 	return x_array, s_dict, a_dict, b_dict, c_dict, d_dict, feature_columns
+
+def create_amplitude_prediction_arrays(csv_names: list[str], target_columns: list[str] = ["V_out_steady_state"], 
+								   manipulate_features: bool = True, sample_percentage: float = 1.0, seed: int = 42, 
+								   sampling_method: Literal["random", "lhs"] = "random", subfolder: str = "transient_dataset"):
+	"""
+	# create_amplitude_prediction_arrays()
+	## Creates arrays features and labels arrays from given csv file(s)
+	
+	## Args:
+	- csv_names: List of CSV file names as they appear inside csv_files/  
+	- target_columns: List of target column names
+	- manipulate_features: Whether to apply feature manipulation (adds width to space ratio, cross sectional area and gnd width to width ratio)
+	- sampling_method: "random" or "lhs" for subsampling the loaded dataset
+	- subfolder: Subfolder in csv_files/ where the datasets are located
+	## Returns:
+	- Tuple (x_array, y_array, feature_columns)
+	"""
+	
+	
+	# Extract inputs, labels and feature names from csv files
+	x_array, y_array, feature_columns = load_csv_dataset(csv_names, target_columns=target_columns, subfolder=subfolder)
+	
+	num_of_samples = len(y_array)	
+	
+	if manipulate_features:
+		x_array, feature_columns = extend_features(x_array, feature_columns, "width", "space", "/", "width_space_ratio")
+		x_array, feature_columns = extend_features(x_array, feature_columns, "width", "metal_thickness", "*", "cross_sectional_area")
+		x_array, feature_columns = extend_features(x_array, feature_columns, "gnd_width", "width", "/", "gnd_width_width_ratio")
+		
+			
+	
+	x_array, selected_row_indices = split_dataset(x_array, sample_percentage=sample_percentage, sampling_method=sampling_method, seed=seed)
+
+	# Apply same sampling to y_array
+	y_array = y_array[selected_row_indices]	
+				
+	# Return
+	return x_array, y_array, feature_columns
 
 
 def load_csv_dataset(csv_names: list[str], target_columns="BER", subfolder: str =None):
@@ -368,7 +407,7 @@ def create_dataloader(
 
 
 def create_param_dataloader(x_array: NDArray, y_array: NDArray, batch_size: int =64, seed: int =42, standard_scale = False,
-							split_method: Literal["random", "lhs"] = "random", split_percentages: list[float]=[0.8, 0.1], pki_array: NDArray = None,
+							split_method: Literal["random", "lhs", "custom"] = "random", split_idx: dict[str, np.ndarray] = None, split_percentages: list[float]=[0.8, 0.1], pki_array: NDArray = None,
 							weight_type: Literal["balanced", "low_freq"] = None):
 	"""
 	# create_param_dataloader()
@@ -380,13 +419,15 @@ def create_param_dataloader(x_array: NDArray, y_array: NDArray, batch_size: int 
 	- batch_size: Batch size for dataloader
 	- seed: Random seed for reproducibility
 	- standard_scale: If true standard scaling is applied to features and labels using mean and std of the training data
-	- split_method: "random" or "lhs" for splitting the dataset
+	- split_method: "random", "lhs" or "custom" for splitting the dataset
+	- split_idx: Dictionary with keys "train", "val", "test" and values as the corresponding row indices in the original dataset (used when split_method="custom")
 	- split_percentages: [percentage of samples for training set, percentage of samples for validation set]
 	## Returns:
 	- dataloader: [train_data, val_data, test_data]
 	- x_scale_params: (x_train_mean, x_train_std)
 	- y_scale_params: (y_train_mean, y_train_std)
 	- y_weights: Tensor of weights for balancing loss function based on label distribution
+	- split_idx: Dictionary with keys "train", "val", "test" and values as the corresponding row indices in the original dataset
 	"""
 
 	if isinstance(standard_scale, tuple) and len(standard_scale) == 2:
@@ -416,28 +457,35 @@ def create_param_dataloader(x_array: NDArray, y_array: NDArray, batch_size: int 
 	train_size = int(total_size * train_percent)
 	val_size = int(total_size * val_percent)
 
-	if split_method == "random":
-		generator = torch.Generator().manual_seed(seed)
-		split_group_ids = torch.randperm(total_size, generator=generator).numpy()
-	elif split_method == "lhs":
-		split_group_ids = latin_hypercube_order(unique_geoms, total_size, seed=seed)
+	if split_method == "custom":
+		if split_idx is None:
+			raise ValueError("split_idx must be provided when split_method is 'custom'")
+		train_idx = split_idx.get("train", np.array([], dtype=int))
+		val_idx = split_idx.get("val", np.array([], dtype=int))
+		test_idx = split_idx.get("test", np.array([], dtype=int))
 	else:
-		raise ValueError("split_method must be 'random' or 'lhs'.")
+		if split_method == "random":
+			generator = torch.Generator().manual_seed(seed)
+			split_group_ids = torch.randperm(total_size, generator=generator).numpy()
+		elif split_method == "lhs":
+			split_group_ids = latin_hypercube_order(unique_geoms, total_size, seed=seed)
+		else:
+			raise ValueError("split_method must be 'random' or 'lhs'.")
 
-	# Split grouping ids into train/val/test
-	train_group_ids = split_group_ids[:train_size]
-	val_group_ids = split_group_ids[train_size:train_size + val_size]
-	test_group_ids = split_group_ids[train_size + val_size:]
+		# Split grouping ids into train/val/test
+		train_group_ids = split_group_ids[:train_size]
+		val_group_ids = split_group_ids[train_size:train_size + val_size]
+		test_group_ids = split_group_ids[train_size + val_size:]
 
-	# Map grouping ids to original row indices (accounting for the case that val and test sets are empty)
-	train_idx = np.concatenate([grouping[i] for i in train_group_ids])
-	val_idx = np.concatenate([grouping[i] for i in val_group_ids]) if len(val_group_ids) > 0 else np.array([], dtype=int)
-	test_idx = np.concatenate([grouping[i] for i in test_group_ids]) if len(test_group_ids) > 0 else np.array([], dtype=int)
+		# Map grouping ids to original row indices (accounting for the case that val and test sets are empty)
+		train_idx = np.concatenate([grouping[i] for i in train_group_ids])
+		val_idx = np.concatenate([grouping[i] for i in val_group_ids]) if len(val_group_ids) > 0 else np.array([], dtype=int)
+		test_idx = np.concatenate([grouping[i] for i in test_group_ids]) if len(test_group_ids) > 0 else np.array([], dtype=int)
 
-	# Sort to maintain original order
-	train_idx = np.sort(train_idx)
-	val_idx = np.sort(val_idx)
-	test_idx = np.sort(test_idx)
+		# Sort to maintain original order
+		train_idx = np.sort(train_idx)
+		val_idx = np.sort(val_idx)
+		test_idx = np.sort(test_idx)
 
 	# Standard scaling
 	if scale_features:
@@ -536,9 +584,113 @@ def create_param_dataloader(x_array: NDArray, y_array: NDArray, batch_size: int 
 	test_data = DataLoader(test_set, batch_size=batch_size, shuffle=False)
 
 	dataloader = [train_data, val_data, test_data]
+
+	split_idx = {
+		"train": train_idx,
+		"val": val_idx,
+		"test": test_idx
+	}
 		
-	return dataloader, x_scale_params, y_scale_params, y_weights
+	return dataloader, x_scale_params, y_scale_params, y_weights, split_idx
+
 	
+def create_amplitude_correction_dataloader(
+    s_param_dataloader: List[DataLoader],
+    x_array_amplitude: np.ndarray,
+    y_array_amplitude: np.ndarray,
+    x_scale_params: Tuple[Union[np.ndarray, int], Union[np.ndarray, int]],
+    standard_scale: Union[bool, Tuple[bool, bool]] = False
+):
+    """
+    Creates dataloaders for the amplitude correction dataset by unpacking the 
+    s_param_dataloader and matching the features to preserve the exact same splits.
+    """
+    train_dl_og, val_dl_og, test_dl_og = s_param_dataloader
+    x_mean, x_std = x_scale_params
+
+    # Unpack scaled features from the original TensorDatasets
+    x_train_s = train_dl_og.dataset.tensors[0].numpy()
+    x_val_s = val_dl_og.dataset.tensors[0].numpy() if val_dl_og.dataset else np.array([])
+    x_test_s = test_dl_og.dataset.tensors[0].numpy() if test_dl_og.dataset else np.array([])
+
+    # Scale x_array_amplitude to match the exact mathematical space of the dataloaders
+    x_amp_scaled = (x_array_amplitude - x_mean) / x_std
+    x_amp_scaled = x_amp_scaled.astype(np.float32) # Match PyTorch's default float32
+
+    # Use a KDTree for extremely fast, precision-safe matching
+    tree = cKDTree(x_amp_scaled)
+    
+    # Query the tree. Returns distances (which will be ~0) and the matching row indices
+    _, train_idx = tree.query(x_train_s)
+    _, val_idx = tree.query(x_val_s) if len(x_val_s) > 0 else ([], [])
+    _, test_idx = tree.query(x_test_s) if len(x_test_s) > 0 else ([], [])
+
+    # Prepare amplitude arrays using the discovered indices
+    if y_array_amplitude.ndim == 1:
+        y_array_amplitude = np.asarray(y_array_amplitude, dtype=np.float32).reshape(-1, 1)
+    else:
+        y_array_amplitude = np.asarray(y_array_amplitude, dtype=np.float32)
+
+    x_array_amplitude = np.asarray(x_array_amplitude, dtype=np.float32)
+
+    x_train, y_train = x_array_amplitude[train_idx], y_array_amplitude[train_idx]
+    
+    x_val, y_val = (np.array([]), np.array([]))
+    if len(val_idx) > 0:
+        x_val, y_val = x_array_amplitude[val_idx], y_array_amplitude[val_idx]
+        
+    x_test, y_test = (np.array([]), np.array([]))
+    if len(test_idx) > 0:
+        x_test, y_test = x_array_amplitude[test_idx], y_array_amplitude[test_idx]
+
+    # Apply scaling for the new dataloader (independent of s_param scales)
+    if isinstance(standard_scale, tuple) and len(standard_scale) == 2:
+        scale_features, scale_labels = standard_scale
+    else:
+        scale_features, scale_labels = standard_scale, standard_scale
+
+    if scale_features:
+        x_train_mean_amp = x_train.mean(axis=0)
+        x_train_std_amp = x_train.std(axis=0)
+        x_train_std_amp = np.where(x_train_std_amp == 0.0, 1.0, x_train_std_amp)
+        
+        x_train = (x_train - x_train_mean_amp) / x_train_std_amp
+        if len(x_val) > 0: x_val = (x_val - x_train_mean_amp) / x_train_std_amp
+        if len(x_test) > 0: x_test = (x_test - x_train_mean_amp) / x_train_std_amp
+        x_scale_params_amp = (x_train_mean_amp, x_train_std_amp)
+    else:
+        x_scale_params_amp = (0, 1)
+
+    if scale_labels:
+        y_train_mean_amp = y_train.mean(axis=0)
+        y_train_std_amp = y_train.std(axis=0)
+        y_train_std_amp = np.where(y_train_std_amp == 0.0, 1.0, y_train_std_amp)
+        
+        y_train = (y_train - y_train_mean_amp) / y_train_std_amp
+        if len(y_val) > 0: y_val = (y_val - y_train_mean_amp) / y_train_std_amp
+        if len(y_test) > 0: y_test = (y_test - y_train_mean_amp) / y_train_std_amp
+        y_scale_params_amp = (y_train_mean_amp, y_train_std_amp)
+    else:
+        y_scale_params_amp = (0, 1)
+
+    # Create the output Datasets
+    train_set = TensorDataset(torch.from_numpy(x_train), torch.from_numpy(y_train))
+    val_set = TensorDataset(torch.from_numpy(x_val), torch.from_numpy(y_val)) if len(val_idx) > 0 else None
+    test_set = TensorDataset(torch.from_numpy(x_test), torch.from_numpy(y_test)) if len(test_idx) > 0 else None
+
+    # Match batch_size and shuffle settings
+    amp_train_dl = DataLoader(train_set, batch_size=train_dl_og.batch_size, shuffle=True)
+    
+    amp_val_dl = None
+    if val_set is not None:
+        amp_val_dl = DataLoader(val_set, batch_size=val_dl_og.batch_size, shuffle=False)
+        
+    amp_test_dl = None
+    if test_set is not None:
+        amp_test_dl = DataLoader(test_set, batch_size=test_dl_og.batch_size, shuffle=False)
+ 
+    return [amp_train_dl, amp_val_dl, amp_test_dl], x_scale_params_amp, y_scale_params_amp
+
 
 def create_param_forward_dataloader(x_array: NDArray, batch_size: int =64, standard_scale: bool =False, 
 									x_scale_params: tuple[np.ndarray, np.ndarray] = None):

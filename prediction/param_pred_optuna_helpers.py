@@ -8,6 +8,7 @@ from optuna.exceptions import TrialPruned
 from torch.utils.data import DataLoader, TensorDataset
 from prediction.predictor import DeepBER_Param_Predictor, DeepBER_Param_Predictor_Complex, PI_STCNN
 from dataset_splitting import split_dataset
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 
 def set_seed(seed: int):
     random.seed(seed)
@@ -349,13 +350,14 @@ def run_pi_stcnn_trial(trial, device, x_array, feature_columns, y_array, batch_s
         ).to(device)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
+    scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=150)
 
-    phase = 1
-    patience = 50
+    phase = 2
+    patience = 300
     non_improving_epochs = 0
     best_val_loss = float("inf")
     best_model_state = None
-    bypass_PEL = True
+    bypass_PEL = False
 
     # Training Loop
     for epoch in range(n_epochs):
@@ -411,3 +413,80 @@ def run_pi_stcnn_trial(trial, device, x_array, feature_columns, y_array, batch_s
     return val_loss
 
 
+def run_amp_corr_trial(trial, device, x_array, feature_columns, y_array, batch_size, hidden, dropout, lr, weight_decay, n_epochs, criterion, seed):
+    _, train_idx = split_dataset(x_array, 0.8, seed=42)
+    val_idx = [idx for idx in range(x_array.shape[0]) if idx not in train_idx]
+
+    try:
+        train_loader, val_loader = build_fold_loaders(
+            x_array,
+            y_array,
+            train_idx,
+            val_idx,
+            batch_size,
+            batch_norm=False,
+        )
+    except ValueError as exc:
+        print(f"[optuna] Trial {trial.number} invalid - {exc}")
+        raise optuna.exceptions.TrialPruned() from exc
+
+    model = DeepBER_Param_Predictor(
+        input_size=len(feature_columns),
+        hidden=hidden,
+        output_size=1,
+        activation_fn=torch.nn.ELU(),
+        batch_norm=False,
+        dropout=dropout,
+    ).to(device)
+
+    optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
+    scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=10)
+
+    patience = 50
+    best_val_loss = float("inf")
+    non_improving_epochs = 0
+
+    for epoch in range(n_epochs):
+        model.train()
+        for xb, yb in train_loader:
+            xb = xb.to(device).float()
+            yb = yb.to(device).float()
+
+            optimizer.zero_grad()
+            preds = model(xb)
+            loss = criterion(preds, yb)
+            loss.backward()
+            optimizer.step()
+
+        # Validation Loop
+        model.eval()
+        val_losses = []
+        with torch.no_grad():
+            for xb, yb in val_loader:
+                xb = xb.to(device).float()
+                yb = yb.to(device).float()
+                preds = model(xb)
+                val_losses.append(criterion(preds, yb).item())
+
+        val_loss = float(np.mean(val_losses))
+
+        # Step scheduler
+        scheduler.step(val_loss)
+
+        if val_loss < best_val_loss - 1e-8:
+            best_val_loss = val_loss
+            non_improving_epochs = 0
+        else:
+            non_improving_epochs += 1
+
+        if non_improving_epochs >= patience:
+            print(f"[optuna] Trial {trial.number}: early stopping at epoch {epoch + 1} after {non_improving_epochs} non-improving epochs")
+            break
+
+        print(f"[optuna] Trial {trial.number}: epoch {epoch + 1}/{n_epochs}, val_loss={val_loss:.6f}")
+
+        trial.report(val_loss, epoch)
+        if trial.should_prune():
+            print(f"[optuna] Trial {trial.number}: pruned after {epoch+1}")
+            raise optuna.exceptions.TrialPruned()
+    return best_val_loss

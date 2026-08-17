@@ -2,7 +2,7 @@ import torch
 from torch import nn
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from prediction.pi_stcnn_optuna import run_pi_stcnn_optuna
-from load_set import organize_dataset_for_pi_stcnn, create_param_dataloader, cut_dataset_at_specified_freq
+from load_set import organize_dataset_for_pi_stcnn, create_param_dataloader
 from prediction.predictor import PI_STCNN
 from prediction.l_freq_loss import l_freq_loss
 from prediction.test_predictor_config import test_predictor_configuration_pistcnn
@@ -35,10 +35,10 @@ if pki:
 else:
     x_array, feature_columns, y_array = organize_dataset_for_pi_stcnn(x_array, s_dict, feature_columns)
 
-"""
-db_path = "out_files/pi_stcnn/pi_stcnn_study.db"
+#"""
+db_path = "out_files/pi_stcnn/pi_stcnn_study2.db"
 storage_url = f"sqlite:///{db_path}"
-run_pi_stcnn_optuna(x_array, y_array, feature_columns, n_trials=175, n_epochs=600, storage=storage_url)
+run_pi_stcnn_optuna(x_array, y_array, feature_columns, n_trials=400, n_epochs=450, storage=storage_url)
 
 """
 dataloader, x_scale_params, y_scale_params, y_weights = create_param_dataloader(
@@ -118,3 +118,4 @@ export_files_for_transient(
     freq_arrays_per_geom=freq_arrays_per_geom,
     save_dir="out_files/pi_stcnn/touchstone_files"
 )
+"""
