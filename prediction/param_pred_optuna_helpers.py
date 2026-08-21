@@ -320,7 +320,7 @@ def run_trial(trial, device, model_architecture, selected_elements, x_pure, feat
     return current_losses       
 
 
-def run_pi_stcnn_trial(trial, device, x_array, feature_columns, y_array, batch_size, mlp_hidden, tcnn_hidden, dropout, M, varience_min, lr, weight_decay, n_epochs, criterion, seed):
+def run_pi_stcnn_trial(trial, device, x_array, feature_columns, y_array, batch_size, mlp_hidden, tcnn_hidden, dropout, M, varience_min, layer_norm, lr, weight_decay, n_epochs, criterion, seed):
     _, train_idx = split_dataset(x_array, 0.8, seed=seed)
     val_idx = [idx for idx in range(x_array.shape[0]) if idx not in train_idx]
 
@@ -350,6 +350,7 @@ def run_pi_stcnn_trial(trial, device, x_array, feature_columns, y_array, batch_s
             M=M,
             K=2,
             varience_min=varience_min,
+            layer_norm=layer_norm,
         ).to(device)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
