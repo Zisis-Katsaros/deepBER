@@ -9,6 +9,8 @@ from prediction.test_predictor_config import test_predictor_configuration_pistcn
 import numpy as np
 from export_files_for_transient import export_files_for_transient, convert_stcnn_outputs_to_dicts
 from dataset_splitting import split_dataset
+from prediction.param_pred_optuna_helpers import eval_pistcnn_study
+
 
 # ============================================= Initializing Dataset ============================================= #
 seed = 42
@@ -38,6 +40,7 @@ else:
 #"""
 db_path = "out_files/pi_stcnn/pi_stcnn_study2.db"
 storage_url = f"sqlite:///{db_path}"
+# eval_pistcnn_study(storage_url)
 run_pi_stcnn_optuna(x_array, y_array, feature_columns, n_trials=400, n_epochs=450, storage=storage_url)
 
 """
