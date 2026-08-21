@@ -41,7 +41,7 @@ else:
 db_path = "out_files/pi_stcnn/pi_stcnn_study2.db"
 storage_url = f"sqlite:///{db_path}"
 # eval_pistcnn_study(storage_url)
-run_pi_stcnn_optuna(x_array, y_array, feature_columns, n_trials=400, n_epochs=450, storage=storage_url)
+run_pi_stcnn_optuna(x_array, y_array, feature_columns, n_trials=650, n_epochs=450, storage=storage_url)
 
 """
 dataloader, x_scale_params, y_scale_params, y_weights = create_param_dataloader(
