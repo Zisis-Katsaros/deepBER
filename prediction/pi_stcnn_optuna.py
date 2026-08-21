@@ -32,17 +32,17 @@ def run_pi_stcnn_optuna(x_array, y_array, feature_columns, batch_size=16, mlp_hi
         
         if tcnn_hidden_map is None:
             tcnn_hidden_map = {
-                "rect_3_128": [128, 128, 128],
-                "rect_3_196": [196, 196, 196],
-                "rect_3_256": [256, 256, 256],
-                "rect_3_384": [384, 384, 384],
+                # "rect_3_128": [128, 128, 128],
+                # "rect_3_196": [196, 196, 196],
+                # "rect_3_256": [256, 256, 256],
+                # "rect_3_384": [384, 384, 384],
 
-                "rect_4_128": [128, 128, 128, 128],
-                "rect_4_196": [196, 196, 196, 196],
-                "rect_4_256": [256, 256, 256, 256],
-                "rect_4_384": [384, 384, 384, 384],
-                "rect_4_512": [512, 512, 512, 512],
-                "rect_4_768": [768, 768, 768, 768],
+                # "rect_4_128": [128, 128, 128, 128],
+                # "rect_4_196": [196, 196, 196, 196],
+                # "rect_4_256": [256, 256, 256, 256],
+                # "rect_4_384": [384, 384, 384, 384],
+                # "rect_4_512": [512, 512, 512, 512],
+                # "rect_4_768": [768, 768, 768, 768],
 
                 "rect_5_128": [128, 128, 128, 128, 128],
                 "rect_5_196": [196, 196, 196, 196, 196],
@@ -65,12 +65,12 @@ def run_pi_stcnn_optuna(x_array, y_array, feature_columns, batch_size=16, mlp_hi
                 "rect_7_512": [512, 512, 512, 512, 512, 512, 512],
                 "rect_7_768": [768, 768, 768, 768, 768, 768, 768],
 
-                "inv_funnel_4_small_narrow": [384, 256, 196, 128],
-                "inv_funnel_4_small_wide": [512, 384, 256, 128],
-                "inv_funnel_4_med_narrow": [512, 384, 256, 196],
-                "inv_funnel_4_med_wide": [768, 512, 384, 196],
-                "inv_funnel_4_large_narrow": [768, 512, 384, 256],
-                "inv_funnel_4_xl_narrow": [768, 512, 384, 384],
+                # "inv_funnel_4_small_narrow": [384, 256, 196, 128],
+                # "inv_funnel_4_small_wide": [512, 384, 256, 128],
+                # "inv_funnel_4_med_narrow": [512, 384, 256, 196],
+                # "inv_funnel_4_med_wide": [768, 512, 384, 196],
+                # "inv_funnel_4_large_narrow": [768, 512, 384, 256],
+                # "inv_funnel_4_xl_narrow": [768, 512, 384, 384],
 
                 "inv_funnel_5_small_narrow": [512, 384, 256, 196, 128],
                 "inv_funnel_5_small_wide": [768, 512, 384, 256, 128],
@@ -91,7 +91,7 @@ def run_pi_stcnn_optuna(x_array, y_array, feature_columns, batch_size=16, mlp_hi
         # MLP hyperparameters
         mlp_hidden_shape_name = trial.suggest_categorical("mlp_hidden_shape_name", list(mlp_hidden_map.keys()))
         mlp_hidden = mlp_hidden_map[mlp_hidden_shape_name]
-        dropout = trial.suggest_float("dropout", 0.0, 0.2, step=0.02)
+        dropout = 0.0 # trial.suggest_float("dropout", 0.0, 0.2, step=0.02)
 
         
 
@@ -107,7 +107,7 @@ def run_pi_stcnn_optuna(x_array, y_array, feature_columns, batch_size=16, mlp_hi
         padding = 1
 
         N = y_array.shape[2]
-        M = trial.suggest_categorical("M", [1.5, 2.0])
+        M = 1.5 # trial.suggest_categorical("M", [1.5, 2.0])
         target_len = int(N * M + 1)
         for i in range(1, tcnn_n_layers):
             out_channels = tcnn_hidden_shape[i]
@@ -139,7 +139,7 @@ def run_pi_stcnn_optuna(x_array, y_array, feature_columns, batch_size=16, mlp_hi
             raise optuna.TrialPruned(f"Trial {trial.number} pruned due to excessive output length: {current_seq_len} > {target_len}")
         
         # Other hyperparameters
-        weight_decay = trial.suggest_float("weight_decay", 1e-8, 1e-3, log=True)
+        weight_decay = 0.0 # trial.suggest_float("weight_decay", 1e-8, 1e-3, log=True)
         varience_min = 1.0
         lr = 0.001
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
