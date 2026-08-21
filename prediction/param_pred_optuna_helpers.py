@@ -1,6 +1,7 @@
 import random
 import numpy as np
 import optuna
+from optuna import study
 import torch
 from torch import nn
 from complexNN import nn as cvnn
@@ -9,6 +10,8 @@ from torch.utils.data import DataLoader, TensorDataset
 from prediction.predictor import DeepBER_Param_Predictor, DeepBER_Param_Predictor_Complex, PI_STCNN
 from dataset_splitting import split_dataset
 from torch.optim.lr_scheduler import ReduceLROnPlateau
+import optuna.visualization as vis
+import pandas as pd
 
 def set_seed(seed: int):
     random.seed(seed)
@@ -490,3 +493,32 @@ def run_amp_corr_trial(trial, device, x_array, feature_columns, y_array, batch_s
             print(f"[optuna] Trial {trial.number}: pruned after {epoch+1}")
             raise optuna.exceptions.TrialPruned()
     return best_val_loss
+
+
+def eval_pistcnn_study(storage_url):
+    study = optuna.create_study(study_name="pi_stcnn_optuna", storage=storage_url, direction="minimize", load_if_exists=True)
+    vis.plot_param_importances(study).show()
+
+    # Export to a dataframe
+    df = study.trials_dataframe()
+
+    # Worst 20 trials
+    completed_trials = df[df['state'] == 'COMPLETE']
+    worst_20 = completed_trials.sort_values(by="value", ascending=False).head(20)
+    print("--- WORST 20 TRIALS ---")
+    print(worst_20[['value', 'params_mlp_hidden_shape_name', 'params_tcnn_hidden_shape_name', 'params_dropout', 'params_M']])
+
+    # Best 20 trials
+    best_20 = completed_trials.sort_values(by="value", ascending=True).head(20)
+    print("\n--- BEST 20 TRIALS ---")
+    print(best_20[['value', 'params_mlp_hidden_shape_name', 'params_tcnn_hidden_shape_name', 'params_dropout', 'params_M']])
+
+    # MLP hidden shapes that got pruned the most
+    pruned_trials = df[df['state'] == 'PRUNED']
+    print("\n--- PRUNED SHAPES ---")
+    print(pruned_trials['params_mlp_hidden_shape_name'].value_counts())
+
+    # TCNN hidden shapes that got pruned the most
+    print("\n--- PRUNED TCNN SHAPES ---")
+    print(pruned_trials['params_tcnn_hidden_shape_name'].value_counts())
+

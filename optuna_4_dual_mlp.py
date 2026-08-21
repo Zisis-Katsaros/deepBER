@@ -152,7 +152,3 @@ for element in elements:
             freq_arrays_per_geom[geom_idx] = geom_freq_array
 
 export_files_for_transient(geometries, feature_columns, labels_dict_per_geom, preds_dict_per_geom, freq_arrays_per_geom, save_dir=f"out_files/dual_mlp/touchstone")
-
-
-
-
