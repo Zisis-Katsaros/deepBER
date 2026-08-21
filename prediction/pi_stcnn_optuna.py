@@ -93,8 +93,6 @@ def run_pi_stcnn_optuna(x_array, y_array, feature_columns, batch_size=16, mlp_hi
         mlp_hidden = mlp_hidden_map[mlp_hidden_shape_name]
         dropout = 0.0 # trial.suggest_float("dropout", 0.0, 0.2, step=0.02)
 
-        
-
         # TCNN hyperparameters
         tcnn_hidden_shape_name = trial.suggest_categorical("tcnn_hidden_shape_name", list(tcnn_hidden_map.keys()))
         tcnn_hidden_shape = tcnn_hidden_map[tcnn_hidden_shape_name]
@@ -139,8 +137,9 @@ def run_pi_stcnn_optuna(x_array, y_array, feature_columns, batch_size=16, mlp_hi
             raise optuna.TrialPruned(f"Trial {trial.number} pruned due to excessive output length: {current_seq_len} > {target_len}")
         
         # Other hyperparameters
+        layer_norm = trial.suggest_categorical("layer_norm", [True, False])
         weight_decay = 0.0 # trial.suggest_float("weight_decay", 1e-8, 1e-3, log=True)
-        varience_min = 1.0
+        varience_min = 0.05
         lr = 0.001
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         criterion = l_freq_loss()
@@ -156,7 +155,7 @@ def run_pi_stcnn_optuna(x_array, y_array, feature_columns, batch_size=16, mlp_hi
         print(f"varience_min: {varience_min}")
         
         trial_loss = run_pi_stcnn_trial(trial, device, x_array, feature_columns, y_array, batch_size, mlp_hidden, tcnn_hidden,
-                        dropout, M, varience_min, lr, weight_decay, n_epochs, criterion, seed)
+                        dropout, M, varience_min, layer_norm, lr, weight_decay, n_epochs, criterion, seed)
 
         print(f"[optuna] Trial {trial.number}: completed with loss={trial_loss:.6f}")
         return trial_loss

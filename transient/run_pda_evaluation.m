@@ -1,4 +1,4 @@
-function run_pda_evaluation(filename_preds, filename_actuals, amplitude_correction_data, title_str, fs, bit_rate, Vhi)
+function pda_metrics = run_pda_evaluation(filename_preds, filename_actuals, amplitude_correction_data, title_str, fs, bit_rate, Vhi, show_plots)
     %{
     Runs Peak Distortion Analysis (PDA) on predicted and actual S-parameters.
     Identifies the worst-case channel and evaluates pass/fail against the UCIe mask.
@@ -11,6 +11,7 @@ function run_pda_evaluation(filename_preds, filename_actuals, amplitude_correcti
         fs (1,1) double = 2e12 % 0.5 ps resolution
         bit_rate (1,1) double = 32e9 % 32 GT/s UCIe Standard
         Vhi (1,1) double = 0.625
+        show_plots (1,1) logical = true
     end
 
     Ts = 1/fs;
@@ -93,6 +94,11 @@ function run_pda_evaluation(filename_preds, filename_actuals, amplitude_correcti
             results(port).EW_pred_adj = metrics_pred_adj.eye_width;
             results(port).Pass_pred_adj = metrics_pred_adj.passes_mask;
             
+            % Use adjusted metrics for error calculation
+            eh_errors(port) = metrics_pred_adj.eye_height - metrics_act.eye_height;
+            ew_errors(port) = metrics_pred_adj.eye_width - metrics_act.eye_width;
+            verdict_mismatches(port) = (metrics_pred_adj.passes_mask ~= metrics_act.passes_mask);
+
             % Print 3-way Comparison
             fprintf('\t           PREDICTED (RAW) | PREDICTED (ADJ) |   ACTUAL\n');
             fprintf('\tEye Height: %.4f V       |  %.4f V       |   %.4f V \n', metrics_pred_raw.eye_height, metrics_pred_adj.eye_height, metrics_act.eye_height);
@@ -100,6 +106,11 @@ function run_pda_evaluation(filename_preds, filename_actuals, amplitude_correcti
             fprintf('\tJitter:     %.2f ps       |  %.2f ps       |   %.2f ps \n', metrics_pred_raw.jitter*1e12, metrics_pred_adj.jitter*1e12, metrics_act.jitter*1e12);
             fprintf('\tUCIe Mask:  %-14s |  %-14s |   %-9s \n', string(metrics_pred_raw.passes_mask), string(metrics_pred_adj.passes_mask), string(metrics_act.passes_mask));
         else
+            % Use raw metrics for error calculation
+            eh_errors(port) = metrics_pred_raw.eye_height - metrics_act.eye_height;
+            ew_errors(port) = metrics_pred_raw.eye_width - metrics_act.eye_width;
+            verdict_mismatches(port) = (metrics_pred_raw.passes_mask ~= metrics_act.passes_mask);
+            
             % Print 2-way Comparison
             fprintf('\t           PREDICTED |   ACTUAL\n');
             fprintf('\tEye Height: %.4f V   |   %.4f V \n', metrics_pred_raw.eye_height, metrics_act.eye_height);
@@ -108,9 +119,11 @@ function run_pda_evaluation(filename_preds, filename_actuals, amplitude_correcti
             fprintf('\tUCIe Mask:  %-9s |   %-9s \n', string(metrics_pred_raw.passes_mask), string(metrics_act.passes_mask));
         end
         
-        plot_title_str = sprintf('%s - PDA Worst-Case Eye (Port %d)', title_str, port);
-        plot_pda_eye(Ts, s1_pred_raw, s0_pred_raw, metrics_pred_raw, s1_act, s0_act, metrics_act, ...
-            mask_height, mask_width, plot_title_str, s1_pred_adj, s0_pred_adj, metrics_pred_adj);
+        if show_plots
+            plot_title_str = sprintf('%s - PDA Worst-Case Eye (Port %d)', title_str, port);
+            plot_pda_eye(Ts, s1_pred_raw, s0_pred_raw, metrics_pred_raw, s1_act, s0_act, metrics_act, ...
+                mask_height, mask_width, plot_title_str, s1_pred_adj, s0_pred_adj, metrics_pred_adj);
+        end
         
         % Track Worst Channel (Based on Actual Eye Height)
         if metrics_act.eye_height < min_global_eye_height
@@ -133,4 +146,9 @@ function run_pda_evaluation(filename_preds, filename_actuals, amplitude_correcti
         fprintf('>> Predicted Verdict: %s | Actual Verdict: %s\n', ...
                 string(results(worst_port).Pass_pred_raw), string(results(worst_port).Pass_act));
     end
+
+    pda_metrics = struct();
+    pda_metrics.avg_eye_height_rmse = sqrt(mean(eh_errors.^2));
+    pda_metrics.avg_eye_width_rmse = sqrt(mean(ew_errors.^2));
+    pda_metrics.verdict_error_percentage = (sum(verdict_mismatches) / 9) * 100;
 end

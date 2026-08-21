@@ -1,4 +1,5 @@
-function run_transient_evaluation(filename_preds, filename_actuals, amplitude_correction_data, title, fs, t_step, rise_time, delay, Vhi, num_bits, bit_rate, precision)
+function [step_metrics, eye_metrics] = run_transient_evaluation(filename_preds, filename_actuals, amplitude_correction_data, title, fs, t_step, rise_time, delay, Vhi, ...
+        num_bits, bit_rate, precision, show_plots)
     arguments
         filename_preds (1,1) string
         filename_actuals (1,1) string
@@ -9,9 +10,10 @@ function run_transient_evaluation(filename_preds, filename_actuals, amplitude_co
         rise_time (1,1) double {mustBePositive} = 40e-12; % Default rise time is 40 ps
         delay (1,1) double {mustBeNonnegative} = 100e-12; % Default delay is 100 ps
         Vhi (1,1) double {mustBePositive} = 0.625; % Default high voltage is 0.625 V (middle of 0.4-0.85 V range)
-        num_bits (1,1) double {mustBeInteger, mustBePositive} = 1000; % Default number of bits is 1000
+        num_bits (1,1) double {mustBeInteger, mustBePositive} = 10000; % Default number of bits is 10000
         bit_rate (1,1) double {mustBePositive} = 10e9; % Default bit rate is 10 Gbps
         precision = -40; % Default precision is -40 dB  
+        show_plots (1,1) logical = true
     end
 
     % Load amplitude correction data if provided
@@ -194,12 +196,14 @@ function run_transient_evaluation(filename_preds, filename_actuals, amplitude_co
                 max_rmse_fext2 = rmse_fext2;
             end
         end
-        % Plot step responses
-        plot_step_response_pred_vs_act(t, V_in_step, V_out_main_step_pred, V_out_main_step_actual, ...
-            V_out_next1_step_pred, V_out_next1_step_actual, V_out_fext1_step_pred, V_out_fext1_step_actual, ...
-            V_out_next2_step_pred, V_out_next2_step_actual, V_out_fext2_step_pred, V_out_fext2_step_actual, ...
-            sprintf('%s - Step Response Prediction Vs Actual (Port %d)', title, port), V_out_main_step_pred_adj, ... 
-            V_out_target_val);
+        if show_plots
+            % Plot step responses
+            plot_step_response_pred_vs_act(t, V_in_step, V_out_main_step_pred, V_out_main_step_actual, ...
+                V_out_next1_step_pred, V_out_next1_step_actual, V_out_fext1_step_pred, V_out_fext1_step_actual, ...
+                V_out_next2_step_pred, V_out_next2_step_actual, V_out_fext2_step_pred, V_out_fext2_step_actual, ...
+                sprintf('%s - Step Response Prediction Vs Actual (Port %d)', title, port), V_out_main_step_pred_adj, ... 
+                V_out_target_val);
+        end
 
         % Evaluate PRBS responses
         V_out_main_prbs_pred = timeresp(fit_main_pred, V_in_prbs, Ts);
@@ -282,9 +286,11 @@ function run_transient_evaluation(filename_preds, filename_actuals, amplitude_co
         fprintf("[transient evaluation] \t- RMSE Eye Jitter: %.4f s\n", rmse_eye_jitter);
         fprintf("[transient evaluation] \t- RMSE Eye Amplitude: %.4f V\n", rmse_eye_amp);
     
-        t_eye = linspace(0, 2, samples_per_bit * 2);
-        plot_eye_pred_vs_act(t_eye, eye_matrix_Vout_pred, eye_matrix_Vout_actual, sprintf('%s - Eye Diagram Prediction Vs Actual (Port %d)', title, port), ...
-        eye_matrix_Vout_pred_adj);    
+        if show_plots
+            t_eye = linspace(0, 2, samples_per_bit * 2);
+            plot_eye_pred_vs_act(t_eye, eye_matrix_Vout_pred, eye_matrix_Vout_actual, sprintf('%s - Eye Diagram Prediction Vs Actual (Port %d)', title, port), ...
+            eye_matrix_Vout_pred_adj); 
+        end   
     end
 
     % Calculate average RMSE for each channel across all ports
@@ -314,4 +320,18 @@ function run_transient_evaluation(filename_preds, filename_actuals, amplitude_co
     min_rmse_rt, min_rmse_ft, min_rmse_eye_hight, min_rmse_eye_jitter, min_rmse_eye_amp);
     fprintf("[transient evaluation] Max RMSE Eye Metrics: Rise Time=%.4f s, Fall Time=%.4f s, Eye Height=%.4f V, Eye Jitter=%.4f s, Eye Amplitude=%.4f V\n", ...
     max_rmse_rt, max_rmse_ft, max_rmse_eye_hight, max_rmse_eye_jitter, max_rmse_eye_amp);
+
+    step_metrics = struct('avg_rmse_main', avg_rmse_main, 'avg_rmse_next1', avg_rmse_next1, 'avg_rmse_fext1', avg_rmse_fext1, ...
+        'avg_rmse_next2', avg_rmse_next2, 'avg_rmse_fext2', avg_rmse_fext2, ...
+        'min_rmse_main', min_rmse_main, 'min_rmse_next1', min_rmse_next1, 'min_rmse_fext1', min_rmse_fext1, ...
+        'min_rmse_next2', min_rmse_next2, 'min_rmse_fext2', min_rmse_fext2, ...
+        'max_rmse_main', max_rmse_main, 'max_rmse_next1', max_rmse_next1, 'max_rmse_fext1', max_rmse_fext1, ...
+        'max_rmse_next2', max_rmse_next2, 'max_rmse_fext2', max_rmse_fext2);
+
+    eye_metrics = struct('avg_rmse_rt', avg_rmse_rt, 'avg_rmse_ft', avg_rmse_ft, 'avg_rmse_eye_hight', avg_rmse_eye_hight, ...
+        'avg_rmse_eye_jitter', avg_rmse_eye_jitter, 'avg_rmse_eye_amp', avg_rmse_eye_amp, ...
+        'min_rmse_rt', min_rmse_rt, 'min_rmse_ft', min_rmse_ft, 'min_rmse_eye_hight', min_rmse_eye_hight, ...
+        'min_rmse_eye_jitter', min_rmse_eye_jitter, 'min_rmse_eye_amp', min_rmse_eye_amp, ...
+        'max_rmse_rt', max_rmse_rt, 'max_rmse_ft', max_rmse_ft, 'max_rmse_eye_hight', max_rmse_eye_hight, ...
+        'max_rmse_eye_jitter', max_rmse_eye_jitter, 'max_rmse_eye_amp', max_rmse_eye_amp);
 end
