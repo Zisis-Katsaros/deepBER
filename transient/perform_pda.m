@@ -48,14 +48,19 @@ function [s1, s0, metrics] = perform_pda(fit_main, xtalk_fits, Ts, bit_rate, Vhi
     
     % Extract Metrics
     metrics = struct();
-    metrics.eye_height = max(s1 - s0);
+    metrics.eye_height = max(0, max(s1 - s0)); % Ensure it doesn't go below 0
     metrics.eye_amp = max(y_cursor);
     
     % Calculate Eye Width and Jitter at V_ref
-    Vref = (max(s1) + min(s0)) / 2;
-    valid_width_indices = (s1 > Vref) & (s0 < Vref);
-    metrics.eye_width = sum(valid_width_indices) * Ts;
-    metrics.jitter = (1/bit_rate) - metrics.eye_width;
+    if metrics.eye_height > 0
+        Vref = (max(s1) + min(s0)) / 2;
+        valid_width_indices = (s1 > Vref) & (s0 < Vref);
+        metrics.eye_width = sum(valid_width_indices) * Ts;
+        metrics.jitter = (1/bit_rate) - metrics.eye_width;
+    else
+        metrics.eye_width = 0;
+        metrics.jitter = 1/bit_rate;
+    end
     
     % Check the UCIe Target Mask Rectangle
     win_samples = round(mask_width / Ts);

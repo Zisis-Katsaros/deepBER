@@ -1,4 +1,4 @@
-function pda_metrics = run_pda_evaluation(filename_preds, filename_actuals, amplitude_correction_data, title_str, fs, bit_rate, Vhi, show_plots)
+function pda_metrics = run_pda_evaluation(filename_preds, filename_actuals, amplitude_correction_data, title_str, show_plots, single_channel, fs, bit_rate, Vhi)
     %{
     Runs Peak Distortion Analysis (PDA) on predicted and actual S-parameters.
     Identifies the worst-case channel and evaluates pass/fail against the UCIe mask.
@@ -8,10 +8,11 @@ function pda_metrics = run_pda_evaluation(filename_preds, filename_actuals, ampl
         filename_actuals (1,1) string
         amplitude_correction_data = []
         title_str (1,1) string = "PDA Evaluation"
-        fs (1,1) double = 2e12 % 0.5 ps resolution
-        bit_rate (1,1) double = 32e9 % 32 GT/s UCIe Standard
-        Vhi (1,1) double = 0.625
         show_plots (1,1) logical = true
+        single_channel (1,1) logical = false
+        fs (1,1) double = 2e12 % 0.5 ps resolution
+        bit_rate (1,1) double = 64e9 % 32 GT/s UCIe Standard
+        Vhi (1,1) double = 0.625
     end
 
     Ts = 1/fs;
@@ -32,7 +33,23 @@ function pda_metrics = run_pda_evaluation(filename_preds, filename_actuals, ampl
                      'EH_pred_adj', {}, 'EW_pred_adj', {}, 'Pass_pred_adj', {}, ...
                      'EH_act', {}, 'EW_act', {}, 'Pass_act', {});
 
-    for port = 1:9
+    % Preallocate arrays with NaN to support correct averaging (especially for single_channel)
+    num_ports = 9;
+    eh_errors = nan(1, num_ports);
+    ew_errors = nan(1, num_ports);
+    verdict_mismatches = nan(1, num_ports);
+    eh_mapes = nan(1, num_ports);
+    ew_mapes = nan(1, num_ports);
+
+    if single_channel
+        start_port = 5;
+        end_port = 5;
+    else
+        start_port = 1;
+        end_port = 9;
+    end
+    
+    for port = start_port:end_port
         fprintf('\n[PDA] Evaluating Port %d...\n', port);
         
         % Map ports (Main, NEXT, FEXT)
@@ -80,6 +97,10 @@ function pda_metrics = run_pda_evaluation(filename_preds, filename_actuals, ampl
             s1_pred_adj = []; s0_pred_adj = []; metrics_pred_adj = [];
         end
 
+        % Safe MAPE Calculation for Raw
+        eh_mape_raw = safe_mape(metrics_act.eye_height, metrics_pred_raw.eye_height, 1e-4);
+        ew_mape_raw = safe_mape(metrics_act.eye_width, metrics_pred_raw.eye_width, 1e-15);
+
         % Store metrics
         results(port).EH_act = metrics_act.eye_height;
         results(port).EW_act = metrics_act.eye_width;
@@ -90,6 +111,10 @@ function pda_metrics = run_pda_evaluation(filename_preds, filename_actuals, ampl
         results(port).Pass_pred_raw = metrics_pred_raw.passes_mask;
         
         if ~isempty(metrics_pred_adj)
+            % Safe MAPE Calculation for Adjusted
+            eh_mape_adj = safe_mape(metrics_act.eye_height, metrics_pred_adj.eye_height, 1e-4);
+            ew_mape_adj = safe_mape(metrics_act.eye_width, metrics_pred_adj.eye_width, 1e-15);
+
             results(port).EH_pred_adj = metrics_pred_adj.eye_height;
             results(port).EW_pred_adj = metrics_pred_adj.eye_width;
             results(port).Pass_pred_adj = metrics_pred_adj.passes_mask;
@@ -98,6 +123,8 @@ function pda_metrics = run_pda_evaluation(filename_preds, filename_actuals, ampl
             eh_errors(port) = metrics_pred_adj.eye_height - metrics_act.eye_height;
             ew_errors(port) = metrics_pred_adj.eye_width - metrics_act.eye_width;
             verdict_mismatches(port) = (metrics_pred_adj.passes_mask ~= metrics_act.passes_mask);
+            eh_mapes(port) = eh_mape_adj;
+            ew_mapes(port) = ew_mape_adj;
 
             % Print 3-way Comparison
             fprintf('\t           PREDICTED (RAW) | PREDICTED (ADJ) |   ACTUAL\n');
@@ -105,11 +132,15 @@ function pda_metrics = run_pda_evaluation(filename_preds, filename_actuals, ampl
             fprintf('\tEye Width:  %.2f ps       |  %.2f ps       |   %.2f ps \n', metrics_pred_raw.eye_width*1e12, metrics_pred_adj.eye_width*1e12, metrics_act.eye_width*1e12);
             fprintf('\tJitter:     %.2f ps       |  %.2f ps       |   %.2f ps \n', metrics_pred_raw.jitter*1e12, metrics_pred_adj.jitter*1e12, metrics_act.jitter*1e12);
             fprintf('\tUCIe Mask:  %-14s |  %-14s |   %-9s \n', string(metrics_pred_raw.passes_mask), string(metrics_pred_adj.passes_mask), string(metrics_act.passes_mask));
+            fprintf('\tEH MAPE:    %6.2f %%       |  %6.2f %%       |     - \n', eh_mape_raw, eh_mape_adj);
+            fprintf('\tEW MAPE:    %6.2f %%       |  %6.2f %%       |     - \n', ew_mape_raw, ew_mape_adj);
         else
             % Use raw metrics for error calculation
             eh_errors(port) = metrics_pred_raw.eye_height - metrics_act.eye_height;
             ew_errors(port) = metrics_pred_raw.eye_width - metrics_act.eye_width;
             verdict_mismatches(port) = (metrics_pred_raw.passes_mask ~= metrics_act.passes_mask);
+            eh_mapes(port) = eh_mape_raw;
+            ew_mapes(port) = ew_mape_raw;
             
             % Print 2-way Comparison
             fprintf('\t           PREDICTED |   ACTUAL\n');
@@ -117,6 +148,8 @@ function pda_metrics = run_pda_evaluation(filename_preds, filename_actuals, ampl
             fprintf('\tEye Width:  %.2f ps   |   %.2f ps \n', metrics_pred_raw.eye_width*1e12, metrics_act.eye_width*1e12);
             fprintf('\tJitter:     %.2f ps   |   %.2f ps \n', metrics_pred_raw.jitter*1e12, metrics_act.jitter*1e12);
             fprintf('\tUCIe Mask:  %-9s |   %-9s \n', string(metrics_pred_raw.passes_mask), string(metrics_act.passes_mask));
+            fprintf('\tEH MAPE:    %6.2f %%  |     - \n', eh_mape_raw);
+            fprintf('\tEW MAPE:    %6.2f %%  |     - \n', ew_mape_raw);
         end
         
         if show_plots
@@ -131,6 +164,14 @@ function pda_metrics = run_pda_evaluation(filename_preds, filename_actuals, ampl
             worst_port = port;
         end
     end
+
+    % Calculate final metrics gracefully skipping NaNs 
+    pda_metrics = struct();
+    pda_metrics.avg_eye_height_rmse = sqrt(mean(eh_errors.^2, 'omitnan'));
+    pda_metrics.avg_eye_width_rmse = sqrt(mean(ew_errors.^2, 'omitnan'));
+    pda_metrics.verdict_error_percentage = mean(double(verdict_mismatches), 'omitnan') * 100;
+    pda_metrics.avg_eh_mape = mean(eh_mapes, 'omitnan');
+    pda_metrics.avg_ew_mape = mean(ew_mapes, 'omitnan');
 
     fprintf('\n======================================================\n');
     fprintf('               WORST CHANNEL ANALYSIS\n');
@@ -147,8 +188,12 @@ function pda_metrics = run_pda_evaluation(filename_preds, filename_actuals, ampl
                 string(results(worst_port).Pass_pred_raw), string(results(worst_port).Pass_act));
     end
 
-    pda_metrics = struct();
-    pda_metrics.avg_eye_height_rmse = sqrt(mean(eh_errors.^2));
-    pda_metrics.avg_eye_width_rmse = sqrt(mean(ew_errors.^2));
-    pda_metrics.verdict_error_percentage = (sum(verdict_mismatches) / 9) * 100;
+    fprintf('\n======================================================\n');
+    fprintf('                 OVERALL PDA METRICS\n');
+    fprintf('======================================================\n');
+    fprintf('>> Average Eye Height RMSE: %.4f V\n', pda_metrics.avg_eye_height_rmse);
+    fprintf('>> Average Eye Width RMSE:  %.4e s\n', pda_metrics.avg_eye_width_rmse);
+    fprintf('>> Average Eye Height MAPE: %.2f%%\n', pda_metrics.avg_eh_mape);
+    fprintf('>> Average Eye Width MAPE:  %.2f%%\n', pda_metrics.avg_ew_mape);
+    fprintf('>> Verdict Error Rate:      %.2f%%\n', pda_metrics.verdict_error_percentage);
 end
