@@ -513,42 +513,56 @@ def create_param_dataloader(x_array: NDArray, y_array: NDArray, batch_size: int 
 		y_scale_params = (0, 1)
 
 	if weight_type is None:
-		y_weights = np.ones(y_array[train_idx].shape[1], dtype=np.float32)
+        # A scalar tensor broadcasts perfectly to any shape without dimension errors
+		y_weights = np.array(1.0, dtype=np.float32)
+
 	elif weight_type == "balanced":
-		# Extract weights for balancing loss function
+        # Extract weights for balancing loss function across S-parameter elements
 		y_train_abs = np.abs(y_array[train_idx])
 
 		if y_train_abs.ndim == 3:
 			peak_mags = np.max(y_train_abs, axis=(0,2))
+			y_weights = 1.0 / (peak_mags + 1e-8)
+			y_weights = y_weights / np.mean(y_weights) # normalize
+            # Reshape to (1, num_elements, 1) for proper broadcasting against (N, E, F)
+			y_weights = y_weights.reshape(1, -1, 1)
+
 		elif y_train_abs.ndim == 2:
 			peak_mags = np.max(y_train_abs, axis=0)
+			y_weights = 1.0 / (peak_mags + 1e-8)
+			y_weights = y_weights / np.mean(y_weights) # normalize
+			y_weights = y_weights.reshape(1, -1)
 		else:
 			peak_mags = np.max(y_train_abs)
+			y_weights = 1.0 / (peak_mags + 1e-8)
+			y_weights = np.array(y_weights / np.mean(y_weights))
 
-		y_weights = 1.0 / (peak_mags + 1e-8)
-		y_weights = y_weights / np.mean(y_weights) # normalize
 	elif weight_type == "low_freq":
+        # Extract weights for balancing loss function across frequency points
 		num_freqs = y_array.shape[-1]
 		freqs = np.linspace(0, 1, num_freqs)
 		y_weights = np.ones(num_freqs, dtype=np.float32)
 
-		# Prioritize lower 6.667% of frequencies
+        # Prioritize lower 6.667% of frequencies
 		y_weights[freqs <= 0.06667] = 50.0
 
-		# Linearly reduce weight for 6.667% to 16.667% and after that W=1
+        # Linearly reduce weight for 6.667% to 16.667% and after that W=1
 		transition_mask = (freqs > 0.06667) & (freqs < 0.16667)
 		fraction = (freqs[transition_mask] - 0.06667) / (0.16667 - 0.06667)
 		y_weights[transition_mask] = 50.0 - (49.0 * fraction) 
 
-	# Convert to Tensor
+		if y_array.ndim == 3:
+            # Reshape to (1, 1, num_freqs) for proper broadcasting against (N, E, F)
+			y_weights = y_weights.reshape(1, 1, -1)
+		elif y_array.ndim == 2:
+			y_weights = y_weights.reshape(1, -1)
+
+    # Convert to Tensor
 	y_weights = torch.from_numpy(y_weights).float()
-
-	# Ensure correct shape for broadcasting
-	if y_weights.ndim == 1:
-		y_weights = y_weights.view(1, -1)
-	elif y_weights.ndim == 0:
-		y_weights = y_weights.view(1, 1)
-
+    
+    # Note: The old generic "y_weights.view(1, -1)" block was removed here. 
+    # The arrays are now correctly dimensioned prior to tensor conversion.
+	
 	if pki_array is not None:
 		train_set = TensorDataset(
 			torch.from_numpy(x_array[train_idx]), 

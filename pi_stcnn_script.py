@@ -52,7 +52,7 @@ dataloader, x_scale_params, y_scale_params, y_weights, *_ = create_param_dataloa
                     standard_scale=(True, False),  # (scale_features, scale_labels)
                     split_method="lhs",
                     pki_array=pki_array if pki else None,
-                    weight_type="low_freq"
+                    weight_type="balanced"
                     )
 
 _, num_channels_times2, num_freqs = y_array.shape
@@ -79,7 +79,7 @@ predictor = PI_STCNN(
     layer_norm=True,
 ).to(device)
 
-criterion = l_freq_loss() # l_freq_loss(weight=y_weights).to(device)
+criterion = l_freq_loss(weight=y_weights).to(device)
 learning_rate = 0.001
 weight_decay = 0.0 # 5.1635e-05
 optimizer = torch.optim.Adam(predictor.parameters(), lr=learning_rate, weight_decay=weight_decay)
