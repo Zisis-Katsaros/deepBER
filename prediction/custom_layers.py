@@ -88,9 +88,6 @@ class CausalityEnforcementLayer(nn.Module):
         return S_real, S_imag
     
 
-import torch
-import torch.nn as nn
-
 class PassivityEnforcementLayer(nn.Module):
     def __init__(self, num_ports, passivity_margin=1.03, approx=False):
         """
