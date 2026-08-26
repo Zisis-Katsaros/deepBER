@@ -88,8 +88,11 @@ class CausalityEnforcementLayer(nn.Module):
         return S_real, S_imag
     
 
+import torch
+import torch.nn as nn
+
 class PassivityEnforcementLayer(nn.Module):
-    def __init__(self, num_ports, passivity_margin=1.03):
+    def __init__(self, num_ports, passivity_margin=1.03, approx=False):
         """
         # PassivityEnforcementLayer
 
@@ -98,10 +101,13 @@ class PassivityEnforcementLayer(nn.Module):
         ## Args:
         - num_ports: Number of ports
         - passivity_margin: Margin for passivity enforcement (>1)
+        - approx: If True, uses the trace-based upper bound approximation. 
+                  If False, computes exact SVD via torch.linalg.svdvals.
         """
         super(PassivityEnforcementLayer, self).__init__()
         self.P = num_ports
         self.passivity_margin = passivity_margin
+        self.approx = approx
 
     def reconstruct_symmetric_mat(self, S_real, S_imag):
         Nd, Dy, F = S_real.shape
@@ -122,29 +128,41 @@ class PassivityEnforcementLayer(nn.Module):
         # Reshape into matrix form
         mat_real, mat_imag = self.reconstruct_symmetric_mat(S_real, S_imag)
 
-        # Create isomorphic matrix for complex operations using real tensors
-        # SP = [[Re, Im], 
-        #       [-Im, Re]]
-        row1 = torch.cat([mat_real, mat_imag], dim=2)
-        row2 = torch.cat([-mat_imag, mat_real], dim=2)
-        Sp = torch.cat([row1, row2], dim=1)  # Shape: (Nd, 2P, 2P, F)
+        if self.approx:
+            # Create isomorphic matrix for complex operations using real tensors
+            # SP = [[Re, Im], 
+            #       [-Im, Re]]
+            row1 = torch.cat([mat_real, mat_imag], dim=2)
+            row2 = torch.cat([-mat_imag, mat_real], dim=2)
+            Sp = torch.cat([row1, row2], dim=1)  # Shape: (Nd, 2P, 2P, F)
 
-        # Rearrange to compute batched matrix operations 
-        Sp = Sp.permute(0, 3, 1, 2)  # Shape: (Nd, F, 2P, 2P)
-        Sp_T = Sp.transpose(-1, -2)  # Transpose for S^H
+            # Rearrange to compute batched matrix operations 
+            Sp = Sp.permute(0, 3, 1, 2)  # Shape: (Nd, F, 2P, 2P)
+            Sp_T = Sp.transpose(-1, -2)  # Transpose for S^H
 
-        # Calculate upper bound max singular value
-        C_f = torch.sum(Sp ** 2, dim=(2,3)) / 2 # /2 due to isomorphic representation
+            # Calculate upper bound max singular value
+            C_f = torch.sum(Sp ** 2, dim=(2,3)) / 2 # /2 due to isomorphic representation
 
-        # D calculated via Hadamard product
-        SH_S = torch.matmul(Sp_T, Sp)
-        D_f = torch.sum(SH_S * SH_S, dim=(2,3)) / 2 
+            # D calculated via Hadamard product
+            SH_S = torch.matmul(Sp_T, Sp)
+            D_f = torch.sum(SH_S * SH_S, dim=(2,3)) / 2 
 
-        # Calculate sigma_1 upper bound
-        term1 = C_f / self.P
-        term2 = ((self.P - 1) / self.P) * (D_f - (C_f ** 2) / self.P)
-        term2 = torch.clamp(term2, min=0.0)  # Prevent NaNs from numerical instability
-        sigma_bound = torch.sqrt(term1 + torch.sqrt(term2))
+            # Calculate sigma_1 upper bound
+            term1 = C_f / self.P
+            term2 = ((self.P - 1) / self.P) * (D_f - (C_f ** 2) / self.P)
+            term2 = torch.clamp(term2, min=0.0)  # Prevent NaNs from numerical instability
+            sigma_bound = torch.sqrt(term1 + torch.sqrt(term2))
+        
+        else:
+            # Exact SVD computation using complex tensors
+            # Permute to (Nd, F, P, P) for batched svdvals
+            S_comp = torch.complex(mat_real, mat_imag).permute(0, 3, 1, 2)
+            
+            # svdvals returns singular values in descending order
+            svd_vals = torch.linalg.svdvals(S_comp)
+            
+            # The maximum singular value is the first element at index 0
+            sigma_bound = svd_vals[..., 0] 
 
         # Enforce passivity using minimum-phase filter: 1/sigma_bound if > passivity_margin, else 1
         mag_filter = torch.where(sigma_bound > self.passivity_margin, 1.0 / sigma_bound, torch.ones_like(sigma_bound))
