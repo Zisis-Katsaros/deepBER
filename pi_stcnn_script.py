@@ -44,7 +44,7 @@ storage_url = f"sqlite:///{db_path}"
 run_pi_stcnn_optuna(x_array, y_array, feature_columns, n_trials=400, n_epochs=850, storage=storage_url)
 
 """
-dataloader, x_scale_params, y_scale_params, y_weights = create_param_dataloader(
+dataloader, x_scale_params, y_scale_params, y_weights, *_ = create_param_dataloader(
                     x_array,
                     y_array,
                     batch_size=16,
@@ -83,7 +83,7 @@ criterion = l_freq_loss() # l_freq_loss(weight=y_weights).to(device)
 learning_rate = 0.001
 weight_decay = 0.0 # 5.1635e-05
 optimizer = torch.optim.Adam(predictor.parameters(), lr=learning_rate, weight_decay=weight_decay)
-scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=150) # torch.optim.lr_scheduler.StepLR(optimizer, step_size=500, gamma=0.5) 
+scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=100) # torch.optim.lr_scheduler.StepLR(optimizer, step_size=500, gamma=0.5) 
 
 test_preds, test_labels = test_predictor_configuration_pistcnn(
     title=f"S-Parameters Prediction with PI-STCNN",
