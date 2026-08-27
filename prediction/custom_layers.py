@@ -4,7 +4,7 @@ import torch.fft
 import math
 
 class GaussianSmoothingLayer(nn.Module):
-    def __init__(self, channels, kernel_size=7, varience_min=None):
+    def __init__(self, channels, kernel_size=11, varience_min=None):
         """
         # GaussianSmoothingLayer
 

@@ -5,7 +5,7 @@ import optuna
 from prediction.l_freq_loss import l_freq_loss
 from prediction.param_pred_optuna_helpers import *
 
-def run_pi_stcnn_optuna(x_array, y_array, feature_columns, batch_size=16, mlp_hidden_map=None, tcnn_hidden_map=None, n_trials=20, n_epochs=550, seed=42,
+def run_pi_stcnn_optuna(x_array, y_array, feature_columns, batch_size=16, mlp_hidden_map=None, tcnn_hidden_map=None, fixed_ks_s=True, n_trials=20, n_epochs=550, seed=42,
                         study_name="pi_stcnn_optuna", storage=None, timeout_seconds=5.5*3600):
 
     set_seed(seed)
@@ -26,7 +26,8 @@ def run_pi_stcnn_optuna(x_array, y_array, feature_columns, batch_size=16, mlp_hi
             "funnel_short_large": [128, 256, 512],
             "funnel_short_xl": [256, 512, 1024],
             "funnel_long_small": [32, 64, 128, 256],
-            "funnel_long_large": [64, 128, 256, 512]
+            "funnel_long_large": [64, 128, 256, 512],
+            "funnel_long_xl": [128, 256, 512, 1024],
         }
 
         
@@ -99,7 +100,6 @@ def run_pi_stcnn_optuna(x_array, y_array, feature_columns, batch_size=16, mlp_hi
         tcnn_n_layers = len(tcnn_hidden_shape)
 
         tcnn_hidden = []
-        tcnn_hidden.append([tcnn_hidden_shape[0], 0, 0])
 
         current_seq_len = 10 # Corresponds to self.initial_seq_len
         padding = 1
@@ -107,27 +107,52 @@ def run_pi_stcnn_optuna(x_array, y_array, feature_columns, batch_size=16, mlp_hi
         N = y_array.shape[2]
         M = 1.5 # trial.suggest_categorical("M", [1.5, 2.0])
         target_len = int(N * M + 1)
-        for i in range(1, tcnn_n_layers):
-            out_channels = tcnn_hidden_shape[i]
-
-            if i==0:
-                stride = 1
-                kernel_size = trial.suggest_int(f"tcnn_l{i}_kernel_size", 8, 32, step=4)
-            elif i == tcnn_n_layers - 1:
-                stride = trial.suggest_int(f"tcnn_l{i}_stride", 1, 3)
-                if stride == 1:
-                    kernel_size = trial.suggest_categorical(f"tcnn_l{i}_kernel_size_s1", [2, 3, 4])
-                else:
-                    multiplier = trial.suggest_int(f"tcnn_l{i}_c", 1, 2)
-                    kernel_size = stride * multiplier
+        if fixed_ks_s:
+            # Fixed kernel sizes and strides for specific layer counts
+            if tcnn_n_layers == 5:
+                fixed_strides = [1, 4, 3, 2, 2]
+                fixed_kernels = [16, 8, 6, 4, 4]
+            elif tcnn_n_layers == 6:
+                fixed_strides = [1, 2, 3, 2, 2, 2]
+                fixed_kernels = [16, 4, 6, 4, 4, 4]
+            elif tcnn_n_layers == 7:
+                fixed_strides = [1, 2, 2, 2, 2, 2, 2]
+                fixed_kernels = [16, 4, 4, 4, 4, 4, 4]
             else:
-                stride = trial.suggest_int(f"tcnn_l{i}_stride", 2, 4)
-                multiplier = trial.suggest_int(f"tcnn_l{i}_c", 1, 3)
-                kernel_size = stride * multiplier
+                raise ValueError(f"Fixed configurations not defined for {tcnn_n_layers} layers.")
 
-            # L_out = (L_in - 1) * stride - 2 * padding + kernel_size to calculate output length
-            current_seq_len = (current_seq_len - 1) * stride - 2 * padding + kernel_size
-            tcnn_hidden.append([out_channels, kernel_size, stride])
+            # Build TCNN hidden
+            for i in range(tcnn_n_layers):
+                out_channels = tcnn_hidden_shape[i]
+                stride = fixed_strides[i]
+                kernel_size = fixed_kernels[i]
+
+                # Calculate Transposed 1D Convolution output length
+                current_seq_len = (current_seq_len - 1) * stride - 2 * padding + kernel_size
+                tcnn_hidden.append([out_channels, kernel_size, stride])
+        else:
+            # Build TCNN hidden with variable kernel sizes and strides
+            for i in range(1, tcnn_n_layers):
+                out_channels = tcnn_hidden_shape[i]
+
+                if i==0:
+                    stride = 1
+                    kernel_size = trial.suggest_int(f"tcnn_l{i}_kernel_size", 8, 32, step=4)
+                elif i == tcnn_n_layers - 1:
+                    stride = trial.suggest_int(f"tcnn_l{i}_stride", 1, 3)
+                    if stride == 1:
+                        kernel_size = trial.suggest_categorical(f"tcnn_l{i}_kernel_size_s1", [2, 3, 4])
+                    else:
+                        multiplier = trial.suggest_int(f"tcnn_l{i}_c", 1, 2)
+                        kernel_size = stride * multiplier
+                else:
+                    stride = trial.suggest_int(f"tcnn_l{i}_stride", 2, 4)
+                    multiplier = trial.suggest_int(f"tcnn_l{i}_c", 1, 3)
+                    kernel_size = stride * multiplier
+
+                # L_out = (L_in - 1) * stride - 2 * padding + kernel_size to calculate output length
+                current_seq_len = (current_seq_len - 1) * stride - 2 * padding + kernel_size
+                tcnn_hidden.append([out_channels, kernel_size, stride])
 
         # Prune if network generates fewer points than needed
         if current_seq_len < target_len:
@@ -139,7 +164,7 @@ def run_pi_stcnn_optuna(x_array, y_array, feature_columns, batch_size=16, mlp_hi
         # Other hyperparameters
         layer_norm = trial.suggest_categorical("layer_norm", [True, False])
         weight_decay = 0.0 # trial.suggest_float("weight_decay", 1e-8, 1e-3, log=True)
-        varience_min = 0.05
+        varience_min = 0.1
         lr = 0.001
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         criterion = l_freq_loss()
