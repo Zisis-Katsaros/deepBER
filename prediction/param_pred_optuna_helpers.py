@@ -354,7 +354,7 @@ def run_pi_stcnn_trial(trial, device, x_array, feature_columns, y_array, batch_s
         ).to(device)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
-    scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=150)
+    scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=50)
 
     phase = 2
     patience = 300

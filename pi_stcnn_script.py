@@ -37,11 +37,11 @@ if pki:
 else:
     x_array, feature_columns, y_array = organize_dataset_for_pi_stcnn(x_array, s_dict, feature_columns)
 
-"""
-db_path = "out_files/pi_stcnn/pi_stcnn_study3.db"
+# """
+db_path = "out_files/pi_stcnn/pi_stcnn_study4.db"
 storage_url = f"sqlite:///{db_path}"
 # eval_pistcnn_study(storage_url)
-run_pi_stcnn_optuna(x_array, y_array, feature_columns, n_trials=400, n_epochs=850, storage=storage_url)
+run_pi_stcnn_optuna(x_array, y_array, feature_columns, n_trials=300, n_epochs=400, storage=storage_url)
 
 """
 dataloader, x_scale_params, y_scale_params, y_weights, *_ = create_param_dataloader(
@@ -122,4 +122,4 @@ export_files_for_transient(
     freq_arrays_per_geom=freq_arrays_per_geom,
     save_dir="out_files/pi_stcnn/touchstone_files"
 )
-# """
+"""
