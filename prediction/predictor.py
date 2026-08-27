@@ -197,7 +197,7 @@ class PI_STCNN(nn.Module):
         self.tcnn = nn.ModuleList()
         in_channels = tcnn_layer_params[0][0]
 
-        for out_channels, kernel_size, stride in tcnn_layer_params[1:-1]:
+        for out_channels, kernel_size, stride in tcnn_layer_params[:-1]:
             self.tcnn.append(nn.ConvTranspose1d(in_channels, out_channels, kernel_size=kernel_size, stride=stride, padding=1))
             if layer_norm:
                 self.tcnn.append(nn.GroupNorm(num_groups=1, num_channels=out_channels))
