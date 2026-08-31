@@ -21,7 +21,7 @@ def s2generalized_abcd(s, z0=50.0):
 
     I = np.eye(k)
 
-    s21_inv = np.linalg.pinv(s21) 
+    s21_inv = np.linalg.inv(s21) 
 
     # Calculation of ABCD matrices
 
@@ -31,6 +31,47 @@ def s2generalized_abcd(s, z0=50.0):
     D = 0.5 * ((I - s11) @ s21_inv @ (I + s22) + s12)
 
     return A, B, C, D
+
+
+def abcd2s(A, B, C, D, z0=50.0):
+    """
+    Calculates the S-parameter matrix from generalized ABCD block matrices.
+    
+    Args:
+    - A, B, C, D: Sub-matrices of the ABCD (transmission) matrix.
+                  Expected shape: (num_samples, k, k) or (k, k).
+    - z0: Standard uniform reference impedance.
+    
+    Returns:
+    - S: Full assembled S-parameter matrix. 
+         Output shape: (num_samples, 2k, 2k) or (2k, 2k).
+    """
+    # Normalize B and C by the reference impedance
+    Bn = B / z0
+    Cn = C * z0
+    
+    # Calculate the common inverse term E = (A + B_n + C_n + D)^-1
+    # We use np.linalg.inv which naturally handles batched 3D arrays
+    sum_ABCD = A + Bn + Cn + D
+    E = np.linalg.inv(sum_ABCD)
+    
+    # Calculate the 4 S-parameter sub-matrices using multi-port generalized formulas
+    # Note: The order of matrix multiplication (@) is critical here.
+    S11 = (A + Bn - Cn - D) @ E
+    S21 = 2 * E
+    S22 = E @ (-A + Bn - Cn + D)
+    S12 = (A - Bn) - (A + Bn) @ E @ (A - Bn + Cn - D)
+    
+    # Assemble the full S-matrix
+    # Concatenate horizontally (axis=-1) to form [S11 S12] and [S21 S22]
+    row1 = np.concatenate((S11, S12), axis=-1)
+    row2 = np.concatenate((S21, S22), axis=-1)
+    
+    # Concatenate vertically (axis=-2) to form the complete 18x18 S-matrix
+    S = np.concatenate((row1, row2), axis=-2)
+    
+    return S
+
 
 def trans_param_dict2mat(data_dict):
     first_key = list(data_dict.keys())[0]
@@ -248,6 +289,35 @@ def s_param_imag_part_hilbert_construction(s: np.ndarray, num_og_freq: int, K: i
 
     return s_cell_real + 1j * s_cell_imag
 
+
+def combine_shielded_and_unshielded_portions(s_dict_shielded, s_dict_unshielded):
+    # Convert the S-parameter dictionaries to matrices
+    s_mat_shielded = trans_param_dict2mat(s_dict_shielded)
+    s_mat_unshielded = trans_param_dict2mat(s_dict_unshielded)
+
+    # Convert the S-parameter matrices to ABCD matrices
+    A_shielded, B_shielded, C_shielded, D_shielded = s2generalized_abcd(s_mat_shielded)
+    A_unshielded, B_unshielded, C_unshielded, D_unshielded = s2generalized_abcd(s_mat_unshielded)
+
+    # Create the transmission matrices
+    T_shielded_row1 = np.concatenate((A_shielded, B_shielded), axis=-1)
+    T_shielded_row2 = np.concatenate((C_shielded, D_shielded), axis=-1)
+    T_shielded = np.concatenate((T_shielded_row1, T_shielded_row2), axis=-2)
+
+    T_unshielded_row1 = np.concatenate((A_unshielded, B_unshielded), axis=-1)
+    T_unshielded_row2 = np.concatenate((C_unshielded, D_unshielded), axis=-1)
+    T_unshielded = np.concatenate((T_unshielded_row1, T_unshielded_row2), axis=-2)
+
+    # Calculate the total transmission matrix: Unshielded - Shielded - Unshielded
+    T_total = np.matmul(T_unshielded, T_shielded)
+    T_total = np.matmul(T_total, T_unshielded)
+
+    # Convert the total transmission matrix back to S-parameters
+    s_mat_total = abcd2s(T_total[:, :9, :9], T_total[:, :9, 9:], T_total[:, 9:, :9], T_total[:, 9:, 9:])
+
+    # Convert the total S-parameter matrix back to a dictionary
+    s_dict_total = trans_param_mat2dict(s_mat_total, "S")
+    return s_dict_total
     
 
 
