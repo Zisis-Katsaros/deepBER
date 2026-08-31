@@ -77,7 +77,7 @@ def create_arrays(csv_names, target_columns, thresholds, test_names, manipulate_
 
 def create_param_prediction_arrays(csv_names: list[str], expected_ports:int = 18, target_columns: list[str] = [], 
 								   manipulate_features: bool = True, sample_percentage: float = 1.0, seed: int = 42, 
-								   sampling_method: Literal["random", "lhs"] = "random", subfolder: str = None):
+								   sampling_method: Literal["random", "lhs"] = "random", subfolder: str = None, return_t_dicts: bool = False):
 	"""
 	# create_param_prediction_arrays()
 	## Creates arrays features and labels arrays from given csv file(s)
@@ -135,41 +135,47 @@ def create_param_prediction_arrays(csv_names: list[str], expected_ports:int = 18
 			# Move to next column
 			col_idx +=  2
 
-	# Calculate ABCD parameters from S-matrix
-	A, B, C, D = s2generalized_abcd(s_matrices)
+	if return_t_dicts:
+		# Calculate ABCD parameters from S-matrix
+		A, B, C, D = s2generalized_abcd(s_matrices)
 
-	# Create ABCD dictionaries
-	a_dict = {}
-	b_dict = {}
-	c_dict = {}
-	d_dict = {}
-	col_idx = 0
-	for submatrices, dict, name in zip([A,B,C,D], [a_dict, b_dict, c_dict, d_dict], ["A", "B", "C", "D"]):
-		# Dictionary entry with all elements of the ABCD matrices together 
-		MATflat = submatrices.reshape(num_of_samples, submatrices.shape[1]**2)
+		# Create ABCD dictionaries
+		a_dict = {}
+		b_dict = {}
+		c_dict = {}
+		d_dict = {}
+		col_idx = 0
+		for submatrices, dict, name in zip([A,B,C,D], [a_dict, b_dict, c_dict, d_dict], ["A", "B", "C", "D"]):
+			# Dictionary entry with all elements of the ABCD matrices together 
+			MATflat = submatrices.reshape(num_of_samples, submatrices.shape[1]**2)
 
-		all_array = np.empty((num_of_samples, 2*submatrices.shape[1]**2))
-		all_array[:, 0::2] = MATflat.real
-		all_array[:, 1::2] = MATflat.imag
+			all_array = np.empty((num_of_samples, 2*submatrices.shape[1]**2))
+			all_array[:, 0::2] = MATflat.real
+			all_array[:, 1::2] = MATflat.imag
 
-		dict["all"] = all_array
+			dict["all"] = all_array
 
-		# Dictionary entries for each element of the ABCD matrices
-		for i in range(submatrices.shape[1]):
-			for j in range(submatrices.shape[2]):
-				MATij = submatrices[:, i, j]
+			# Dictionary entries for each element of the ABCD matrices
+			for i in range(submatrices.shape[1]):
+				for j in range(submatrices.shape[2]):
+					MATij = submatrices[:, i, j]
 
-				key = f"{name}{i+1}{j+1}"
-				dict[key] = MATij	
+					key = f"{name}{i+1}{j+1}"
+					dict[key] = MATij	
 
-	x_array, selected_row_indices = split_dataset(x_array, sample_percentage=sample_percentage, sampling_method=sampling_method, seed=seed)
+	if sample_percentage < 1.0:
+		x_array, selected_row_indices = split_dataset(x_array, sample_percentage=sample_percentage, sampling_method=sampling_method, seed=seed)
 
-	for dict in [s_dict, a_dict, b_dict, c_dict, d_dict]:
-		for key in dict.keys():
-			dict[key] = dict[key][selected_row_indices]
+		dicts = [s_dict, a_dict, b_dict, c_dict, d_dict] if return_t_dicts else [s_dict]
+		for dict in dicts:
+			for key in dict.keys():
+				dict[key] = dict[key][selected_row_indices]
 			
 	# Return
-	return x_array, s_dict, a_dict, b_dict, c_dict, d_dict, feature_columns
+	if return_t_dicts:
+		return x_array, s_dict, a_dict, b_dict, c_dict, d_dict, feature_columns
+	else:
+		return x_array, s_dict, feature_columns
 
 def create_amplitude_prediction_arrays(csv_names: list[str], target_columns: list[str] = ["V_out_steady_state"], 
 								   manipulate_features: bool = True, sample_percentage: float = 1.0, seed: int = 42, 
