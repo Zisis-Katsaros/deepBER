@@ -1,9 +1,9 @@
 addpath('transient');
 
-start_geom = 32;
-max_geoms = 1;
+start_geom = 1;
+max_geoms = 46;
 filename_amplitude = "out_files/amplitude_prediction/export4transient/amplitude_predictions.mat";
-run_step_and_prbs_eye = true;
+run_step_and_prbs_eye = false;
 run_pda = true;
 show_plots = true;
 single_channel = true;

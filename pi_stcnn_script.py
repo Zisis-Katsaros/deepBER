@@ -17,27 +17,15 @@ seed = 42
 torch.manual_seed(seed)
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
-pki = False
-pred_arrays_dict = torch.load("csv_files/s_params/pt/pred_arrays_dict.pt", weights_only=False)
+pred_arrays_dict = torch.load("csv_files/s_params/pt/pred_arrays_dict_total.pt", weights_only=False)
 
 x_array = pred_arrays_dict["x_array"].astype(np.float32)
 s_dict = pred_arrays_dict["s_dict"]
 feature_columns = pred_arrays_dict["feature_columns"]
 
-# x_array, s_dict = cut_dataset_at_specified_freq(x_array, s_dict, feature_columns, cutoff_freq_ghz=20.0)
+x_array, feature_columns, y_array = organize_dataset_for_pi_stcnn(x_array, s_dict, feature_columns)
 
-if pki:
-    s_coarse_dict = torch.load("csv_files/s_params/pt/s_coarse_dict.pt", weights_only=False)
-    _, pred_row_indices = split_dataset(x_array, sample_percentage=0.5, sampling_method="lhs", seed=seed)
-    physics_row_indices = [idx for idx in range(x_array.shape[0]) if idx not in pred_row_indices]
-    x_array_physics = x_array[physics_row_indices]
-    s_dict_physics = {key: s_dict[key][physics_row_indices] for key in s_dict.keys()}
-
-    x_array, feature_columns, y_array, pki_array = organize_dataset_for_pi_stcnn(x_array_physics, s_dict_physics, feature_columns, pki_dict=s_coarse_dict)
-else:
-    x_array, feature_columns, y_array = organize_dataset_for_pi_stcnn(x_array, s_dict, feature_columns)
-
-# """
+"""
 db_path = "out_files/pi_stcnn/pi_stcnn_study4.db"
 storage_url = f"sqlite:///{db_path}"
 # eval_pistcnn_study(storage_url)
@@ -51,23 +39,23 @@ dataloader, x_scale_params, y_scale_params, y_weights, *_ = create_param_dataloa
                     seed=42,
                     standard_scale=(True, False),  # (scale_features, scale_labels)
                     split_method="lhs",
-                    pki_array=pki_array if pki else None,
                     weight_type="balanced"
                     )
 
 _, num_channels_times2, num_freqs = y_array.shape
 predictor = PI_STCNN(
     input_size=len(feature_columns),
-    mlp_hidden=[64, 64, 64, 64],
+    mlp_hidden=[512, 512, 512, 512],
     mlp_activation_fn=nn.ELU(),
     mlp_dropout=0.0,
     tcnn_layer_params=[
-        [196, 0, 0],  # [out_channels, kernel_size, stride]
+        [196, 16, 1],  # [out_channels, kernel_size, stride]
         [196, 4, 2],
-        [196, 3, 3],
-        [196, 8, 4],
-        [196, 8, 2],
-        [196, 2, 2]
+        [196, 4, 2],
+        [196, 4, 2],
+        [196, 4, 2],
+        [196, 4, 2],
+        [196, 4, 2]
     ],
     tcnn_activation_fn=nn.ELU(),
     output_size=num_channels_times2 // 2,
@@ -75,7 +63,7 @@ predictor = PI_STCNN(
     N=num_freqs,
     M=1.5,
     K=2,
-    varience_min=0.05,
+    varience_min=0.1,
     layer_norm=True,
 ).to(device)
 
@@ -83,7 +71,7 @@ criterion = l_freq_loss(weight=y_weights).to(device)
 learning_rate = 0.001
 weight_decay = 0.0 # 5.1635e-05
 optimizer = torch.optim.Adam(predictor.parameters(), lr=learning_rate, weight_decay=weight_decay)
-scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=100) # torch.optim.lr_scheduler.StepLR(optimizer, step_size=500, gamma=0.5) 
+scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=50) # torch.optim.lr_scheduler.StepLR(optimizer, step_size=500, gamma=0.5) 
 
 test_preds, test_labels = test_predictor_configuration_pistcnn(
     title=f"S-Parameters Prediction with PI-STCNN",
@@ -122,4 +110,4 @@ export_files_for_transient(
     freq_arrays_per_geom=freq_arrays_per_geom,
     save_dir="out_files/pi_stcnn/touchstone_files"
 )
-"""
+# """
