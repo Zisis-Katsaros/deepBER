@@ -1,14 +1,14 @@
 addpath('transient');
 addpath('transient/error_statistical_analysis');
-
+addpath('transient/visualization');
 
 start_geom = 1;
-max_geoms = 46;
+max_geoms = 2;
 filename_amplitude = ""; %"out_files/amplitude_prediction/export4transient/amplitude_predictions.mat";
 run_step_and_prbs_eye = true;
-run_pda = false;
+run_pda = true;
 show_transient_plots = true;
-show_statistics_plots = false;
+show_statistics_plots = true;
 single_channel = true;
 
 if filename_amplitude ~= ""
