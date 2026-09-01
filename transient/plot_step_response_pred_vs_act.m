@@ -18,7 +18,9 @@ function plot_step_response_pred_vs_act(t, V_in, V_out_main_pred, V_out_main_act
         V_out_target = []
     end
 
-    figure('Name', plot_title);
+    figure('Name', plot_title, 'Visible', 'on');
+    drawnow;
+    shg;
     grid on;
     plot_handles = [];
     legend_labels = {};
