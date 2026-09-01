@@ -1,5 +1,5 @@
-function [step_metrics, eye_metrics] = run_transient_evaluation(filename_preds, filename_actuals, amplitude_correction_data, title, show_plots, single_channel, fs, t_step, rise_time, delay, Vhi, ...
-        num_bits, bit_rate, precision, method)
+function [prbs_data, step_metrics, eye_metrics] = run_transient_evaluation(filename_preds, filename_actuals, amplitude_correction_data, title, show_plots, single_channel, apply_worst_case_xtalk, fs, t_step, rise_time, delay, Vhi, ...
+        num_bits, bit_rate, precision)
     arguments
         filename_preds (1,1) string
         filename_actuals (1,1) string
@@ -7,6 +7,7 @@ function [step_metrics, eye_metrics] = run_transient_evaluation(filename_preds, 
         title (1,1) string = "Transient Evaluation"
         show_plots (1,1) logical = true
         single_channel (1,1) logical = false
+        apply_worst_case_xtalk (1,1) logical = false
         fs (1,1) double = 1e12
         t_step (1,1) double = 2e-9
         rise_time (1,1) double {mustBePositive} = 15e-12;
@@ -15,7 +16,6 @@ function [step_metrics, eye_metrics] = run_transient_evaluation(filename_preds, 
         num_bits (1,1) double {mustBeInteger, mustBePositive} = 1000;
         bit_rate (1,1) double {mustBePositive} = 32e9; 
         precision = -40;
-        method (1,1) string {mustBeMember(method, ["ifft", "rationalfit"])} = "rationalfit";
     end
 
     if ~isempty(amplitude_correction_data) && isfield(amplitude_correction_data, 'V_out_pred')
@@ -45,6 +45,7 @@ function [step_metrics, eye_metrics] = run_transient_evaluation(filename_preds, 
     rmse_step = struct('main', nan(1, num_ports), 'next1', nan(1, num_ports), 'fext1', nan(1, num_ports), 'next2', nan(1, num_ports), 'fext2', nan(1, num_ports));
     rmse_eye = struct('rt', nan(1, num_ports), 'ft', nan(1, num_ports), 'height', nan(1, num_ports), 'width', nan(1, num_ports), 'jitter', nan(1, num_ports), 'amp', nan(1, num_ports));
     mape_eye = struct('height', nan(1, num_ports), 'width', nan(1, num_ports));
+    prbs_data = struct('EH_pred', nan(1, num_ports), 'EH_act', nan(1, num_ports), 'EW_pred', nan(1, num_ports), 'EW_act', nan(1, num_ports));
 
     fprintf("[transient evaluation] Beginning %s\n", title);
     for port = start_port:end_port
@@ -61,21 +62,16 @@ function [step_metrics, eye_metrics] = run_transient_evaluation(filename_preds, 
         end
         
         % S-parameters to Impulse Response Conversion
-        if method == "rationalfit"
-            [fit_main_pred, fit_next1_pred, fit_fext1_pred, fit_next2_pred, fit_fext2_pred] = s_params2impulse_response(filename_preds, tx, rx, next1, fext1, next2, fext2, precision);
-            [fit_main_actual, fit_next1_actual, fit_fext1_actual, fit_next2_actual, fit_fext2_actual] = s_params2impulse_response(filename_actuals, tx, rx, next1, fext1, next2, fext2, precision);
-            t_imp = [];
-        else
-            [t_imp, fit_main_pred, fit_next1_pred, fit_fext1_pred, fit_next2_pred, fit_fext2_pred] = s_params2impulse_ifft(filename_preds, tx, rx, next1, fext1, next2, fext2);
-            [~, fit_main_actual, fit_next1_actual, fit_fext1_actual, fit_next2_actual, fit_fext2_actual] = s_params2impulse_ifft(filename_actuals, tx, rx, next1, fext1, next2, fext2);
-        end
-
+        [fit_main_pred, fit_next1_pred, fit_fext1_pred, fit_next2_pred, fit_fext2_pred] = s_params2impulse_response(filename_preds, tx, rx, next1, fext1, next2, fext2, precision);
+        [fit_main_actual, fit_next1_actual, fit_fext1_actual, fit_next2_actual, fit_fext2_actual] = s_params2impulse_response(filename_actuals, tx, rx, next1, fext1, next2, fext2, precision);
+        
+        % timeresp(model, V_in, Ts);
         % Predicted step response
-        V_out_main_step_pred = compute_transient(fit_main_pred, V_in_step, Ts, method, t_imp);
-        V_out_next1_step_pred = compute_transient(fit_next1_pred, V_in_step, Ts, method, t_imp);
-        V_out_fext1_step_pred = compute_transient(fit_fext1_pred, V_in_step, Ts, method, t_imp);
-        V_out_next2_step_pred = compute_transient(fit_next2_pred, V_in_step, Ts, method, t_imp);
-        V_out_fext2_step_pred = compute_transient(fit_fext2_pred, V_in_step, Ts, method, t_imp);
+        V_out_main_step_pred = timeresp(fit_main_pred, V_in_step, Ts);
+        V_out_next1_step_pred = timeresp(fit_next1_pred, V_in_step, Ts);
+        V_out_fext1_step_pred = timeresp(fit_fext1_pred, V_in_step, Ts);
+        V_out_next2_step_pred = timeresp(fit_next2_pred, V_in_step, Ts);
+        V_out_fext2_step_pred = timeresp(fit_fext2_pred, V_in_step, Ts);
         
         if ~isempty(V_out_pred_val)
             corr_factor = V_out_pred_val / V_out_main_step_pred(end);
@@ -87,11 +83,11 @@ function [step_metrics, eye_metrics] = run_transient_evaluation(filename_preds, 
         end
 
         % Actual step response
-        V_out_main_step_actual = compute_transient(fit_main_actual, V_in_step, Ts, method, t_imp);
-        V_out_next1_step_actual = compute_transient(fit_next1_actual, V_in_step, Ts, method, t_imp);
-        V_out_fext1_step_actual = compute_transient(fit_fext1_actual, V_in_step, Ts, method, t_imp);
-        V_out_next2_step_actual = compute_transient(fit_next2_actual, V_in_step, Ts, method, t_imp);
-        V_out_fext2_step_actual = compute_transient(fit_fext2_actual, V_in_step, Ts, method, t_imp);
+        V_out_main_step_actual = timeresp(fit_main_actual, V_in_step, Ts);
+        V_out_next1_step_actual = timeresp(fit_next1_actual, V_in_step, Ts);
+        V_out_fext1_step_actual = timeresp(fit_fext1_actual, V_in_step, Ts);
+        V_out_next2_step_actual = timeresp(fit_next2_actual, V_in_step, Ts);
+        V_out_fext2_step_actual = timeresp(fit_fext2_actual, V_in_step, Ts);
 
         if port == 1
             V_out_next1_step_pred = []; V_out_fext1_step_pred = [];
@@ -130,8 +126,26 @@ function [step_metrics, eye_metrics] = run_transient_evaluation(filename_preds, 
         end
 
         % PRBS responses
-        V_out_main_prbs_pred = compute_transient(fit_main_pred, V_in_prbs, Ts, method, t_imp);
-        V_out_main_prbs_actual = compute_transient(fit_main_actual, V_in_prbs, Ts, method, t_imp);
+        if ~apply_worst_case_xtalk
+            V_out_main_prbs_pred = timeresp(fit_main_pred, V_in_prbs, Ts);
+            V_out_main_prbs_actual = timeresp(fit_main_actual, V_in_prbs, Ts);
+        else
+            % Gather available crosstalk channels based on port location
+            xtalk_fits_pred = {};
+            xtalk_fits_actual = {};
+            
+            if port ~= 1
+                xtalk_fits_pred(end+1:end+2) = {fit_next1_pred, fit_fext1_pred};
+                xtalk_fits_actual(end+1:end+2) = {fit_next1_actual, fit_fext1_actual};
+            end
+            if port ~= 9
+                xtalk_fits_pred(end+1:end+2) = {fit_next2_pred, fit_fext2_pred};
+                xtalk_fits_actual(end+1:end+2) = {fit_next2_actual, fit_fext2_actual};
+            end
+            % Apply worst-case dynamic crosstalk
+            V_out_main_prbs_pred = apply_xtalk(fit_main_pred, xtalk_fits_pred, V_in_prbs, Vhi, Ts);
+            V_out_main_prbs_actual = apply_xtalk(fit_main_actual, xtalk_fits_actual, V_in_prbs, Vhi, Ts);
+        end
 
         if ~isempty(V_out_pred_val)
             V_out_main_prbs_pred_adj = V_out_main_prbs_pred * corr_factor;
@@ -175,7 +189,8 @@ function [step_metrics, eye_metrics] = run_transient_evaluation(filename_preds, 
         end
         % ==============================
         
-        [rmse_eye.rt(port), rmse_eye.ft(port), rmse_eye.height(port), rmse_eye.jitter(port), rmse_eye.amp(port), rmse_eye.width(port), mape_eye.height(port), mape_eye.width(port)] = ...
+        [rmse_eye.rt(port), rmse_eye.ft(port), rmse_eye.height(port), rmse_eye.jitter(port), rmse_eye.amp(port), rmse_eye.width(port), mape_eye.height(port), mape_eye.width(port), ...
+         prbs_data.EH_pred(port), prbs_data.EH_act(port), prbs_data.EW_pred(port), prbs_data.EW_act(port)] = ...
             eye_metrics_pred_vs_act(eval_prbs_pred, V_out_main_prbs_actual, eval_eye_matrix, eye_matrix_Vout_actual, fs, bit_rate);
         
         fprintf("[transient evaluation] \t>> PRBS stimulus:\n");
