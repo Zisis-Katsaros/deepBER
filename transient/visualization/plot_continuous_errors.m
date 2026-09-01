@@ -4,7 +4,6 @@ function plot_continuous_errors(pred, act, metric_name)
 
     figure('Name', sprintf('Error Analysis: %s', metric_name), 'Position', [100, 100, 1000, 800], 'Visible', 'on');
     drawnow;
-    shg;
 
     % 1. Predicted vs Actual Plot
     subplot(2, 2, 1);
