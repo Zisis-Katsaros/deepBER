@@ -1,6 +1,6 @@
-addpath('transient');
-addpath('transient/error_statistical_analysis');
 addpath('transient/visualization');
+addpath('transient/error_statistical_analysis');
+addpath('transient');
 
 start_geom = 1;
 max_geoms = 2;
