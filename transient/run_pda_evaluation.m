@@ -1,4 +1,4 @@
-function pda_metrics = run_pda_evaluation(filename_preds, filename_actuals, amplitude_correction_data, title_str, show_plots, single_channel, fs, bit_rate, Vhi)
+function [pda_data, pda_metrics] = run_pda_evaluation(filename_preds, filename_actuals, amplitude_correction_data, title_str, show_plots, single_channel, fs, bit_rate, Vhi)
     %{
     Runs Peak Distortion Analysis (PDA) on predicted and actual S-parameters.
     Identifies the worst-case channel and evaluates pass/fail against the UCIe mask.
@@ -40,6 +40,8 @@ function pda_metrics = run_pda_evaluation(filename_preds, filename_actuals, ampl
     verdict_mismatches = nan(1, num_ports);
     eh_mapes = nan(1, num_ports);
     ew_mapes = nan(1, num_ports);
+    pda_data = struct('Pass_pred', nan(1, num_ports), 'Pass_act', nan(1, num_ports), 'EH_pred', nan(1, num_ports), 'EH_act', nan(1, num_ports), 'EW_pred', nan(1, num_ports), ... 
+                        'EW_act', nan(1, num_ports));
 
     if single_channel
         start_port = 5;
@@ -126,6 +128,13 @@ function pda_metrics = run_pda_evaluation(filename_preds, filename_actuals, ampl
             eh_mapes(port) = eh_mape_adj;
             ew_mapes(port) = ew_mape_adj;
 
+            pda_data.Pass_pred(port) = double(metrics_pred_adj.passes_mask);
+            pda_data.Pass_act(port)  = double(metrics_act.passes_mask);
+            pda_data.EH_pred(port)   = metrics_pred_adj.eye_height;
+            pda_data.EH_act(port)    = metrics_act.eye_height;
+            pda_data.EW_pred(port)   = metrics_pred_adj.eye_width;
+            pda_data.EW_act(port)    = metrics_act.eye_width;
+
             % Print 3-way Comparison
             fprintf('\t           PREDICTED (RAW) | PREDICTED (ADJ) |   ACTUAL\n');
             fprintf('\tEye Height: %.4f V       |  %.4f V       |   %.4f V \n', metrics_pred_raw.eye_height, metrics_pred_adj.eye_height, metrics_act.eye_height);
@@ -141,6 +150,13 @@ function pda_metrics = run_pda_evaluation(filename_preds, filename_actuals, ampl
             verdict_mismatches(port) = (metrics_pred_raw.passes_mask ~= metrics_act.passes_mask);
             eh_mapes(port) = eh_mape_raw;
             ew_mapes(port) = ew_mape_raw;
+
+            pda_data.Pass_pred(port) = double(metrics_pred_raw.passes_mask);
+            pda_data.Pass_act(port)  = double(metrics_act.passes_mask);
+            pda_data.EH_pred(port)   = metrics_pred_raw.eye_height;
+            pda_data.EH_act(port)    = metrics_act.eye_height;
+            pda_data.EW_pred(port)   = metrics_pred_raw.eye_width;
+            pda_data.EW_act(port)    = metrics_act.eye_width;
             
             % Print 2-way Comparison
             fprintf('\t           PREDICTED |   ACTUAL\n');

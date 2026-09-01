@@ -7,7 +7,8 @@ function plot_eye_pred_vs_act(t, eye_matrix_Vout_pred, eye_matrix_Vout_actual, p
         eye_matrix_Vout_pred_adj = []
     end
     
-    figure('Name', 'Receiver Eye Diagram');
+    figure('Name', 'Receiver Eye Diagram', 'Visible', 'on');
+    drawnow;
     
     % Plot Actual First
     plot(t, eye_matrix_Vout_actual, 'r', 'Color', [1 0 0 0.1]); 

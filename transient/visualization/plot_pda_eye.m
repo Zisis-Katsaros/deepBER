@@ -35,7 +35,8 @@ function plot_pda_eye(Ts, s1_pred_raw, s0_pred_raw, metrics_pred_raw, s1_act, s0
     t_ps = (0:(length(s1_act)-1)) * Ts * 1e12; 
 
     % Setup the Figure
-    figure('Name', 'PDA Worst-Case Eye', 'Color', 'w');
+    figure('Name', 'PDA Worst-Case Eye', 'Color', 'w', 'Visible', 'on');
+    drawnow;
     hold on; grid on;
 
     % Plot Actual Bounds (Solid Red lines)

@@ -1,4 +1,5 @@
-function [rmse_rt, rmse_ft, rmse_eye_height, rmse_eye_jitter, rmse_eye_amp, rmse_eye_width, mape_eye_height, mape_eye_width] = eye_metrics_pred_vs_act(Vout_pred, Vout_act, eye_matrix_pred, ...
+function [rmse_rt, rmse_ft, rmse_eye_height, rmse_eye_jitter, rmse_eye_amp, rmse_eye_width, mape_eye_height, mape_eye_width, ...
+          eye_height_pred, eye_height_act, eye_width_pred, eye_width_act] = eye_metrics_pred_vs_act(Vout_pred, Vout_act, eye_matrix_pred, ...
     eye_matrix_act, fs, bit_rate)
     
     rt_act = mean(risetime(Vout_act, fs));
@@ -7,6 +8,7 @@ function [rmse_rt, rmse_ft, rmse_eye_height, rmse_eye_jitter, rmse_eye_amp, rmse
     ft_act = mean(falltime(Vout_act, fs));
     ft_pred = mean(falltime(Vout_pred, fs));
 
+    % The raw variables are generated right here:
     [eye_height_pred, eye_jitter_pred, eye_amp_pred, eye_width_pred] = calculate_eye_stats(eye_matrix_pred, fs, bit_rate);
     [eye_height_act, eye_jitter_act, eye_amp_act, eye_width_act] = calculate_eye_stats(eye_matrix_act, fs, bit_rate);
 
