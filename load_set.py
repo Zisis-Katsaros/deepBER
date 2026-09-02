@@ -219,7 +219,7 @@ def create_amplitude_prediction_arrays(csv_names: list[str], target_columns: lis
 
 
 def load_csv_dataset(csv_names: list[str], target_columns="BER", subfolder: str =None):
-	""""
+	"""
 	# load_csv_dataset()
 	## Loads dataset from CSV file(s)
 
@@ -319,16 +319,7 @@ def load_csv_dataset(csv_names: list[str], target_columns="BER", subfolder: str 
 	return x_array, y_array, feature_columns
 
 
-def create_dataloader(
-	x_array,
- 	y_array,
- 	batch_size=64,
- 	seed=42,
- 	ber_interval=None,
- 	logBER=False,
- 	standard_scale=False,
-	split_method="random",
-):
+def create_dataloader(x_array, y_array, batch_size=64, seed=42, ber_interval=None, logBER=False, standard_scale=False, split_method="random"):
 	# Creates dataloader
 	#
 	# Args:
@@ -414,9 +405,8 @@ def create_dataloader(
 	return [train_data, val_data, test_data]
 
 
-def create_param_dataloader(x_array: NDArray, y_array: NDArray, batch_size: int =64, seed: int =42, standard_scale = False,
-							split_method: Literal["random", "lhs", "custom"] = "random", split_idx: dict[str, np.ndarray] = None, split_percentages: list[float]=[0.8, 0.1], pki_array: NDArray = None,
-							weight_type: Literal["balanced", "low_freq"] = None):
+def create_param_dataloader(x_array: NDArray, y_array: NDArray, batch_size: int =64, seed: int =42, standard_scale = False, split_method: Literal["random", "lhs", "custom"] = "random", 
+							split_idx: dict[str, np.ndarray] = None, split_percentages: list[float]=[0.8, 0.1], pki_array: NDArray = None, weight_type: Literal["balanced", "low_freq"] = None):
 	"""
 	# create_param_dataloader()
 	## Creates train/val/test dataloader
@@ -430,6 +420,8 @@ def create_param_dataloader(x_array: NDArray, y_array: NDArray, batch_size: int 
 	- split_method: "random", "lhs" or "custom" for splitting the dataset
 	- split_idx: Dictionary with keys "train", "val", "test" and values as the corresponding row indices in the original dataset (used when split_method="custom")
 	- split_percentages: [percentage of samples for training set, percentage of samples for validation set]
+	- pki_array: Prior Knowledge Information array (optional) to be included in the dataloader
+	- weight_type: "balanced" for balancing across S-parameter elements, "low_freq" for prioritizing lower frequencies, or None for no weighting
 	## Returns:
 	- dataloader: [train_data, val_data, test_data]
 	- x_scale_params: (x_train_mean, x_train_std)
@@ -568,9 +560,6 @@ def create_param_dataloader(x_array: NDArray, y_array: NDArray, batch_size: int 
     # Convert to Tensor
 	y_weights = torch.from_numpy(y_weights).float()
     
-    # Note: The old generic "y_weights.view(1, -1)" block was removed here. 
-    # The arrays are now correctly dimensioned prior to tensor conversion.
-	
 	if pki_array is not None:
 		train_set = TensorDataset(
 			torch.from_numpy(x_array[train_idx]), 
