@@ -41,6 +41,25 @@ function run_error_stat_analysis(all_PRBS_EH_preds, all_PRBS_EH_acts, all_PRBS_E
         table_columns{end+1} = cell2mat(struct2cell(PDA_EH_stats));
         table_columns{end+1} = cell2mat(struct2cell(PDA_EW_stats));
         var_names = [var_names, {'PDA_Eye_Height_V', 'PDA_Eye_Width_s'}];
+
+        % PDA OPEN EYE STATS
+        % Identify indices where the actual eye is legitimately open
+        open_idx = all_PDA_EH_acts > 1e-4; 
+        
+        % Ensure there is at least one open eye to analyze to prevent crashes
+        if any(open_idx)
+            open_PDA_EH_preds = all_PDA_EH_preds(open_idx);
+            open_PDA_EH_acts  = all_PDA_EH_acts(open_idx);
+            open_PDA_EW_preds = all_PDA_EW_preds(open_idx);
+            open_PDA_EW_acts  = all_PDA_EW_acts(open_idx);
+            
+            PDA_Open_EH_stats = calculate_continuous_stats(open_PDA_EH_preds, open_PDA_EH_acts);
+            PDA_Open_EW_stats = calculate_continuous_stats(open_PDA_EW_preds, open_PDA_EW_acts);
+            
+            table_columns{end+1} = cell2mat(struct2cell(PDA_Open_EH_stats));
+            table_columns{end+1} = cell2mat(struct2cell(PDA_Open_EW_stats));
+            var_names = [var_names, {'PDA_Open_EH_V', 'PDA_Open_EW_s'}];
+        end
     end
 
     % DISPLAY TABLE 
@@ -64,6 +83,11 @@ function run_error_stat_analysis(all_PRBS_EH_preds, all_PRBS_EH_acts, all_PRBS_E
         if has_pda
             plot_continuous_errors(all_PDA_EH_preds, all_PDA_EH_acts, 'PDA Eye Height (V)');
             plot_continuous_errors(all_PDA_EW_preds, all_PDA_EW_acts, 'PDA Eye Width (s)');
+
+            if any(open_idx)
+                plot_continuous_errors(open_PDA_EH_preds, open_PDA_EH_acts, 'PDA Eye Height (Open Only)');
+                plot_continuous_errors(open_PDA_EW_preds, open_PDA_EW_acts, 'PDA Eye Width (Open Only)');
+            end
         end
     end
 end
