@@ -83,12 +83,13 @@ def create_param_prediction_arrays(csv_names: list[str], expected_ports:int = 18
 	## Creates arrays features and labels arrays from given csv file(s)
 	
 	## Args:
-	- csv_names: List of CSV file names as they appear inside csv_files/ 
+	- csv_names: List of CSV file names as they appear inside csv_files/{subfolder}
 	- expected_ports: Expected number of ports for the equivalent circuit model 
 	- target_columns: List of target column names
 	- manipulate_features: Whether to apply feature manipulation (adds width to space ratio, cross sectional area and gnd width to width ratio)
 	- sampling_method: "random" or "lhs" for subsampling the loaded dataset
 	- subfolder: Subfolder in csv_files/ where the datasets are located
+	- return_t_dicts: If True, returns dictionaries for A, B, C, D matrices in addition to S-matrix
 	## Returns:
 	- Tuple (x_array, s_dict, a_dict, b_dict, c_dict, d_dict, feature_columns)
 	"""
@@ -176,6 +177,7 @@ def create_param_prediction_arrays(csv_names: list[str], expected_ports:int = 18
 		return x_array, s_dict, a_dict, b_dict, c_dict, d_dict, feature_columns
 	else:
 		return x_array, s_dict, feature_columns
+
 
 def create_amplitude_prediction_arrays(csv_names: list[str], target_columns: list[str] = ["V_out_steady_state"], 
 								   manipulate_features: bool = True, sample_percentage: float = 1.0, seed: int = 42, 
