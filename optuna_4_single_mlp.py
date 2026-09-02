@@ -8,7 +8,7 @@ from rmse import RMSELoss
 from prediction.test_predictor_config import test_predictor_configuration, single_geometry_test
 from dataset_manipulation import pki_extend
 import numpy as np
-from prediction.s2abcd import s_param_imag_part_hilbert_construction
+from prediction.parameter_computations import s_param_imag_part_hilbert_construction
 from export_files_for_transient import export_files_for_transient, convert_stcnn_outputs_to_dicts
 from visualization import plot_preds_vs_act_freq
 

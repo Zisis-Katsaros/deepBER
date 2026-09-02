@@ -6,7 +6,7 @@ import torch
 from torch.utils.data import DataLoader, TensorDataset, RandomSampler
 from dataset_manipulation import extend_features, exclude_columns
 from classification.ber_to_class import ber_to_class
-from prediction.s2abcd import s2generalized_abcd
+from prediction.parameter_computations import s2generalized_abcd
 from dataset_splitting import split_dataset, latin_hypercube_order, get_grouping
 from typing import Literal, List, Tuple, Union
 from scipy.spatial import cKDTree

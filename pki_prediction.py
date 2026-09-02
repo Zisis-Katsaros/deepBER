@@ -6,7 +6,7 @@ from prediction.predictor import DeepBER_Param_Predictor
 from rmse import RMSELoss
 from prediction.test_predictor_config import test_predictor_configuration
 import numpy as np
-from prediction.s2abcd import trans_param_dict2mat
+from prediction.parameter_computations import trans_param_dict2mat
 from prediction.pki_calculation import get_pki_dict, calculate_s_coarse_matrices
 from visualization import plot_pki_vs_act_freq
 from prediction.predictor_loops import test_pred_loop

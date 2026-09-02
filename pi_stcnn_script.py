@@ -10,7 +10,7 @@ import numpy as np
 from export_files_for_transient import export_files_for_transient, convert_stcnn_outputs_to_dicts
 from dataset_splitting import split_dataset
 from prediction.param_pred_optuna_helpers import eval_pistcnn_study
-from prediction.s2abcd import combine_shielded_and_unshielded_portions
+from prediction.parameter_computations import combine_shielded_and_unshielded_portions
 
 
 # ============================================= Initialization ============================================= #

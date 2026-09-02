@@ -1,6 +1,6 @@
 import numpy as np
 import skrf as rf
-from prediction.s2abcd import trans_param_dict2mat
+from prediction.parameter_computations import trans_param_dict2mat
 import os
 import csv
 import scipy.io as sio
