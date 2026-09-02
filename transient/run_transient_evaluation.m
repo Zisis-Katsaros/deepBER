@@ -1,5 +1,8 @@
-function [prbs_data, step_metrics, eye_metrics] = run_transient_evaluation(filename_preds, filename_actuals, amplitude_correction_data, title, show_plots, single_channel, apply_worst_case_xtalk, fs, t_step, rise_time, delay, Vhi, ...
+function [prbs_data, step_metrics, eye_metrics] = run_transient_evaluation(filename_preds, filename_actuals, amplitude_correction_data, title, show_plots, single_channel, xtalk_type, fs, t_step, rise_time, delay, Vhi, ...
         num_bits, bit_rate, precision)
+        %{
+        Compares the transient responses of the predicted to the actual S-parameters. This evaluation includes two tests: a lo->hi step stimulus and a PRBS stimulus.
+        %}
     arguments
         filename_preds (1,1) string
         filename_actuals (1,1) string
@@ -7,7 +10,7 @@ function [prbs_data, step_metrics, eye_metrics] = run_transient_evaluation(filen
         title (1,1) string = "Transient Evaluation"
         show_plots (1,1) logical = true
         single_channel (1,1) logical = false
-        apply_worst_case_xtalk (1,1) logical = false
+        xtalk_type (1,1) string {mustBeMember(xtalk_type, ["none", "worst-case", "realistic"])} = "realistic"
         fs (1,1) double = 1e12
         t_step (1,1) double = 2e-9
         rise_time (1,1) double {mustBePositive} = 15e-12;
@@ -126,7 +129,7 @@ function [prbs_data, step_metrics, eye_metrics] = run_transient_evaluation(filen
         end
 
         % PRBS responses
-        if ~apply_worst_case_xtalk
+        if xtalk_type == "none"
             V_out_main_prbs_pred = timeresp(fit_main_pred, V_in_prbs, Ts);
             V_out_main_prbs_actual = timeresp(fit_main_actual, V_in_prbs, Ts);
         else
@@ -143,8 +146,8 @@ function [prbs_data, step_metrics, eye_metrics] = run_transient_evaluation(filen
                 xtalk_fits_actual(end+1:end+2) = {fit_next2_actual, fit_fext2_actual};
             end
             % Apply worst-case dynamic crosstalk
-            V_out_main_prbs_pred = apply_xtalk(fit_main_pred, xtalk_fits_pred, V_in_prbs, Vhi, Ts);
-            V_out_main_prbs_actual = apply_xtalk(fit_main_actual, xtalk_fits_actual, V_in_prbs, Vhi, Ts);
+            V_out_main_prbs_pred = apply_xtalk(fit_main_pred, xtalk_fits_pred, V_in_prbs, Vhi, Ts, xtalk_type);
+            V_out_main_prbs_actual = apply_xtalk(fit_main_actual, xtalk_fits_actual, V_in_prbs, Vhi, Ts, xtalk_type);
         end
 
         if ~isempty(V_out_pred_val)
