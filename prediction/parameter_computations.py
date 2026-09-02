@@ -2,13 +2,16 @@ import numpy as np
 import re
 
 def s2generalized_abcd(s, z0=50.0):
-    # Calculates the generalized ABCD matrices from a given S-parameter matrix
-    #
-    # Args:
-    # - s: S-parameter matrix
-    # - z0: standard uniform reference impedance
-    # Returns:
-    # ABCD matrices
+    """
+    # s2generalized_abcd()
+    ##  Calculates the generalized ABCD matrices from a given S-parameter matrix
+
+    ## Args:
+    - s: S-parameter matrix dimensions: (num_samples, 2k, 2k)
+    - z0: standard uniform reference impedance
+    ## Returns:
+    - ABCD matrices
+    """
 
     num_of_ports = s.shape[-1]
     k = num_of_ports // 2
@@ -24,7 +27,6 @@ def s2generalized_abcd(s, z0=50.0):
     s21_inv = np.linalg.inv(s21) 
 
     # Calculation of ABCD matrices
-
     A = 0.5 * ((I + s11) @ s21_inv @ (I - s22) + s12)
     B = 0.5 * z0 * ((I + s11) @ s21_inv @ (I + s22) - s12)
     C = (0.5 / z0) * ((I - s11) @ s21_inv @ (I - s22) - s12)
@@ -35,14 +37,13 @@ def s2generalized_abcd(s, z0=50.0):
 
 def abcd2s(A, B, C, D, z0=50.0):
     """
-    Calculates the S-parameter matrix from generalized ABCD block matrices.
-    
-    Args:
-    - A, B, C, D: Sub-matrices of the ABCD (transmission) matrix.
-                  Expected shape: (num_samples, k, k) or (k, k).
-    - z0: Standard uniform reference impedance.
-    
-    Returns:
+    # abcd2s()
+    ## Calculates the S-parameter matrix from generalized ABCD block matrices.
+
+    ## Args:
+    - A, B, C, D: Sub-matrices of the ABCD (transmission) matrix. Expected shape: (num_samples, k, k) or (k, k)
+    - z0: Standard uniform reference impedance
+    ## Returns:
     - S: Full assembled S-parameter matrix. 
          Output shape: (num_samples, 2k, 2k) or (2k, 2k).
     """
@@ -69,11 +70,20 @@ def abcd2s(A, B, C, D, z0=50.0):
     
     # Concatenate vertically (axis=-2) to form the complete 18x18 S-matrix
     S = np.concatenate((row1, row2), axis=-2)
-    
     return S
 
 
 def trans_param_dict2mat(data_dict):
+    """
+    # trans_param_dict2mat()
+    ## Converts a dictionary of transmission parameters (S, R, L, C, G, A, B, C, D) into a 3D matrix format
+    ## Args:
+    - data_dict: Dictionary with keys '*11', '*12', ..., '*NN' where * is the prefix and values are 2D arrays of shape (num_samples, 1) or (num_samples,)
+    ## Returns:
+    - matrices: 3D numpy array of shape (num_samples, N, N)
+    """
+
+    # Extract prefix from the first key
     first_key = list(data_dict.keys())[0]
     match = re.match(r"^([a-zA-Z]+)", first_key)
     if not match:
@@ -128,6 +138,16 @@ def trans_param_dict2mat(data_dict):
 
 
 def trans_param_mat2dict(matrices, prefix, symmetric=False):
+    """
+    # trans_param_mat2dict()
+    ## Converts a 3D matrix of transmission parameters (S, R, L, C, G, A, B, C, D) into a dictionary format
+    ## Args:
+    - matrices: 3D numpy array of shape (num_samples, N, N)
+    - prefix: String to be used as the prefix for the dictionary keys
+    - symmetric: Boolean indicating if the matrix is symmetric
+    ## Returns:
+    - out_dict: Dictionary with keys '*11', '*12', ..., '*NN' where * is the prefix and values are 2D arrays. Output dictionary contains only unique elements if input issymmetric
+    """
     out_dict = {}
     if symmetric or prefix in ["L", "C", "S"]:
         for i in range(matrices.shape[1]):
@@ -147,6 +167,16 @@ def trans_param_mat2dict(matrices, prefix, symmetric=False):
 
 
 def s2abcd_dict(s_dict, expected_ports=18, z0=50.0):
+    """
+    # s2abcd_dict()
+    ## Converts S-parameter dictionary to ABCD parameter dictionaries
+    ## Args:
+    - s_dict: Dictionary with keys '*11', '*12', ..., '*NN' where * is the prefix and values are 2D arrays of shape (num_samples, 1) or (num_samples,)
+    - expected_ports: Number of ports of the equivalent circuit
+    - z0: Standard uniform reference impedance
+    ## Returns:
+    - a_dict, b_dict, c_dict, d_dict: Dictionaries containing the ABCD parameters
+    """
     s_matrices = trans_param_dict2mat(s_dict)
     A, B, C, D = s2generalized_abcd(s_matrices, z0=z0)
 
@@ -166,7 +196,7 @@ def s2rlcg(s, freq, lengths, z0=50.0):
     - s: S-parameter matrices
     - freq: Frequency value in Hz
     - lengths: Array of lengths of the transmission lines in meters
-    - z0: Reference impedance (default: 50.0 Ohms)
+    - z0: Standard uniform reference impedance
     ## Returns:
     - L: Inductance matrices
     - C: Capacitance matrices
@@ -242,7 +272,7 @@ def s2rlcg_dict(s, freq, lengths, z0=50.0):
     - s: S-parameter matrices
     - freq: Frequency value in Hz
     - lengths: Array of lengths of the transmission lines in meters
-    - z0: Reference impedance (default: 50.0 Ohms)
+    - z0: Standard uniform reference impedance
     ## Returns:
     - r_dict: Dictionary of resistance matrices
     - l_dict: Dictionary of inductance matrices
