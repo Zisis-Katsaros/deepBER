@@ -20,7 +20,7 @@ seed = 42
 torch.manual_seed(seed)
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
-separate_portions = True
+separate_portions = False
 
 # Dataloader Hyperparameters
 weight_type = "balanced"
@@ -46,10 +46,10 @@ criterion = l_freq_loss().to(device)
 learning_rate = 0.001
 weight_decay = 0.0 # 5.1635e-05
 scheduler_patience = 50
-epochs = 1
+epochs = 3000
 patience = 300
 
-max_figures = 0
+max_figures = 3
 
 # ============================================= Training and Testing ============================================= #
 if not separate_portions:
@@ -70,7 +70,7 @@ if not separate_portions:
                         split_method="lhs",
                         weight_type=weight_type
                         )
-    # Save PKI pred dictionary
+    # Save Split indices
     pt_dir = "csv_files/s_params/pt"
     os.makedirs(pt_dir, exist_ok=True)
 
