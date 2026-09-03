@@ -1,3 +1,5 @@
+import os
+
 import torch
 from torch import nn
 from torch.optim.lr_scheduler import ReduceLROnPlateau
@@ -44,10 +46,10 @@ criterion = l_freq_loss().to(device)
 learning_rate = 0.001
 weight_decay = 0.0 # 5.1635e-05
 scheduler_patience = 50
-epochs = 3000
+epochs = 1
 patience = 300
 
-max_figures = 3
+max_figures = 0
 
 # ============================================= Training and Testing ============================================= #
 if not separate_portions:
@@ -59,7 +61,7 @@ if not separate_portions:
 
     x_array, feature_columns, y_array = organize_dataset_for_pi_stcnn(x_array, s_dict, feature_columns)
 
-    dataloader, x_scale_params, y_scale_params, y_weights, *_ = create_param_dataloader(
+    dataloader, x_scale_params, y_scale_params, y_weights, total_split_idx_lhs = create_param_dataloader(
                         x_array,
                         y_array,
                         batch_size=16,
@@ -68,6 +70,12 @@ if not separate_portions:
                         split_method="lhs",
                         weight_type=weight_type
                         )
+    # Save PKI pred dictionary
+    pt_dir = "csv_files/s_params/pt"
+    os.makedirs(pt_dir, exist_ok=True)
+
+    split_idx_path = os.path.join(pt_dir, "total_split_idx_lhs.pt")
+    torch.save(total_split_idx_lhs, split_idx_path)
 
     _, num_channels_times2, num_freqs = y_array.shape
     predictor = PI_STCNN(
@@ -118,26 +126,28 @@ if not separate_portions:
 else:
     pred_arrays_dict_shielded = torch.load("csv_files/s_params/pt/pred_arrays_dict_shielded.pt", weights_only=False)
     pred_arrays_dict_unshielded = torch.load("csv_files/s_params/pt/pred_arrays_dict_unshielded.pt", weights_only=False)
+    total_split_idx_lhs = torch.load("csv_files/s_params/pt/total_split_idx_lhs.pt", weights_only=False)
 
     x_array = pred_arrays_dict_shielded["x_array"].astype(np.float32)
     s_dict = pred_arrays_dict_shielded["s_dict"]
     feature_columns = pred_arrays_dict_shielded["feature_columns"]
 
-    x_array, feature_columns, y_array = organize_dataset_for_pi_stcnn(x_array, s_dict, feature_columns)
+    x_array_shielded, feature_columns_shielded, y_array_shielded = organize_dataset_for_pi_stcnn(x_array, s_dict, feature_columns)
 
-    dataloader, x_scale_params, y_scale_params, y_weights, split_idx = create_param_dataloader(
-                        x_array,
-                        y_array,
+    dataloader, x_scale_params, y_scale_params, y_weights, _ = create_param_dataloader(
+                        x_array_shielded,
+                        y_array_shielded,
                         batch_size=16,
                         seed=42,
                         standard_scale=(True, False),  # (scale_features, scale_labels)
-                        split_method="lhs",
-                        weight_type=weight_type
+                        split_method="custom",
+                        weight_type=weight_type,
+                        split_idx=total_split_idx_lhs
                         )
 
-    _, num_channels_times2, num_freqs = y_array.shape
+    _, num_channels_times2, num_freqs = y_array_shielded.shape
     predictor_shielded = PI_STCNN(
-        input_size=len(feature_columns),
+        input_size=len(feature_columns_shielded),
         mlp_hidden=mlp_hidden,
         mlp_activation_fn=nn.ELU(),
         mlp_dropout=mlp_dropout,
@@ -182,22 +192,22 @@ else:
     s_dict = pred_arrays_dict_unshielded["s_dict"]
     feature_columns = pred_arrays_dict_unshielded["feature_columns"]
 
-    x_array, feature_columns, y_array = organize_dataset_for_pi_stcnn(x_array, s_dict, feature_columns)
+    x_array_unshielded, feature_columns_unshielded, y_array_unshielded = organize_dataset_for_pi_stcnn(x_array, s_dict, feature_columns)
 
     dataloader, x_scale_params, y_scale_params, y_weights, _ = create_param_dataloader(
-                        x_array,
-                        y_array,
+                        x_array_unshielded,
+                        y_array_unshielded,
                         batch_size=16,
                         seed=42,
                         standard_scale=(True, False),  # (scale_features, scale_labels)
-                        split_method="lhs",
+                        split_method="custom",
                         weight_type=weight_type,
-                        split_idx=split_idx
+                        split_idx=total_split_idx_lhs
                         )
 
-    _, num_channels_times2, num_freqs = y_array.shape
+    _, num_channels_times2, num_freqs = y_array_unshielded.shape
     predictor_unshielded = PI_STCNN(
-        input_size=len(feature_columns),
+        input_size=len(feature_columns_unshielded),
         mlp_hidden=mlp_hidden,
         mlp_activation_fn=nn.ELU(),
         mlp_dropout=mlp_dropout,
@@ -260,10 +270,13 @@ else:
 # ============================================= Export for Transient ============================================= #
 freq_array = np.linspace(0, 30, 601)
 freq_arrays_per_geom = [freq_array for _ in range(num_geometries)]
+test_indices = total_split_idx_lhs["test"]
+test_geometries = x_array[test_indices] if not separate_portions else [x_array_shielded[test_indices], x_array_unshielded[test_indices]]
+feature_names = feature_columns if not separate_portions else [feature_columns_shielded, feature_columns_unshielded]
 
 export_files_for_transient(
-    geometries=x_array,  # The unique geometries returned by organize_dataset_for_pi_stcnn
-    feature_names=feature_columns,
+    geometries=test_geometries,
+    feature_names=feature_names, 
     labels_dict_per_geom=labels_dict_list if not separate_portions else labels_dict_list_total,
     preds_dict_per_geom=preds_dict_list if not separate_portions else preds_dict_list_total,
     freq_arrays_per_geom=freq_arrays_per_geom,

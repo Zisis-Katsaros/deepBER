@@ -73,6 +73,48 @@ def abcd2s(A, B, C, D, z0=50.0):
     return S
 
 
+
+def s_to_t(s_matrices: np.ndarray) -> np.ndarray:
+    """Converts standard S-parameters to Cascading T-parameters."""
+    N = s_matrices.shape[1]
+    n = N // 2
+    t_matrices = np.zeros_like(s_matrices)
+    
+    S11, S12 = s_matrices[:, :n, :n], s_matrices[:, :n, n:]
+    S21, S22 = s_matrices[:, n:, :n], s_matrices[:, n:, n:]
+    
+    S21_inv = np.linalg.inv(S21)
+    
+    t_matrices[:, :n, :n] = S12 - S11 @ S21_inv @ S22
+    t_matrices[:, :n, n:] = S11 @ S21_inv
+    t_matrices[:, n:, :n] = -S21_inv @ S22
+    t_matrices[:, n:, n:] = S21_inv
+    return t_matrices
+
+def t_to_s(t_matrices: np.ndarray) -> np.ndarray:
+    """Converts Cascading T-parameters back to standard S-parameters."""
+    N = t_matrices.shape[1]
+    n = N // 2
+    s_matrices = np.zeros_like(t_matrices)
+    
+    T11, T12 = t_matrices[:, :n, :n], t_matrices[:, :n, n:]
+    T21, T22 = t_matrices[:, n:, :n], t_matrices[:, n:, n:]
+    
+    T22_inv = np.linalg.inv(T22)
+    
+    s_matrices[:, :n, :n] = T12 @ T22_inv
+    s_matrices[:, :n, n:] = T11 - T12 @ T22_inv @ T21
+    s_matrices[:, n:, :n] = T22_inv
+    s_matrices[:, n:, n:] = -T22_inv @ T21
+    return s_matrices
+
+def cascade_s_matrices(s1: np.ndarray, s2: np.ndarray, s3: np.ndarray) -> np.ndarray:
+    """Cascades 3 S-parameter matrices from left to right (Unshield -> Shield -> Unshield)."""
+    t1, t2, t3 = s_to_t(s1), s_to_t(s2), s_to_t(s3)
+    t_total = t1 @ t2 @ t3
+    return t_to_s(t_total)
+
+
 def trans_param_dict2mat(data_dict):
     """
     # trans_param_dict2mat()
@@ -320,30 +362,34 @@ def s_param_imag_part_hilbert_construction(s: np.ndarray, num_og_freq: int, K: i
     return s_cell_real + 1j * s_cell_imag
 
 
-def combine_shielded_and_unshielded_portions(s_dict_shielded, s_dict_unshielded):
+def combine_shielded_and_unshielded_portions(s_dict_shielded, s_dict_unshielded, cascade_using="T"):
     # Convert the S-parameter dictionaries to matrices
     s_mat_shielded = trans_param_dict2mat(s_dict_shielded)
     s_mat_unshielded = trans_param_dict2mat(s_dict_unshielded)
 
-    # Convert the S-parameter matrices to ABCD matrices
-    A_shielded, B_shielded, C_shielded, D_shielded = s2generalized_abcd(s_mat_shielded)
-    A_unshielded, B_unshielded, C_unshielded, D_unshielded = s2generalized_abcd(s_mat_unshielded)
+    if cascade_using == "T":
+        # Calculate the total T matrix: Unshielded - Shielded - Unshielded
+        s_mat_total = cascade_s_matrices(s_mat_unshielded, s_mat_shielded, s_mat_unshielded)
+    elif cascade_using == "ABCD":
+        # Convert the S-parameter matrices to ABCD matrices
+        A_shielded, B_shielded, C_shielded, D_shielded = s2generalized_abcd(s_mat_shielded)
+        A_unshielded, B_unshielded, C_unshielded, D_unshielded = s2generalized_abcd(s_mat_unshielded)
 
-    # Create the transmission matrices
-    T_shielded_row1 = np.concatenate((A_shielded, B_shielded), axis=-1)
-    T_shielded_row2 = np.concatenate((C_shielded, D_shielded), axis=-1)
-    T_shielded = np.concatenate((T_shielded_row1, T_shielded_row2), axis=-2)
+        # Create the transmission matrices
+        ABCD_shielded_row1 = np.concatenate((A_shielded, B_shielded), axis=-1)
+        ABCD_shielded_row2 = np.concatenate((C_shielded, D_shielded), axis=-1)
+        ABCD_shielded = np.concatenate((ABCD_shielded_row1, ABCD_shielded_row2), axis=-2)
 
-    T_unshielded_row1 = np.concatenate((A_unshielded, B_unshielded), axis=-1)
-    T_unshielded_row2 = np.concatenate((C_unshielded, D_unshielded), axis=-1)
-    T_unshielded = np.concatenate((T_unshielded_row1, T_unshielded_row2), axis=-2)
+        ABCD_unshielded_row1 = np.concatenate((A_unshielded, B_unshielded), axis=-1)
+        ABCD_unshielded_row2 = np.concatenate((C_unshielded, D_unshielded), axis=-1)
+        ABCD_unshielded = np.concatenate((ABCD_unshielded_row1, ABCD_unshielded_row2), axis=-2)
 
-    # Calculate the total transmission matrix: Unshielded - Shielded - Unshielded
-    T_total = np.matmul(T_unshielded, T_shielded)
-    T_total = np.matmul(T_total, T_unshielded)
+        # Calculate the total transmission matrix: Unshielded - Shielded - Unshielded
+        ABCD_total = np.matmul(ABCD_unshielded, ABCD_shielded)
+        ABCD_total = np.matmul(ABCD_total, ABCD_unshielded)
 
-    # Convert the total transmission matrix back to S-parameters
-    s_mat_total = abcd2s(T_total[:, :9, :9], T_total[:, :9, 9:], T_total[:, 9:, :9], T_total[:, 9:, 9:])
+        # Convert the total transmission matrix back to S-parameters
+        s_mat_total = abcd2s(ABCD_total[:, :9, :9], ABCD_total[:, :9, 9:], ABCD_total[:, 9:, :9], ABCD_total[:, 9:, 9:])
 
     # Convert the total S-parameter matrix back to a dictionary
     s_dict_total = trans_param_mat2dict(s_mat_total, "S")

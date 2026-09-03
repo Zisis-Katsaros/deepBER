@@ -18,26 +18,47 @@ def create_touchstone_file(s_matrices, freqs, filename="my_dnn_output.s18p"):
     print(f"Touchstone file saved successfully to: {filename}")
 
 
-def create_geometry_mapping_file(geometries: list[np.ndarray], feature_names: list[str], save_dir: str = "csv_files/transient_input_files"):
+def create_geometry_mapping_file(geometries: list[np.ndarray], feature_names: list[list[str]], save_dir: str = "csv_files/transient_input_files"):
     # Create output directories
     os.makedirs(save_dir, exist_ok=True)
     csv_save_path = os.path.join(save_dir, f"geometry_mapping.csv")
+
+    # Convert single dataset inputs to lists
+    if isinstance(geometries, np.ndarray):
+        geometries = [geometries]
+    if feature_names and isinstance(feature_names[0], str):
+        feature_names = [feature_names]
+
+    # Gather all unique feature names across all datasets (preserving order)
+    combined_feature_names = []
+    for feat_list in feature_names:
+        for feat in feat_list:
+            if feat not in combined_feature_names:
+                combined_feature_names.append(feat)
+
+    num_geoms = len(geometries[0]) 
     
-    num_features = len(geometries[0]) 
-    if feature_names is None:
-        feature_names = [f"Feature_{j+1}" for j in range(num_features)]
-    if num_features < len(feature_names):
-        feature_names = feature_names[:num_features]
-        
     with open(csv_save_path, 'w', newline='') as f:
         writer = csv.writer(f)
         
         # Write the header row
-        writer.writerow(["Geom_Index"] + feature_names)
+        writer.writerow(["Geom_Index"] + combined_feature_names)
         
-        # Write the data rows
-        for i, geom in enumerate(geometries):
-            writer.writerow([i+1] + geom.tolist()) 
+        # Compile the corresponding data for each geometry
+        for i in range(num_geoms):
+            row_dict = {}
+            # Loop through each provided array
+            for ds_idx, geom_array in enumerate(geometries):
+                current_features = feature_names[ds_idx]
+                for col_idx, feat_name in enumerate(current_features):
+                    # Only add the value if it hasn't been set yet (avoids overwriting identical shared parameters)
+                    if feat_name not in row_dict:
+                        row_dict[feat_name] = geom_array[i][col_idx]
+            
+            # Map the dictionary values back to the combined header order
+            row_values = [row_dict[feat] for feat in combined_feature_names]
+            writer.writerow([i + 1] + row_values)
+            
     print(f"Saved CSV mapping to {csv_save_path}")
 
 
@@ -90,7 +111,7 @@ def export_amplitude_correction(test_inputs: np.ndarray, test_preds: np.ndarray,
     print(f"Saved MAT predictions to: {mat_save_path}")
 
 
-def export_files_for_transient(geometries: list[np.ndarray], feature_names: list[str], labels_dict_per_geom: list[dict], preds_dict_per_geom: list[dict], freq_arrays_per_geom: list[np.ndarray], save_dir: str="csv_files/transient_input_files"):
+def export_files_for_transient(geometries: list[np.ndarray], feature_names: list[list[str]], labels_dict_per_geom: list[dict], preds_dict_per_geom: list[dict], freq_arrays_per_geom: list[np.ndarray], save_dir: str="csv_files/transient_input_files"):
     """
     # export_files_for_transient()
     ## Exports the actual and predicted S-parameters for each geometry into Touchstone files for transient simulations.

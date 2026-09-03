@@ -763,10 +763,10 @@ def organize_dataset_for_pi_stcnn(x_array: NDArray, s_dict: dict, feature_column
     # Remove the frequency column from the input features
 	x_no_freq, new_feature_columns = exclude_columns(x_array, feature_columns, columns_to_exclude=["frequency_ghz"])
 
-    # Extract unique samples (collapse the dataset to one row per unique design geometry)
-    # inverse_indices maps the flat original array back to the unique geometry index
-	unique_x, inverse_indices = np.unique(x_no_freq, axis=0, return_inverse=True)
-	num_geoms = len(unique_x)
+	num_geoms = len(x_no_freq) // num_freqs
+	unique_x = x_no_freq[::num_freqs]  # Take the first row of each frequency block
+	# Map each flat row back to its geometry index
+	inverse_indices = np.repeat(np.arange(num_geoms), num_freqs)
 
     # Build Y
 	channel_keys = list(s_dict.keys())
