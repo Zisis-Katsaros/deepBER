@@ -146,8 +146,8 @@ function [prbs_data, step_metrics, eye_metrics] = run_transient_evaluation(filen
                 xtalk_fits_actual(end+1:end+2) = {fit_next2_actual, fit_fext2_actual};
             end
             % Apply worst-case dynamic crosstalk
-            V_out_main_prbs_pred = apply_xtalk(fit_main_pred, xtalk_fits_pred, V_in_prbs, Vhi, Ts, xtalk_type);
-            V_out_main_prbs_actual = apply_xtalk(fit_main_actual, xtalk_fits_actual, V_in_prbs, Vhi, Ts, xtalk_type);
+            V_out_main_prbs_pred = apply_xtalk(fit_main_pred, xtalk_fits_pred, V_in_prbs, Vhi, Ts, samples_per_bit, xtalk_type);
+            V_out_main_prbs_actual = apply_xtalk(fit_main_actual, xtalk_fits_actual, V_in_prbs, Vhi, Ts, samples_per_bit, xtalk_type);
         end
 
         if ~isempty(V_out_pred_val)

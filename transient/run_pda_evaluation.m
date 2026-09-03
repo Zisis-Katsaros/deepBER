@@ -11,7 +11,7 @@ function [pda_data, pda_metrics] = run_pda_evaluation(filename_preds, filename_a
         show_plots (1,1) logical = true
         single_channel (1,1) logical = false
         fs (1,1) double = 2e12 % 0.5 ps resolution
-        bit_rate (1,1) double = 32e9 % 32 GT/s UCIe Standard
+        bit_rate (1,1) double = 16e9 % 32 GT/s UCIe Standard
         Vhi (1,1) double = 0.625
     end
 
