@@ -1,10 +1,11 @@
-function V_out_total = apply_xtalk(fit_main, xtalk_fits, V_in_prbs, Vhi, Ts, type,alpha_correction)
+function V_out_total = apply_xtalk(fit_main, xtalk_fits, V_in_prbs, Vhi, Ts, samples_per_bit, type, alpha_correction)
     arguments
-        fit_main (1,1) struct
+        fit_main (1,1)
         xtalk_fits (1,:) cell
-        V_in_prbs (1,:) double
+        V_in_prbs (:,1) double
         Vhi (1,1) double
         Ts (1,1) double
+        samples_per_bit (1,1) double
         type (1,1) string {mustBeMember(type, ["worst-case", "realistic"])} = "realistic"
         alpha_correction (1,1) double = 1.0
     end

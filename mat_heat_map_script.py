@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import torch
 from load_set import get_grouping
-from prediction.s2abcd import trans_param_dict2mat
+from prediction.parameter_computations import trans_param_dict2mat
 
 
 def plot_matrix_heatmap(data_dict, avg_per_geom=True, avg_per_element=True, x_array=None, n_geom_feats: int=7, mask_large_values=False):

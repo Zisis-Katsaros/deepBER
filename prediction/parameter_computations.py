@@ -2,13 +2,16 @@ import numpy as np
 import re
 
 def s2generalized_abcd(s, z0=50.0):
-    # Calculates the generalized ABCD matrices from a given S-parameter matrix
-    #
-    # Args:
-    # - s: S-parameter matrix
-    # - z0: standard uniform reference impedance
-    # Returns:
-    # ABCD matrices
+    """
+    # s2generalized_abcd()
+    ##  Calculates the generalized ABCD matrices from a given S-parameter matrix
+
+    ## Args:
+    - s: S-parameter matrix dimensions: (num_samples, 2k, 2k)
+    - z0: standard uniform reference impedance
+    ## Returns:
+    - ABCD matrices
+    """
 
     num_of_ports = s.shape[-1]
     k = num_of_ports // 2
@@ -24,7 +27,6 @@ def s2generalized_abcd(s, z0=50.0):
     s21_inv = np.linalg.inv(s21) 
 
     # Calculation of ABCD matrices
-
     A = 0.5 * ((I + s11) @ s21_inv @ (I - s22) + s12)
     B = 0.5 * z0 * ((I + s11) @ s21_inv @ (I + s22) - s12)
     C = (0.5 / z0) * ((I - s11) @ s21_inv @ (I - s22) - s12)
@@ -35,14 +37,13 @@ def s2generalized_abcd(s, z0=50.0):
 
 def abcd2s(A, B, C, D, z0=50.0):
     """
-    Calculates the S-parameter matrix from generalized ABCD block matrices.
-    
-    Args:
-    - A, B, C, D: Sub-matrices of the ABCD (transmission) matrix.
-                  Expected shape: (num_samples, k, k) or (k, k).
-    - z0: Standard uniform reference impedance.
-    
-    Returns:
+    # abcd2s()
+    ## Calculates the S-parameter matrix from generalized ABCD block matrices.
+
+    ## Args:
+    - A, B, C, D: Sub-matrices of the ABCD (transmission) matrix. Expected shape: (num_samples, k, k) or (k, k)
+    - z0: Standard uniform reference impedance
+    ## Returns:
     - S: Full assembled S-parameter matrix. 
          Output shape: (num_samples, 2k, 2k) or (2k, 2k).
     """
@@ -69,11 +70,62 @@ def abcd2s(A, B, C, D, z0=50.0):
     
     # Concatenate vertically (axis=-2) to form the complete 18x18 S-matrix
     S = np.concatenate((row1, row2), axis=-2)
-    
     return S
 
 
+
+def s_to_t(s_matrices: np.ndarray) -> np.ndarray:
+    """Converts standard S-parameters to Cascading T-parameters."""
+    N = s_matrices.shape[1]
+    n = N // 2
+    t_matrices = np.zeros_like(s_matrices)
+    
+    S11, S12 = s_matrices[:, :n, :n], s_matrices[:, :n, n:]
+    S21, S22 = s_matrices[:, n:, :n], s_matrices[:, n:, n:]
+    
+    S21_inv = np.linalg.inv(S21)
+    
+    t_matrices[:, :n, :n] = S12 - S11 @ S21_inv @ S22
+    t_matrices[:, :n, n:] = S11 @ S21_inv
+    t_matrices[:, n:, :n] = -S21_inv @ S22
+    t_matrices[:, n:, n:] = S21_inv
+    return t_matrices
+
+def t_to_s(t_matrices: np.ndarray) -> np.ndarray:
+    """Converts Cascading T-parameters back to standard S-parameters."""
+    N = t_matrices.shape[1]
+    n = N // 2
+    s_matrices = np.zeros_like(t_matrices)
+    
+    T11, T12 = t_matrices[:, :n, :n], t_matrices[:, :n, n:]
+    T21, T22 = t_matrices[:, n:, :n], t_matrices[:, n:, n:]
+    
+    T22_inv = np.linalg.inv(T22)
+    
+    s_matrices[:, :n, :n] = T12 @ T22_inv
+    s_matrices[:, :n, n:] = T11 - T12 @ T22_inv @ T21
+    s_matrices[:, n:, :n] = T22_inv
+    s_matrices[:, n:, n:] = -T22_inv @ T21
+    return s_matrices
+
+def cascade_s_matrices(s1: np.ndarray, s2: np.ndarray, s3: np.ndarray) -> np.ndarray:
+    """Cascades 3 S-parameter matrices from left to right (Unshield -> Shield -> Unshield)."""
+    t1, t2, t3 = s_to_t(s1), s_to_t(s2), s_to_t(s3)
+    t_total = t1 @ t2 @ t3
+    return t_to_s(t_total)
+
+
 def trans_param_dict2mat(data_dict):
+    """
+    # trans_param_dict2mat()
+    ## Converts a dictionary of transmission parameters (S, R, L, C, G, A, B, C, D) into a 3D matrix format
+    ## Args:
+    - data_dict: Dictionary with keys '*11', '*12', ..., '*NN' where * is the prefix and values are 2D arrays of shape (num_samples, 1) or (num_samples,)
+    ## Returns:
+    - matrices: 3D numpy array of shape (num_samples, N, N)
+    """
+
+    # Extract prefix from the first key
     first_key = list(data_dict.keys())[0]
     match = re.match(r"^([a-zA-Z]+)", first_key)
     if not match:
@@ -128,6 +180,16 @@ def trans_param_dict2mat(data_dict):
 
 
 def trans_param_mat2dict(matrices, prefix, symmetric=False):
+    """
+    # trans_param_mat2dict()
+    ## Converts a 3D matrix of transmission parameters (S, R, L, C, G, A, B, C, D) into a dictionary format
+    ## Args:
+    - matrices: 3D numpy array of shape (num_samples, N, N)
+    - prefix: String to be used as the prefix for the dictionary keys
+    - symmetric: Boolean indicating if the matrix is symmetric
+    ## Returns:
+    - out_dict: Dictionary with keys '*11', '*12', ..., '*NN' where * is the prefix and values are 2D arrays. Output dictionary contains only unique elements if input issymmetric
+    """
     out_dict = {}
     if symmetric or prefix in ["L", "C", "S"]:
         for i in range(matrices.shape[1]):
@@ -147,6 +209,16 @@ def trans_param_mat2dict(matrices, prefix, symmetric=False):
 
 
 def s2abcd_dict(s_dict, expected_ports=18, z0=50.0):
+    """
+    # s2abcd_dict()
+    ## Converts S-parameter dictionary to ABCD parameter dictionaries
+    ## Args:
+    - s_dict: Dictionary with keys '*11', '*12', ..., '*NN' where * is the prefix and values are 2D arrays of shape (num_samples, 1) or (num_samples,)
+    - expected_ports: Number of ports of the equivalent circuit
+    - z0: Standard uniform reference impedance
+    ## Returns:
+    - a_dict, b_dict, c_dict, d_dict: Dictionaries containing the ABCD parameters
+    """
     s_matrices = trans_param_dict2mat(s_dict)
     A, B, C, D = s2generalized_abcd(s_matrices, z0=z0)
 
@@ -166,7 +238,7 @@ def s2rlcg(s, freq, lengths, z0=50.0):
     - s: S-parameter matrices
     - freq: Frequency value in Hz
     - lengths: Array of lengths of the transmission lines in meters
-    - z0: Reference impedance (default: 50.0 Ohms)
+    - z0: Standard uniform reference impedance
     ## Returns:
     - L: Inductance matrices
     - C: Capacitance matrices
@@ -242,7 +314,7 @@ def s2rlcg_dict(s, freq, lengths, z0=50.0):
     - s: S-parameter matrices
     - freq: Frequency value in Hz
     - lengths: Array of lengths of the transmission lines in meters
-    - z0: Reference impedance (default: 50.0 Ohms)
+    - z0: Standard uniform reference impedance
     ## Returns:
     - r_dict: Dictionary of resistance matrices
     - l_dict: Dictionary of inductance matrices
@@ -290,30 +362,34 @@ def s_param_imag_part_hilbert_construction(s: np.ndarray, num_og_freq: int, K: i
     return s_cell_real + 1j * s_cell_imag
 
 
-def combine_shielded_and_unshielded_portions(s_dict_shielded, s_dict_unshielded):
+def combine_shielded_and_unshielded_portions(s_dict_shielded, s_dict_unshielded, cascade_using="T"):
     # Convert the S-parameter dictionaries to matrices
     s_mat_shielded = trans_param_dict2mat(s_dict_shielded)
     s_mat_unshielded = trans_param_dict2mat(s_dict_unshielded)
 
-    # Convert the S-parameter matrices to ABCD matrices
-    A_shielded, B_shielded, C_shielded, D_shielded = s2generalized_abcd(s_mat_shielded)
-    A_unshielded, B_unshielded, C_unshielded, D_unshielded = s2generalized_abcd(s_mat_unshielded)
+    if cascade_using == "T":
+        # Calculate the total T matrix: Unshielded - Shielded - Unshielded
+        s_mat_total = cascade_s_matrices(s_mat_unshielded, s_mat_shielded, s_mat_unshielded)
+    elif cascade_using == "ABCD":
+        # Convert the S-parameter matrices to ABCD matrices
+        A_shielded, B_shielded, C_shielded, D_shielded = s2generalized_abcd(s_mat_shielded)
+        A_unshielded, B_unshielded, C_unshielded, D_unshielded = s2generalized_abcd(s_mat_unshielded)
 
-    # Create the transmission matrices
-    T_shielded_row1 = np.concatenate((A_shielded, B_shielded), axis=-1)
-    T_shielded_row2 = np.concatenate((C_shielded, D_shielded), axis=-1)
-    T_shielded = np.concatenate((T_shielded_row1, T_shielded_row2), axis=-2)
+        # Create the transmission matrices
+        ABCD_shielded_row1 = np.concatenate((A_shielded, B_shielded), axis=-1)
+        ABCD_shielded_row2 = np.concatenate((C_shielded, D_shielded), axis=-1)
+        ABCD_shielded = np.concatenate((ABCD_shielded_row1, ABCD_shielded_row2), axis=-2)
 
-    T_unshielded_row1 = np.concatenate((A_unshielded, B_unshielded), axis=-1)
-    T_unshielded_row2 = np.concatenate((C_unshielded, D_unshielded), axis=-1)
-    T_unshielded = np.concatenate((T_unshielded_row1, T_unshielded_row2), axis=-2)
+        ABCD_unshielded_row1 = np.concatenate((A_unshielded, B_unshielded), axis=-1)
+        ABCD_unshielded_row2 = np.concatenate((C_unshielded, D_unshielded), axis=-1)
+        ABCD_unshielded = np.concatenate((ABCD_unshielded_row1, ABCD_unshielded_row2), axis=-2)
 
-    # Calculate the total transmission matrix: Unshielded - Shielded - Unshielded
-    T_total = np.matmul(T_unshielded, T_shielded)
-    T_total = np.matmul(T_total, T_unshielded)
+        # Calculate the total transmission matrix: Unshielded - Shielded - Unshielded
+        ABCD_total = np.matmul(ABCD_unshielded, ABCD_shielded)
+        ABCD_total = np.matmul(ABCD_total, ABCD_unshielded)
 
-    # Convert the total transmission matrix back to S-parameters
-    s_mat_total = abcd2s(T_total[:, :9, :9], T_total[:, :9, 9:], T_total[:, 9:, :9], T_total[:, 9:, 9:])
+        # Convert the total transmission matrix back to S-parameters
+        s_mat_total = abcd2s(ABCD_total[:, :9, :9], ABCD_total[:, :9, 9:], ABCD_total[:, 9:, :9], ABCD_total[:, 9:, 9:])
 
     # Convert the total S-parameter matrix back to a dictionary
     s_dict_total = trans_param_mat2dict(s_mat_total, "S")

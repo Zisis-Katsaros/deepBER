@@ -1,14 +1,15 @@
-addpath('transient');
-addpath('transient/error_statistical_analysis');
 addpath('transient/visualization');
+addpath('transient/error_statistical_analysis');
+addpath('transient');
 
 start_geom = 1;
-max_geoms = 2;
+max_geoms = 3;
+filename_s_params = "out_files/pi_stcnn/touchstone_files_total";
 filename_amplitude = ""; %"out_files/amplitude_prediction/export4transient/amplitude_predictions.mat";
 run_step_and_prbs_eye = true;
-run_pda = true;
+run_pda = false;
 show_transient_plots = true;
-show_statistics_plots = true;
+show_statistics_plots = false;
 single_channel = true;
 
 if filename_amplitude ~= ""
@@ -38,8 +39,8 @@ global_pda_Verdict_pred = []; global_pda_Verdict_act = [];
 
 for geom_idx = start_geom:(start_geom + max_geoms - 1)
     % Load s-Parameters and amplitude correction data
-    filename_preds = ['out_files/pi_stcnn/touchstone_files_total/preds/geom', num2str(geom_idx), '_pred.s18p']; 
-    filename_actuals = ['out_files/pi_stcnn/touchstone_files_total/actuals/geom', num2str(geom_idx), '_actual.s18p']; 
+    filename_preds = string(filename_s_params) + "/preds/geom" + geom_idx + "_pred.s18p";
+    filename_actuals = string(filename_s_params) + "/actuals/geom" + geom_idx + "_actual.s18p";
     
     if ~isempty(amplitude_correction_data_all_geoms)
         amplitude_correction_data = struct('V_out_pred', amplitude_correction_data_all_geoms.V_out_pred(geom_idx), ... 

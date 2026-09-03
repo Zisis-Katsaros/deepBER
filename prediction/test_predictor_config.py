@@ -1,6 +1,6 @@
 import sys
 from prediction.predictor_loops import train_pred_loop, test_pred_loop, train_pred_loop_pistcnn, test_pred_loop_pistcnn
-from prediction.s2abcd import s2abcd_dict
+from prediction.parameter_computations import s2abcd_dict
 from visualization import plot_error_distribution, plot_error_vs_feature, plot_predicted_vs_actual, plot_s_param_pred_vs_act_from_pistcnn, plot_training_curves, plot_ber_vs_length, \
                         plot_preds_vs_act_freq, plot_abcd_preds_vs_act_freq
 from load_set import get_grouping

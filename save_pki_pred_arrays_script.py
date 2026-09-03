@@ -1,6 +1,6 @@
 import torch
 import numpy as np
-from prediction.s2abcd import trans_param_dict2mat, s2rlcg_dict
+from prediction.parameter_computations import trans_param_dict2mat, s2rlcg_dict
 from dataset_manipulation import exclude_columns
 import os
 

@@ -1,6 +1,6 @@
 import numpy as np
 from scipy.linalg import expm
-from prediction.s2abcd import trans_param_dict2mat
+from prediction.parameter_computations import trans_param_dict2mat
 
 def calculate_s_coarse_matrices(l_matrices, c_matrices, freqs_ghz, lengths, z0=50.0, r_matrices=None, g_matrices=None):
     num_samples, N, _ = l_matrices.shape

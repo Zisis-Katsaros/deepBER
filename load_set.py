@@ -6,7 +6,7 @@ import torch
 from torch.utils.data import DataLoader, TensorDataset, RandomSampler
 from dataset_manipulation import extend_features, exclude_columns
 from classification.ber_to_class import ber_to_class
-from prediction.s2abcd import s2generalized_abcd
+from prediction.parameter_computations import s2generalized_abcd
 from dataset_splitting import split_dataset, latin_hypercube_order, get_grouping
 from typing import Literal, List, Tuple, Union
 from scipy.spatial import cKDTree
@@ -83,12 +83,13 @@ def create_param_prediction_arrays(csv_names: list[str], expected_ports:int = 18
 	## Creates arrays features and labels arrays from given csv file(s)
 	
 	## Args:
-	- csv_names: List of CSV file names as they appear inside csv_files/ 
+	- csv_names: List of CSV file names as they appear inside csv_files/{subfolder}
 	- expected_ports: Expected number of ports for the equivalent circuit model 
 	- target_columns: List of target column names
 	- manipulate_features: Whether to apply feature manipulation (adds width to space ratio, cross sectional area and gnd width to width ratio)
 	- sampling_method: "random" or "lhs" for subsampling the loaded dataset
 	- subfolder: Subfolder in csv_files/ where the datasets are located
+	- return_t_dicts: If True, returns dictionaries for A, B, C, D matrices in addition to S-matrix
 	## Returns:
 	- Tuple (x_array, s_dict, a_dict, b_dict, c_dict, d_dict, feature_columns)
 	"""
@@ -177,6 +178,7 @@ def create_param_prediction_arrays(csv_names: list[str], expected_ports:int = 18
 	else:
 		return x_array, s_dict, feature_columns
 
+
 def create_amplitude_prediction_arrays(csv_names: list[str], target_columns: list[str] = ["V_out_steady_state"], 
 								   manipulate_features: bool = True, sample_percentage: float = 1.0, seed: int = 42, 
 								   sampling_method: Literal["random", "lhs"] = "random", subfolder: str = "transient_dataset"):
@@ -217,7 +219,7 @@ def create_amplitude_prediction_arrays(csv_names: list[str], target_columns: lis
 
 
 def load_csv_dataset(csv_names: list[str], target_columns="BER", subfolder: str =None):
-	""""
+	"""
 	# load_csv_dataset()
 	## Loads dataset from CSV file(s)
 
@@ -317,16 +319,7 @@ def load_csv_dataset(csv_names: list[str], target_columns="BER", subfolder: str 
 	return x_array, y_array, feature_columns
 
 
-def create_dataloader(
-	x_array,
- 	y_array,
- 	batch_size=64,
- 	seed=42,
- 	ber_interval=None,
- 	logBER=False,
- 	standard_scale=False,
-	split_method="random",
-):
+def create_dataloader(x_array, y_array, batch_size=64, seed=42, ber_interval=None, logBER=False, standard_scale=False, split_method="random"):
 	# Creates dataloader
 	#
 	# Args:
@@ -412,9 +405,8 @@ def create_dataloader(
 	return [train_data, val_data, test_data]
 
 
-def create_param_dataloader(x_array: NDArray, y_array: NDArray, batch_size: int =64, seed: int =42, standard_scale = False,
-							split_method: Literal["random", "lhs", "custom"] = "random", split_idx: dict[str, np.ndarray] = None, split_percentages: list[float]=[0.8, 0.1], pki_array: NDArray = None,
-							weight_type: Literal["balanced", "low_freq"] = None):
+def create_param_dataloader(x_array: NDArray, y_array: NDArray, batch_size: int =64, seed: int =42, standard_scale = False, split_method: Literal["random", "lhs", "custom"] = "random", 
+							split_idx: dict[str, np.ndarray] = None, split_percentages: list[float]=[0.8, 0.1], pki_array: NDArray = None, weight_type: Literal["balanced", "low_freq"] = None):
 	"""
 	# create_param_dataloader()
 	## Creates train/val/test dataloader
@@ -428,6 +420,8 @@ def create_param_dataloader(x_array: NDArray, y_array: NDArray, batch_size: int 
 	- split_method: "random", "lhs" or "custom" for splitting the dataset
 	- split_idx: Dictionary with keys "train", "val", "test" and values as the corresponding row indices in the original dataset (used when split_method="custom")
 	- split_percentages: [percentage of samples for training set, percentage of samples for validation set]
+	- pki_array: Prior Knowledge Information array (optional) to be included in the dataloader
+	- weight_type: "balanced" for balancing across S-parameter elements, "low_freq" for prioritizing lower frequencies, or None for no weighting
 	## Returns:
 	- dataloader: [train_data, val_data, test_data]
 	- x_scale_params: (x_train_mean, x_train_std)
@@ -566,9 +560,6 @@ def create_param_dataloader(x_array: NDArray, y_array: NDArray, batch_size: int 
     # Convert to Tensor
 	y_weights = torch.from_numpy(y_weights).float()
     
-    # Note: The old generic "y_weights.view(1, -1)" block was removed here. 
-    # The arrays are now correctly dimensioned prior to tensor conversion.
-	
 	if pki_array is not None:
 		train_set = TensorDataset(
 			torch.from_numpy(x_array[train_idx]), 
@@ -772,10 +763,10 @@ def organize_dataset_for_pi_stcnn(x_array: NDArray, s_dict: dict, feature_column
     # Remove the frequency column from the input features
 	x_no_freq, new_feature_columns = exclude_columns(x_array, feature_columns, columns_to_exclude=["frequency_ghz"])
 
-    # Extract unique samples (collapse the dataset to one row per unique design geometry)
-    # inverse_indices maps the flat original array back to the unique geometry index
-	unique_x, inverse_indices = np.unique(x_no_freq, axis=0, return_inverse=True)
-	num_geoms = len(unique_x)
+	num_geoms = len(x_no_freq) // num_freqs
+	unique_x = x_no_freq[::num_freqs]  # Take the first row of each frequency block
+	# Map each flat row back to its geometry index
+	inverse_indices = np.repeat(np.arange(num_geoms), num_freqs)
 
     # Build Y
 	channel_keys = list(s_dict.keys())

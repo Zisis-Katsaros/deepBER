@@ -16,6 +16,7 @@ function continuous_stats = calculate_continuous_stats(pred, act)
     err_median = median(abs_error);
     err_q25 = quantile(abs_error, 0.25);
     err_q75 = quantile(abs_error, 0.75);
+    err_q99 = quantile(abs_error, 0.99);
     err_IQR = err_q75 - err_q25;
     err_max = max(abs_error);
     err_var = var(abs_error);
@@ -24,6 +25,6 @@ function continuous_stats = calculate_continuous_stats(pred, act)
 
     continuous_stats = struct('RMSE', rmse_val, 'MAE', mae_val, 'NRMSE', nrmse_val, ...
         'R_squared', R_squared, 'Median_Error', err_median, 'Q25_Error', err_q25, ...
-        'Q75_Error', err_q75, 'IQR_Error', err_IQR, 'Max_Error', err_max, ...
+        'Q75_Error', err_q75, 'Q99_Error', err_q99, 'IQR_Error', err_IQR, 'Max_Error', err_max, ...
         'Variance_Error', err_var, 'StdDev_Error', err_std, 'CoeffVar_Error', coeff_var);
 end

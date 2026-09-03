@@ -16,6 +16,11 @@ function plot_pda_eye(Ts, s1_pred_raw, s0_pred_raw, metrics_pred_raw, s1_act, s0
         metrics_pred_adj = []
     end
 
+    if isempty(s1_act) || isempty(s0_act) || isempty(s1_pred_raw) || isempty(s0_pred_raw)
+        fprintf('[PDA plot] No valid PDA waveform data to plot.\n');
+        return;
+    end
+
     % Visually Center the Eye based on the Actual Signal
     [~, max_idx] = max(s1_act - s0_act);
     center_target = round(length(s1_act) / 2);

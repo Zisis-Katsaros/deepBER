@@ -1,6 +1,10 @@
 function [s1, s0, metrics] = perform_pda(fit_main, xtalk_fits, Ts, bit_rate, Vhi, mask_height, mask_width, alpha_correction)
     % Perform Peak Distortion Analysis (PDA) on a given main channel and its crosstalk channels.
     
+    if isempty(alpha_correction)
+        alpha_correction = 1;
+    end
+
     samples_per_bit = round((1/bit_rate) / Ts);
     num_bits = 200; % Simulate 200 UI to allow all ringing/reflections to settle
     
