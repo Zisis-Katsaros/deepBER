@@ -24,7 +24,10 @@ function V_out_total = apply_xtalk(fit_main, xtalk_fits, V_in_prbs, Vhi, Ts, sam
                 V_in_aggressor = Vhi - V_in_prbs;
             else
                 % Shift by a large prime number of UIs (e.g., 89) for each aggressor to ensure statistical independence
-                shift_amount = 89 * k * samples_per_bit;
+                pattern_shift = 89 * k * samples_per_bit;
+                fractional_skew_ui = (rand() - 0.5) * 0.5; 
+                skew_shift = round(fractional_skew_ui * samples_per_bit); % simulate random skew between -0.25 and +0.25 UI
+                shift_amount = pattern_shift + skew_shift;
                 V_in_aggressor = circshift(V_in_prbs, shift_amount);
             end
             V_out_xtalk = timeresp(xtalk_fits{k}, V_in_aggressor, Ts) * alpha_correction;
