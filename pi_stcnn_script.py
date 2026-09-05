@@ -53,7 +53,7 @@ max_figures = 3
 
 # ============================================= Training and Testing ============================================= #
 if not separate_portions:
-    pred_arrays_dict = torch.load("csv_files/s_params/pt/pred_arrays_dict_total.pt", weights_only=False)
+    pred_arrays_dict = torch.load("csv_files/s_params/pt/pred_arrays_dict_shielded.pt", weights_only=False) # !!!!!
 
     x_array = pred_arrays_dict["x_array"].astype(np.float32)
     s_dict = pred_arrays_dict["s_dict"]
@@ -61,21 +61,17 @@ if not separate_portions:
 
     x_array, feature_columns, y_array = organize_dataset_for_pi_stcnn(x_array, s_dict, feature_columns)
 
-    dataloader, x_scale_params, y_scale_params, y_weights, total_split_idx_lhs = create_param_dataloader(
+    total_split_idx_lhs = torch.load("csv_files/s_params/pt/total_split_idx_lhs.pt", weights_only=False)
+    dataloader, x_scale_params, y_scale_params, y_weights, _ = create_param_dataloader(
                         x_array,
                         y_array,
                         batch_size=16,
                         seed=42,
                         standard_scale=(True, False),  # (scale_features, scale_labels)
-                        split_method="lhs",
-                        weight_type=weight_type
+                        split_method="custom",
+                        weight_type=weight_type,
+                        split_idx=total_split_idx_lhs
                         )
-    # Save Split indices
-    pt_dir = "csv_files/s_params/pt"
-    os.makedirs(pt_dir, exist_ok=True)
-
-    split_idx_path = os.path.join(pt_dir, "total_split_idx_lhs.pt")
-    torch.save(total_split_idx_lhs, split_idx_path)
 
     _, num_channels_times2, num_freqs = y_array.shape
     predictor = PI_STCNN(
@@ -114,7 +110,7 @@ if not separate_portions:
         y_scale_params=y_scale_params,
         training_curves=True,
         predicted_vs_actual=True,
-        test_out_dir = f"out_files/pi_stcnn/total",
+        test_out_dir = f"out_files/pi_stcnn/shielded_only_test", # !!!!
         close_figures=True,
         max_figures=max_figures,
         max_time_hours=5.5
@@ -280,6 +276,6 @@ export_files_for_transient(
     labels_dict_per_geom=labels_dict_list if not separate_portions else labels_dict_list_total,
     preds_dict_per_geom=preds_dict_list if not separate_portions else preds_dict_list_total,
     freq_arrays_per_geom=freq_arrays_per_geom,
-    save_dir="out_files/pi_stcnn/total/touchstone_files" if not separate_portions else "out_files/pi_stcnn/separate/touchstone_files"
+    save_dir="out_files/pi_stcnn/shielded_only_test/touchstone_files" if not separate_portions else "out_files/pi_stcnn/separate/touchstone_files" #!!!!!
 )
 # """

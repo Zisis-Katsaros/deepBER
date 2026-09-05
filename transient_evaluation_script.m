@@ -2,15 +2,17 @@ addpath('transient/visualization');
 addpath('transient/error_statistical_analysis');
 addpath('transient');
 
+% Configure Simulation Parameters
 start_geom = 1;
-max_geoms = 3;
-filename_s_params = "out_files/pi_stcnn/touchstone_files_total";
+max_geoms = 1;
+filename_s_params = "out_files/pi_stcnn/touchstone_files_separate";
 filename_amplitude = ""; %"out_files/amplitude_prediction/export4transient/amplitude_predictions.mat";
 run_step_and_prbs_eye = true;
-run_pda = false;
+run_pda = true;
 show_transient_plots = true;
 show_statistics_plots = false;
 single_channel = true;
+bit_rate = 8e9;
 
 if filename_amplitude ~= ""
     amplitude_correction_data_all_geoms = load(filename_amplitude, 'Geom_Index', 'V_out_pred', 'V_out_target');    
@@ -38,6 +40,8 @@ global_pda_EW_pred = []; global_pda_EW_act = [];
 global_pda_Verdict_pred = []; global_pda_Verdict_act = [];
 
 for geom_idx = start_geom:(start_geom + max_geoms - 1)
+    geometry_title = sprintf('Geometry %d', geom_idx);
+
     % Load s-Parameters and amplitude correction data
     filename_preds = string(filename_s_params) + "/preds/geom" + geom_idx + "_pred.s18p";
     filename_actuals = string(filename_s_params) + "/actuals/geom" + geom_idx + "_actual.s18p";
@@ -50,7 +54,8 @@ for geom_idx = start_geom:(start_geom + max_geoms - 1)
     end
     
     if run_step_and_prbs_eye
-    [prbs_data, step_metrics, eye_metrics] = run_transient_evaluation(filename_preds, filename_actuals, amplitude_correction_data, sprintf('Geometry %d', geom_idx), show_transient_plots, single_channel);
+    [prbs_data, step_metrics, eye_metrics] = run_transient_evaluation(filename_preds, filename_actuals, amplitude_correction_data, geometry_title, ... 
+                                            show_transient_plots, single_channel, bit_rate);
         step_avg_rmse = step_avg_rmse + step_metrics.avg_rmse_main;
         eye_height_avg_rmse = eye_height_avg_rmse + eye_metrics.avg_rmse_eye_height;
         eye_width_avg_rmse = eye_width_avg_rmse + eye_metrics.avg_rmse_eye_width;
@@ -66,7 +71,8 @@ for geom_idx = start_geom:(start_geom + max_geoms - 1)
     end
 
     if run_pda
-        [pda_data, pda_metrics] = run_pda_evaluation(filename_preds, filename_actuals, amplitude_correction_data, sprintf('Geometry %d', geom_idx), show_transient_plots, single_channel);
+        [pda_data, pda_metrics] = run_pda_evaluation(filename_preds, filename_actuals, amplitude_correction_data, geometry_title, show_transient_plots, ...
+                                single_channel, bit_rate);
         pda_avg_eye_height_rmse = pda_avg_eye_height_rmse + pda_metrics.avg_eye_height_rmse;
         pda_avg_eye_width_rmse = pda_avg_eye_width_rmse + pda_metrics.avg_eye_width_rmse;
         pda_avg_verdict_error_percentage = pda_avg_verdict_error_percentage + pda_metrics.verdict_error_percentage;

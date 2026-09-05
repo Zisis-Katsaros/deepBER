@@ -1,5 +1,5 @@
-function [prbs_data, step_metrics, eye_metrics] = run_transient_evaluation(filename_preds, filename_actuals, amplitude_correction_data, title, show_plots, single_channel, xtalk_type, fs, t_step, rise_time, delay, Vhi, ...
-        num_bits, bit_rate, precision)
+function [prbs_data, step_metrics, eye_metrics] = run_transient_evaluation(filename_preds, filename_actuals, amplitude_correction_data, title, show_plots, single_channel, ... 
+        bit_rate, xtalk_type, fs, t_step, rise_time, delay, Vhi, num_bits, precision)
         %{
         Compares the transient responses of the predicted to the actual S-parameters. This evaluation includes two tests: a lo->hi step stimulus and a PRBS stimulus.
         %}
@@ -10,6 +10,7 @@ function [prbs_data, step_metrics, eye_metrics] = run_transient_evaluation(filen
         title (1,1) string = "Transient Evaluation"
         show_plots (1,1) logical = true
         single_channel (1,1) logical = false
+        bit_rate (1,1) double {mustBePositive} = 32e9; 
         xtalk_type (1,1) string {mustBeMember(xtalk_type, ["none", "worst-case", "realistic"])} = "realistic"
         fs (1,1) double = 1e12
         t_step (1,1) double = 2e-9
@@ -17,7 +18,6 @@ function [prbs_data, step_metrics, eye_metrics] = run_transient_evaluation(filen
         delay (1,1) double {mustBeNonnegative} = 100e-12; 
         Vhi (1,1) double {mustBePositive} = 0.625; 
         num_bits (1,1) double {mustBeInteger, mustBePositive} = 1000;
-        bit_rate (1,1) double {mustBePositive} = 32e9; 
         precision = -40;
     end
 
@@ -65,8 +65,8 @@ function [prbs_data, step_metrics, eye_metrics] = run_transient_evaluation(filen
         end
         
         % S-parameters to Impulse Response Conversion
-        [fit_main_pred, fit_next1_pred, fit_fext1_pred, fit_next2_pred, fit_fext2_pred] = s_params2impulse_response(filename_preds, tx, rx, next1, fext1, next2, fext2, precision);
-        [fit_main_actual, fit_next1_actual, fit_fext1_actual, fit_next2_actual, fit_fext2_actual] = s_params2impulse_response(filename_actuals, tx, rx, next1, fext1, next2, fext2, precision);
+        [fit_main_pred, fit_next1_pred, fit_fext1_pred, fit_next2_pred, fit_fext2_pred] = s_params2impulse_response(filename_preds, tx, rx, next1, fext1, next2, fext2, precision, bit_rate);
+        [fit_main_actual, fit_next1_actual, fit_fext1_actual, fit_next2_actual, fit_fext2_actual] = s_params2impulse_response(filename_actuals, tx, rx, next1, fext1, next2, fext2, precision, bit_rate);
         
         % timeresp(model, V_in, Ts);
         % Predicted step response
@@ -223,7 +223,7 @@ function [prbs_data, step_metrics, eye_metrics] = run_transient_evaluation(filen
 
             plot_eye_pred_vs_act(t_eye_plot, eye_matrix_Vout_pred(plot_idx, :), ...
                 eye_matrix_Vout_actual(plot_idx, :), ...
-                sprintf('%s - Eye Diagram Prediction Vs Actual (Port %d)', title, port), ...
+                sprintf('%s - Receiver Eye Diagram', title), ...
                 eval_plot_adj); 
         end   
     end
