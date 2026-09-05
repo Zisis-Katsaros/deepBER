@@ -1,4 +1,4 @@
-function [pda_data, pda_metrics] = run_pda_evaluation(filename_preds, filename_actuals, amplitude_correction_data, title_str, show_plots, single_channel, fs, bit_rate, Vhi)
+function [pda_data, pda_metrics] = run_pda_evaluation(filename_preds, filename_actuals, amplitude_correction_data, title_str, show_plots, single_channel, bit_rate, fs, Vhi)
     %{
     Runs Peak Distortion Analysis (PDA) on predicted and actual S-parameters.
     Identifies the worst-case channel and evaluates pass/fail against the UCIe mask.
@@ -10,16 +10,21 @@ function [pda_data, pda_metrics] = run_pda_evaluation(filename_preds, filename_a
         title_str (1,1) string = "PDA Evaluation"
         show_plots (1,1) logical = true
         single_channel (1,1) logical = false
-        fs (1,1) double = 2e12 % 0.5 ps resolution
-        bit_rate (1,1) double = 16e9 % 32 GT/s UCIe Standard
+        bit_rate (1,1) double = 16e9
+        fs (1,1) double = 2e12 % 0.5 ps resolution 
         Vhi (1,1) double = 0.625
     end
 
     Ts = 1/fs;
     
-    % UCIe 32 GT/s Specification Mask
-    mask_height = 40e-3; % 40 mV
-    mask_width = 20e-12; % 20 ps
+    % UCIe Specification Mask based on transmission rate
+    if bit_rate <= 16e9
+        mask_height = 40e-3; % 40 mV
+        mask_width = 47e-12; % 47 ps
+    else
+        mask_height = 40e-3; % 40 mV
+        mask_width = 20e-12; % 20 ps
+    end
 
     fprintf('\n======================================================\n');
     fprintf('[PDA] Starting Peak Distortion Analysis: %s\n', title_str);
@@ -67,10 +72,10 @@ function [pda_data, pda_metrics] = run_pda_evaluation(filename_preds, filename_a
 
         % Extract VTF rational models 
         [fit_main_pred, fit_next1_pred, fit_fext1_pred, fit_next2_pred, fit_fext2_pred] = ...
-            s_params2vtf_models(filename_preds, tx, rx, next1, fext1, next2, fext2);
+            s_params2vtf_models(filename_preds, tx, rx, next1, fext1, next2, fext2, bit_rate);
             
         [fit_main_act, fit_next1_act, fit_fext1_act, fit_next2_act, fit_fext2_act] = ...
-            s_params2vtf_models(filename_actuals, tx, rx, next1, fext1, next2, fext2);
+            s_params2vtf_models(filename_actuals, tx, rx, next1, fext1, next2, fext2, bit_rate);
 
         % Group crosstalk models into cell arrays
         xtalk_fits_pred = {fit_next1_pred, fit_fext1_pred, fit_next2_pred, fit_fext2_pred};
@@ -169,7 +174,7 @@ function [pda_data, pda_metrics] = run_pda_evaluation(filename_preds, filename_a
         end
         
         if show_plots
-            plot_title_str = sprintf('%s - PDA Worst-Case Eye (Port %d)', title_str, port);
+            plot_title_str = sprintf('%s - PDA Worst-Case Eye', title_str);
             plot_pda_eye(Ts, s1_pred_raw, s0_pred_raw, metrics_pred_raw, s1_act, s0_act, metrics_act, ...
                 mask_height, mask_width, plot_title_str, s1_pred_adj, s0_pred_adj, metrics_pred_adj);
         end
