@@ -1,8 +1,23 @@
-function [fit_main, fit_next1, fit_fext1, fit_next2, fit_fext2] = s_params2vtf_models(filename, tx, rx, next1, fext1, next2, fext2)
+function [fit_main, fit_next1, fit_fext1, fit_next2, fit_fext2] = s_params2vtf_models(filename, tx, rx, next1, fext1, next2, fext2, bit_rate)
     
-    % UCIe 32 GT/s Standard Defaults
-    R_tx = 30; C_tx = 125e-15; 
-    R_rx = 50; C_rx = 125e-15; 
+    % Configure termination and capacitance values for Tx and Rx as specified in the UCIe protocol for the standard package at the given bit rate
+    if bit_rate <= 12e9
+        R_tx = 30;
+        R_rx = 1e6; % unterminated
+        C_tx = 125e-15;
+        C_rx = 125e-15;
+    elseif bit_rate <= 16e9
+         R_tx = 30;
+        R_rx = 50; % reach dependent, simplified to a fixed 50 Ohm value
+        C_tx = 125e-15;
+        C_rx = 125e-15;
+    else 
+        R_tx = 30;
+        R_rx = 50;
+        C_tx = 125e-15;
+        C_rx = 125e-15;
+    end
+     
     precision = -40;
 
     S_data = sparameters(filename);
