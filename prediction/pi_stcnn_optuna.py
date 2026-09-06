@@ -90,12 +90,12 @@ def run_pi_stcnn_optuna(x_array, y_array, feature_columns, batch_size=16, mlp_hi
 
         # Search Space:
         # MLP hyperparameters
-        mlp_hidden_shape_name = trial.suggest_categorical("mlp_hidden_shape_name", list(mlp_hidden_map.keys()))
+        mlp_hidden_shape_name = "rect_long_xxl" #trial.suggest_categorical("mlp_hidden_shape_name", list(mlp_hidden_map.keys()))
         mlp_hidden = mlp_hidden_map[mlp_hidden_shape_name]
         dropout = 0.0 # trial.suggest_float("dropout", 0.0, 0.2, step=0.02)
 
         # TCNN hyperparameters
-        tcnn_hidden_shape_name = trial.suggest_categorical("tcnn_hidden_shape_name", list(tcnn_hidden_map.keys()))
+        tcnn_hidden_shape_name = "rect_7_196" # trial.suggest_categorical("tcnn_hidden_shape_name", list(tcnn_hidden_map.keys()))
         tcnn_hidden_shape = tcnn_hidden_map[tcnn_hidden_shape_name]
         tcnn_n_layers = len(tcnn_hidden_shape)
 
@@ -162,7 +162,7 @@ def run_pi_stcnn_optuna(x_array, y_array, feature_columns, batch_size=16, mlp_hi
             raise optuna.TrialPruned(f"Trial {trial.number} pruned due to excessive output length: {current_seq_len} > {target_len}")
         
         # Other hyperparameters
-        layer_norm = trial.suggest_categorical("layer_norm", [True, False])
+        layer_norm = True # trial.suggest_categorical("layer_norm", [True, False])
         weight_decay = 0.0 # trial.suggest_float("weight_decay", 1e-8, 1e-3, log=True)
         varience_min = 0.1
         lr = 0.001
