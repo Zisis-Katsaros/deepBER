@@ -1,9 +1,10 @@
-function [eye_height, eye_jitter, eye_amp, eye_width] = calculate_eye_stats(eye_matrix, fs, bit_rate, search_window_perc)
+function [eye_height, eye_jitter, eye_amp, eye_width] = calculate_eye_stats(eye_matrix, fs, bit_rate, search_window_perc, check_for_closure)
     arguments
         eye_matrix
         fs
         bit_rate
         search_window_perc (1,1) double = 0.25 
+        check_for_closure (1,1) logical = false
     end
 
     bit_period = 1/bit_rate;
@@ -31,7 +32,7 @@ function [eye_height, eye_jitter, eye_amp, eye_width] = calculate_eye_stats(eye_
     stat_inner_high = mean(v_high) - 2 * std(v_high);
     stat_inner_low = mean(v_low) + 2 * std(v_low);
     
-    if stat_inner_high <= stat_inner_low
+    if check_for_closure && stat_inner_high <= stat_inner_low
         eye_height = 0;
     else
         eye_height = min(v_high) - max(v_low); 
