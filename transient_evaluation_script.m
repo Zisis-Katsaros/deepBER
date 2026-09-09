@@ -4,15 +4,15 @@ addpath('transient');
 
 % Configure Simulation Parameters
 start_geom = 1;
-max_geoms = 1;
+max_geoms = 46;
 filename_s_params = "out_files/pi_stcnn/touchstone_files_separate";
 filename_amplitude = ""; %"out_files/amplitude_prediction/export4transient/amplitude_predictions.mat";
-run_step_and_prbs_eye = true;
+run_step_and_prbs_eye = false;
 run_pda = true;
-show_transient_plots = true;
-show_statistics_plots = false;
+show_transient_plots = false;
+show_statistics_plots = true;
 single_channel = true;
-bit_rate = 8e9;
+bit_rate = 16e9;
 
 if filename_amplitude ~= ""
     amplitude_correction_data_all_geoms = load(filename_amplitude, 'Geom_Index', 'V_out_pred', 'V_out_target');    

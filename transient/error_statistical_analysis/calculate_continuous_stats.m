@@ -5,6 +5,7 @@ function continuous_stats = calculate_continuous_stats(pred, act)
     % Aggregate Metrics
     rmse_val = sqrt(mean(raw_error.^2));
     mae_val = mean(abs_error);
+    mape_val = mean(abs_error ./ (abs(act) + 1e-15)); % Avoid division by zero
     span_act = max(act) - min(act);
     nrmse_val = rmse_val / span_act; % Normalized RMSE
 
@@ -22,7 +23,7 @@ function continuous_stats = calculate_continuous_stats(pred, act)
     err_std = std(abs_error);
     coeff_var = err_std / mean(abs_error);
 
-    continuous_stats = struct('RMSE', rmse_val, 'MAE', mae_val, 'NRMSE', nrmse_val, ...
+    continuous_stats = struct('RMSE', rmse_val, 'MAE', mae_val, 'MAPE', mape_val, 'NRMSE', nrmse_val, ...
         'R_squared', R_squared, 'Median_Error', err_median, 'Q25_Error', err_q25, ...
         'Q75_Error', err_q75, 'IQR_Error', err_IQR, 'Max_Error', err_max, ...
         'Variance_Error', err_var, 'StdDev_Error', err_std, 'CoeffVar_Error', coeff_var);
