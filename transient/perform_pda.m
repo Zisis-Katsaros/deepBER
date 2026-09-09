@@ -58,8 +58,45 @@ function [s1, s0, metrics] = perform_pda(fit_main, xtalk_fits, Ts, bit_rate, Vhi
     % Calculate Eye Width and Jitter at V_ref
     if metrics.eye_height > 0
         Vref = (max(s1) + min(s0)) / 2;
-        valid_width_indices = (s1 > Vref) & (s0 < Vref);
-        metrics.eye_width = sum(valid_width_indices) * Ts;
+        
+        % The margin to Vref bounds the valid eye opening
+        % Positive margin means the eye is open, negative means closed
+        margin_to_vref = min(s1 - Vref, Vref - s0); 
+        
+        % Find all continuous fractional crossing indices
+        cross_idx = [];
+        for i = 1:(length(margin_to_vref)-1)
+            y1 = margin_to_vref(i);
+            y2 = margin_to_vref(i+1);
+            
+            % If the signal crosses zero between sample i and i+1
+            if sign(y1) ~= sign(y2) && y1 ~= 0
+                slope = y2 - y1;
+                cross_idx(end+1) = i - (y1 / slope);
+            elseif y1 == 0
+                cross_idx(end+1) = i;
+            end
+        end
+        
+        % Add the start and end of the 1-UI window to our boundaries
+        all_idx = unique([1, cross_idx, length(margin_to_vref)]);
+        continuous_width_idx = 0;
+        
+        % Iterate through every segment and sum the width if it is "open"
+        for i = 1:(length(all_idx)-1)
+            idx1 = all_idx(i);
+            idx2 = all_idx(i+1);
+            
+            % Check the value at the midpoint of this segment
+            idx_mid = round((idx1 + idx2) / 2);
+            
+            % If margin is positive at the midpoint, this entire segment is open
+            if margin_to_vref(idx_mid) > 0
+                continuous_width_idx = continuous_width_idx + (idx2 - idx1);
+            end
+        end
+        
+        metrics.eye_width = continuous_width_idx * Ts;
         metrics.jitter = (1/bit_rate) - metrics.eye_width;
     else
         metrics.eye_width = 0;
