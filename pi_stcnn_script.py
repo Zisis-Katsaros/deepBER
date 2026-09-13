@@ -66,9 +66,10 @@ if not separate_portions:
     storage_url = f"sqlite:///{db_path}"
     # eval_pistcnn_study(storage_url)
     run_pi_stcnn_optuna(x_array, y_array, feature_columns, n_trials=300, n_epochs=500, storage=storage_url, fixed_ks_s=False)
-
     """
+      
     total_split_idx_lhs = torch.load("csv_files/s_params/pt/total_split_idx_lhs.pt", weights_only=False)
+    """
     dataloader, x_scale_params, y_scale_params, y_weights, _ = create_param_dataloader(
                         x_array,
                         y_array,
@@ -122,7 +123,11 @@ if not separate_portions:
         max_figures=max_figures,
         max_time_hours=5.5
         )
-    
+    """
+    test_results = np.load("out_files/pi_stcnn/shielded_only_test/test_results.npz", allow_pickle=True)
+    test_preds = test_results["preds"]
+    test_labels = test_results["targets"]
+
     labels_dict_list, preds_dict_list = convert_stcnn_outputs_to_dicts(test_targets=test_labels, test_preds=test_preds, num_ports=18)
     num_geometries = test_preds.shape[0]
 

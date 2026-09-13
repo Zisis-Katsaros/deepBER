@@ -1,18 +1,22 @@
 addpath('transient/visualization');
 addpath('transient/error_statistical_analysis');
 addpath('transient');
+addpath('transient/fsv');
 
 % Configure Simulation Parameters
 start_geom = 1;
 max_geoms = 46;
-filename_s_params = "out_files/pi_stcnn/touchstone_files_separate";
+filename_s_params = "out_files/pi_stcnn/touchstone_files_shielded_only";
 filename_amplitude = ""; %"out_files/amplitude_prediction/export4transient/amplitude_predictions.mat";
+
 run_step_and_prbs_eye = false;
-run_pda = true;
+run_pda = false;
 show_transient_plots = false;
 show_statistics_plots = true;
 single_channel = true;
 bit_rate = 16e9;
+
+run_fsv = true;
 
 if filename_amplitude ~= ""
     amplitude_correction_data_all_geoms = load(filename_amplitude, 'Geom_Index', 'V_out_pred', 'V_out_target');    
@@ -87,6 +91,10 @@ for geom_idx = start_geom:(start_geom + max_geoms - 1)
         global_pda_Verdict_pred = [global_pda_Verdict_pred, pda_data.Pass_pred(valid_idx)];
         global_pda_Verdict_act  = [global_pda_Verdict_act,  pda_data.Pass_act(valid_idx)];
     end
+
+    if run_fsv
+        run_fsv_evaluation(filename_preds, filename_actuals);
+    end
 end
 
 %{
@@ -118,5 +126,11 @@ end
 %}
 fprintf('\n\n');
 
-run_error_stat_analysis(global_prbs_EH_pred, global_prbs_EH_act, global_prbs_EW_pred, global_prbs_EW_act, global_pda_EH_pred, global_pda_EH_act, global_pda_EW_pred, ... 
-                        global_pda_EW_act, global_pda_Verdict_pred, global_pda_Verdict_act, show_statistics_plots);
+if run_step_and_prbs_eye || run_pda
+    run_error_stat_analysis(global_prbs_EH_pred, global_prbs_EH_act, global_prbs_EW_pred, global_prbs_EW_act, global_pda_EH_pred, global_pda_EH_act, global_pda_EW_pred, ... 
+                            global_pda_EW_act, global_pda_Verdict_pred, global_pda_Verdict_act, show_statistics_plots);
+end
+
+
+
+
