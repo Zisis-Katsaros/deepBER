@@ -2,21 +2,25 @@ addpath('transient/visualization');
 addpath('transient/error_statistical_analysis');
 addpath('transient');
 addpath('transient/fsv');
+addpath('transient/fsv_statistical_analysis');
 
 % Configure Simulation Parameters
 start_geom = 1;
 max_geoms = 46;
-filename_s_params = "out_files/pi_stcnn/touchstone_files_shielded_only";
+filename_s_params = "out_files/pi_stcnn/touchstone_files_total";
 filename_amplitude = ""; %"out_files/amplitude_prediction/export4transient/amplitude_predictions.mat";
 
 run_step_and_prbs_eye = false;
 run_pda = false;
 show_transient_plots = false;
-show_statistics_plots = true;
+
 single_channel = true;
 bit_rate = 16e9;
 
 run_fsv = true;
+show_fsv_plots = false;
+
+show_statistics_plots = true;
 
 if filename_amplitude ~= ""
     amplitude_correction_data_all_geoms = load(filename_amplitude, 'Geom_Index', 'V_out_pred', 'V_out_target');    
@@ -42,6 +46,17 @@ global_prbs_EW_pred = []; global_prbs_EW_act = [];
 global_pda_EH_pred = []; global_pda_EH_act = [];
 global_pda_EW_pred = []; global_pda_EW_act = [];
 global_pda_Verdict_pred = []; global_pda_Verdict_act = [];
+
+if run_fsv
+    global_ADMc_geoms = zeros(max_geoms, 6);
+    global_FDMc_geoms = zeros(max_geoms, 6);
+    global_GDMc_geoms = zeros(max_geoms, 6);
+
+    % Initialize arrays for raw numerical statistics
+    global_ADM_all = [];
+    global_FDM_all = [];
+    global_GDM_all = [];
+end
 
 for geom_idx = start_geom:(start_geom + max_geoms - 1)
     geometry_title = sprintf('Geometry %d', geom_idx);
@@ -93,42 +108,29 @@ for geom_idx = start_geom:(start_geom + max_geoms - 1)
     end
 
     if run_fsv
-        run_fsv_evaluation(filename_preds, filename_actuals);
+        [geom_ADMc, geom_FDMc, geom_GDMc, ADM_mat, FDM_mat, GDM_mat] = run_fsv_evaluation(filename_preds, filename_actuals, geom_idx, show_fsv_plots);
+
+        geom_array_idx = geom_idx - start_geom + 1;
+        global_ADMc_geoms(geom_array_idx, :) = geom_ADMc;
+        global_FDMc_geoms(geom_array_idx, :) = geom_FDMc;
+        global_GDMc_geoms(geom_array_idx, :) = geom_GDMc;
+
+        % Flatten the NxN matrices and append to the global arrays
+        global_ADM_all = [global_ADM_all; ADM_mat(:)];
+        global_FDM_all = [global_FDM_all; FDM_mat(:)];
+        global_GDM_all = [global_GDM_all; GDM_mat(:)];
     end
 end
 
-%{
-if run_step_and_prbs_eye
-    step_avg_rmse = step_avg_rmse / max_geoms;
-    eye_height_avg_rmse = eye_height_avg_rmse / max_geoms;
-    eye_width_avg_rmse = eye_width_avg_rmse / max_geoms;
-    eye_height_avg_mape = eye_height_avg_mape / max_geoms;
-    eye_width_avg_mape = eye_width_avg_mape / max_geoms;
-    fprintf('Average Step RMSE across %d geometries: %.4f\n', max_geoms, step_avg_rmse);
-    fprintf('Average Eye Height RMSE across %d geometries: %.4f\n', max_geoms, eye_height_avg_rmse);
-    fprintf('Average Eye Width RMSE across %d geometries: %.4f\n', max_geoms, eye_width_avg_rmse);
-    fprintf('Average Eye Height MAPE across %d geometries: %.4f%%\n', max_geoms, eye_height_avg_mape);
-    fprintf('Average Eye Width MAPE across %d geometries: %.4f%%\n', max_geoms, eye_width_avg_mape);
-end
-
-if run_pda
-    pda_avg_eye_height_rmse = pda_avg_eye_height_rmse / max_geoms;
-    pda_avg_eye_width_rmse = pda_avg_eye_width_rmse / max_geoms;
-    pda_avg_verdict_error_percentage = pda_avg_verdict_error_percentage / max_geoms;
-    pda_avg_eye_height_mape = pda_avg_eye_height_mape / max_geoms;
-    pda_avg_eye_width_mape = pda_avg_eye_width_mape / max_geoms;
-    fprintf('Average PDA Eye Height RMSE across %d geometries: %.4f\n', max_geoms, pda_avg_eye_height_rmse);
-    fprintf('Average PDA Eye Width RMSE across %d geometries: %.4f\n', max_geoms, pda_avg_eye_width_rmse);
-    fprintf('Average PDA Verdict Error Percentage across %d geometries: %.4f%%\n', max_geoms, pda_avg_verdict_error_percentage);
-    fprintf('Average PDA Eye Height MAPE across %d geometries: %.4f%%\n', max_geoms, pda_avg_eye_height_mape);
-    fprintf('Average PDA Eye Width MAPE across %d geometries: %.4f%%\n', max_geoms, pda_avg_eye_width_mape);
-end
-%}
 fprintf('\n\n');
 
 if run_step_and_prbs_eye || run_pda
     run_error_stat_analysis(global_prbs_EH_pred, global_prbs_EH_act, global_prbs_EW_pred, global_prbs_EW_act, global_pda_EH_pred, global_pda_EH_act, global_pda_EW_pred, ... 
                             global_pda_EW_act, global_pda_Verdict_pred, global_pda_Verdict_act, show_statistics_plots);
+end
+
+if run_fsv
+    run_fsv_stat_analysis(global_ADM_all, global_FDM_all, global_GDM_all, global_ADMc_geoms, global_FDMc_geoms, global_GDMc_geoms, start_geom, max_geoms);  
 end
 
 
