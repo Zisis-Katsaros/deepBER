@@ -5,22 +5,27 @@ addpath('transient/fsv');
 addpath('transient/fsv_statistical_analysis');
 
 % Configure Simulation Parameters
-start_geom = 1;
-max_geoms = 46;
+start_geom = 24;
+max_geoms = 1;
 filename_s_params = "out_files/pi_stcnn/touchstone_files_total";
 filename_amplitude = ""; %"out_files/amplitude_prediction/export4transient/amplitude_predictions.mat";
 
-run_step_and_prbs_eye = false;
+run_step_and_prbs_eye = true;
 run_pda = false;
-show_transient_plots = false;
+show_transient_plots = true;
 
 single_channel = true;
 bit_rate = 16e9;
 
-run_fsv = true;
+run_fsv = false;
 show_fsv_plots = false;
 
-show_statistics_plots = true;
+show_statistics_plots = false;
+
+% --- NEW: Quality Check Configuration ---
+run_quality_check = false;
+quality_threshold = 80; % IEEE 370 score > 80 is 'Good', > 50 is 'Acceptable'
+% ----------------------------------------
 
 if filename_amplitude ~= ""
     amplitude_correction_data_all_geoms = load(filename_amplitude, 'Geom_Index', 'V_out_pred', 'V_out_target');    
@@ -47,6 +52,11 @@ global_pda_EH_pred = []; global_pda_EH_act = [];
 global_pda_EW_pred = []; global_pda_EW_act = [];
 global_pda_Verdict_pred = []; global_pda_Verdict_act = [];
 
+% --- NEW: Initialize Quality Check Counters ---
+causal_samples_count = 0;
+passive_samples_count = 0;
+% ----------------------------------------------
+
 if run_fsv
     global_ADMc_geoms = zeros(max_geoms, 6);
     global_FDMc_geoms = zeros(max_geoms, 6);
@@ -64,6 +74,26 @@ for geom_idx = start_geom:(start_geom + max_geoms - 1)
     % Load s-Parameters and amplitude correction data
     filename_preds = string(filename_s_params) + "/preds/geom" + geom_idx + "_pred.s18p";
     filename_actuals = string(filename_s_params) + "/actuals/geom" + geom_idx + "_actual.s18p";
+
+    % --- NEW: Causality and Passivity Check ---
+    if run_quality_check
+        % The function natively accepts Touchstone file paths.
+        % It returns [Causality, Reciprocity, Passivity] metrics.
+        % We use '~' to ignore the reciprocity metric for now.
+        [cqm_pred, ~, pqm_pred] = ieee370QualityCheckFrequencyDomain(filename_preds);
+        
+        % Check if the predictions meet the quality threshold
+        if cqm_pred > quality_threshold
+            causal_samples_count = causal_samples_count + 1;
+        end
+        if pqm_pred > quality_threshold
+            passive_samples_count = passive_samples_count + 1;
+        end
+        
+        % Print per-sample metrics to the console
+        fprintf('%s - Predicted S-Params Quality -> Causality: %.2f%% | Passivity: %.2f%%\n', geometry_title, cqm_pred, pqm_pred);
+    end
+    % ------------------------------------------
     
     if ~isempty(amplitude_correction_data_all_geoms)
         amplitude_correction_data = struct('V_out_pred', amplitude_correction_data_all_geoms.V_out_pred(geom_idx), ... 
@@ -123,6 +153,18 @@ for geom_idx = start_geom:(start_geom + max_geoms - 1)
 end
 
 fprintf('\n\n');
+
+% --- NEW: Quality Summary Output ---
+if run_quality_check
+    causality_percentage = (causal_samples_count / max_geoms) * 100;
+    passivity_percentage = (passive_samples_count / max_geoms) * 100;
+    
+    fprintf('=== S-Parameter Quality Check Summary (Predicted Models) ===\n');
+    fprintf('Total Geometries Evaluated: %d\n', max_geoms);
+    fprintf('Passive Samples (>%d%% metric): %.2f%%\n', quality_threshold, passivity_percentage);
+    fprintf('Causal Samples  (>%d%% metric): %.2f%%\n\n', quality_threshold, causality_percentage);
+end
+% -----------------------------------
 
 if run_step_and_prbs_eye || run_pda
     run_error_stat_analysis(global_prbs_EH_pred, global_prbs_EH_act, global_prbs_EW_pred, global_prbs_EW_act, global_pda_EH_pred, global_pda_EH_act, global_pda_EW_pred, ... 
