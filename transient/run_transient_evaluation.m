@@ -158,31 +158,11 @@ function [prbs_data, step_metrics, eye_metrics] = run_transient_evaluation(filen
             eval_prbs_pred = V_out_main_prbs_pred;
         end
 
-        % === DYNAMIC ALIGNMENT BLOCK ===
-        settle_bits = 10;
-        
-        % Force valid_bits to be an even number to allow reshaping into 2-UI columns
-        valid_bits = floor((num_bits - settle_bits - 1) / 2) * 2; 
-        
-        valid_samples = valid_bits * samples_per_bit; 
-        settle_idx = settle_bits * samples_per_bit;
-
-        % Check variance across columns temporarily to find the true first crossing point
-        temp_matrix = reshape(V_out_main_prbs_actual(settle_idx + 1 : settle_idx + valid_samples), samples_per_bit * 2, []);
-        v_var = var(temp_matrix, 0, 2);
-        [~, actual_cross_idx] = min(v_var(1:samples_per_bit));
-        
-        % Calculate shift required to perfectly align crossing to exactly 0.5 UI
-        target_cross_idx = round(samples_per_bit / 2);
-        idx_offset = actual_cross_idx - target_cross_idx;
-
-        % Shift the linear read-window. This naturally absorbs the delay and centers the eye geometry natively!
-        aligned_start = settle_idx + 1 + idx_offset;
-        aligned_end = aligned_start + valid_samples - 1;
-
+        % Eye dynamic alignment
+        [aligned_start, aligned_end] = get_eye_alignment(num_bits, samples_per_bit, V_out_main_prbs_actual);
         eye_matrix_Vout_pred = reshape(V_out_main_prbs_pred(aligned_start:aligned_end), samples_per_bit * 2, []);
         eye_matrix_Vout_actual = reshape(V_out_main_prbs_actual(aligned_start:aligned_end), samples_per_bit * 2, []);
-        
+
         if ~isempty(V_out_main_prbs_pred_adj)
             eye_matrix_Vout_pred_adj = reshape(V_out_main_prbs_pred_adj(aligned_start:aligned_end), samples_per_bit * 2, []);
             eval_eye_matrix = eye_matrix_Vout_pred_adj;
@@ -190,7 +170,6 @@ function [prbs_data, step_metrics, eye_metrics] = run_transient_evaluation(filen
             eye_matrix_Vout_pred_adj = [];
             eval_eye_matrix = eye_matrix_Vout_pred;
         end
-        % ==============================
         
         [rmse_eye.rt(port), rmse_eye.ft(port), rmse_eye.height(port), rmse_eye.jitter(port), rmse_eye.amp(port), rmse_eye.width(port), mape_eye.height(port), mape_eye.width(port), ...
          prbs_data.EH_pred(port), prbs_data.EH_act(port), prbs_data.EW_pred(port), prbs_data.EW_act(port)] = ...
