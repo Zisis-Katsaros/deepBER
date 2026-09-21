@@ -1,4 +1,4 @@
-function [prbs_data, step_metrics, eye_metrics] = run_transient_evaluation(filename_preds, filename_actuals, amplitude_correction_data, title, show_plots, single_channel, ... 
+function [prbs_data, step_metrics, eye_metrics, ber_data] = run_transient_evaluation(filename_preds, filename_actuals, amplitude_correction_data, title, show_plots, single_channel, ... 
         bit_rate, xtalk_type, fs, t_step, rise_time, delay, Vhi, num_bits, precision)
         %{
         Compares the transient responses of the predicted to the actual S-parameters. This evaluation includes two tests: a lo->hi step stimulus and a PRBS stimulus.
@@ -225,6 +225,11 @@ function [prbs_data, step_metrics, eye_metrics] = run_transient_evaluation(filen
         'avg_mape_eye_height', mean(mape_eye.height, 'omitnan'), 'min_mape_eye_height', min(mape_eye.height, [], 'omitnan'), 'max_mape_eye_height', max(mape_eye.height, [], 'omitnan'), ...
         'avg_mape_eye_width', mean(mape_eye.width, 'omitnan'), 'min_mape_eye_width', min(mape_eye.width, [], 'omitnan'), 'max_mape_eye_width', max(mape_eye.width, [], 'omitnan') ...
     );
+
+    % BER Calculation
+    stat_ber_pred = get_ber(V_in_prbs, eval_prbs_pred, bit_rate, num_bits);
+    stat_ber_actual = get_ber(V_in_prbs, V_out_main_prbs_actual, bit_rate, num_bits);
+    ber_data = struct('pred', stat_ber_pred, 'act', stat_ber_actual, 'error', abs(stat_ber_pred - stat_ber_actual));
 
     fprintf("[transient evaluation] Average RMSE Step Stimulus: Main=%.4f V, NEXT1=%.4f V, FEXT1=%.4f V, NEXT2=%.4f V, FEXT2=%.4f V\n", ... 
         step_metrics.avg_rmse_main, step_metrics.avg_rmse_next1, step_metrics.avg_rmse_fext1, step_metrics.avg_rmse_next2, step_metrics.avg_rmse_fext2);
