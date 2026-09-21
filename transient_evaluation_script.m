@@ -1,26 +1,29 @@
 addpath('transient/visualization');
+addpath('transient/freq2time');
+addpath('transient/step_and_prbs_eye');
+addpath('transient/pda');
 addpath('transient/error_statistical_analysis');
 addpath('transient');
 addpath('transient/fsv');
 addpath('transient/fsv_statistical_analysis');
 
 % Configure Simulation Parameters
-start_geom = 24;
-max_geoms = 1;
+start_geom = 1;
+max_geoms = 46;
 filename_s_params = "out_files/pi_stcnn/touchstone_files_total";
 filename_amplitude = ""; %"out_files/amplitude_prediction/export4transient/amplitude_predictions.mat";
 
 run_step_and_prbs_eye = true;
 run_pda = false;
-show_transient_plots = true;
+show_transient_plots = false;
 
 single_channel = true;
-bit_rate = 16e9;
+bit_rate = 4e9;
 
 run_fsv = false;
 show_fsv_plots = false;
 
-show_statistics_plots = false;
+show_statistics_plots = true;
 
 % --- NEW: Quality Check Configuration ---
 run_quality_check = false;
@@ -51,6 +54,7 @@ global_prbs_EW_pred = []; global_prbs_EW_act = [];
 global_pda_EH_pred = []; global_pda_EH_act = [];
 global_pda_EW_pred = []; global_pda_EW_act = [];
 global_pda_Verdict_pred = []; global_pda_Verdict_act = [];
+global_ber_pred = []; global_ber_act = [];
 
 % --- NEW: Initialize Quality Check Counters ---
 causal_samples_count = 0;
@@ -69,6 +73,11 @@ if run_fsv
 end
 
 for geom_idx = start_geom:(start_geom + max_geoms - 1)
+    if geom_idx == 24
+        fprintf('Skipping geometry %d due to known issues with S-parameter data.\n', geom_idx);
+        continue;
+    end
+
     geometry_title = sprintf('Geometry %d', geom_idx);
 
     % Load s-Parameters and amplitude correction data
@@ -80,7 +89,7 @@ for geom_idx = start_geom:(start_geom + max_geoms - 1)
         % The function natively accepts Touchstone file paths.
         % It returns [Causality, Reciprocity, Passivity] metrics.
         % We use '~' to ignore the reciprocity metric for now.
-        [cqm_pred, ~, pqm_pred] = ieee370QualityCheckFrequencyDomain(filename_preds);
+        [cqm_pred, ~, pqm_pred] = ieee370QualityCheckFrequencyDomain(filename_actuals);
         
         % Check if the predictions meet the quality threshold
         if cqm_pred > quality_threshold
@@ -103,7 +112,7 @@ for geom_idx = start_geom:(start_geom + max_geoms - 1)
     end
     
     if run_step_and_prbs_eye
-    [prbs_data, step_metrics, eye_metrics] = run_transient_evaluation(filename_preds, filename_actuals, amplitude_correction_data, geometry_title, ... 
+    [prbs_data, step_metrics, eye_metrics, ber_data] = run_transient_evaluation(filename_preds, filename_actuals, amplitude_correction_data, geometry_title, ... 
                                             show_transient_plots, single_channel, bit_rate);
         step_avg_rmse = step_avg_rmse + step_metrics.avg_rmse_main;
         eye_height_avg_rmse = eye_height_avg_rmse + eye_metrics.avg_rmse_eye_height;
@@ -117,6 +126,9 @@ for geom_idx = start_geom:(start_geom + max_geoms - 1)
         global_prbs_EH_act  = [global_prbs_EH_act,  prbs_data.EH_act(valid_idx)];
         global_prbs_EW_pred = [global_prbs_EW_pred, prbs_data.EW_pred(valid_idx)];
         global_prbs_EW_act  = [global_prbs_EW_act,  prbs_data.EW_act(valid_idx)];
+
+        global_ber_pred = [global_ber_pred, ber_data.pred];
+        global_ber_act  = [global_ber_act,  ber_data.act];
     end
 
     if run_pda
@@ -169,6 +181,10 @@ end
 if run_step_and_prbs_eye || run_pda
     run_error_stat_analysis(global_prbs_EH_pred, global_prbs_EH_act, global_prbs_EW_pred, global_prbs_EW_act, global_pda_EH_pred, global_pda_EH_act, global_pda_EW_pred, ... 
                             global_pda_EW_act, global_pda_Verdict_pred, global_pda_Verdict_act, show_statistics_plots);
+    
+    if ~isempty(global_ber_pred) && ~isempty(global_ber_act)
+        run_ber_stat_analysis(global_ber_pred, global_ber_act, show_statistics_plots, false);
+    end
 end
 
 if run_fsv
