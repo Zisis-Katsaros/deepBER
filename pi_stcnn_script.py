@@ -20,7 +20,7 @@ seed = 42
 torch.manual_seed(seed)
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
-separate_portions = False
+separate_portions = True
 
 # Dataloader Hyperparameters
 weight_type = "balanced"
@@ -49,11 +49,11 @@ scheduler_patience = 50
 epochs = 3000
 patience = 300
 
-max_figures = 0
+max_figures = 3
 
 # ============================================= Training and Testing ============================================= #
 if not separate_portions:
-    pred_arrays_dict = torch.load("csv_files/s_params/pt/pred_arrays_dict_shielded.pt", weights_only=False) # !!!
+    pred_arrays_dict = torch.load("csv_files/s_params/pt/pred_arrays_dict_total.pt", weights_only=False)
 
     x_array = pred_arrays_dict["x_array"].astype(np.float32)
     s_dict = pred_arrays_dict["s_dict"]
@@ -69,7 +69,6 @@ if not separate_portions:
     """
       
     total_split_idx_lhs = torch.load("csv_files/s_params/pt/total_split_idx_lhs.pt", weights_only=False)
-    """
     dataloader, x_scale_params, y_scale_params, y_weights, _ = create_param_dataloader(
                         x_array,
                         y_array,
@@ -118,16 +117,11 @@ if not separate_portions:
         y_scale_params=y_scale_params,
         training_curves=True,
         predicted_vs_actual=True,
-        test_out_dir = f"out_files/pi_stcnn/shielded_only_test", # !!!!
+        test_out_dir = f"out_files/pi_stcnn/total",
         close_figures=True,
         max_figures=max_figures,
         max_time_hours=5.5
         )
-    """
-    test_results = np.load("out_files/pi_stcnn/shielded_only_test/test_results.npz", allow_pickle=True)
-    test_preds = test_results["preds"]
-    test_labels = test_results["targets"]
-
     labels_dict_list, preds_dict_list = convert_stcnn_outputs_to_dicts(test_targets=test_labels, test_preds=test_preds, num_ports=18)
     num_geometries = test_preds.shape[0]
 
@@ -288,6 +282,6 @@ export_files_for_transient(
     labels_dict_per_geom=labels_dict_list if not separate_portions else labels_dict_list_total,
     preds_dict_per_geom=preds_dict_list if not separate_portions else preds_dict_list_total,
     freq_arrays_per_geom=freq_arrays_per_geom,
-    save_dir="out_files/pi_stcnn/shielded_only_test/touchstone_files" if not separate_portions else "out_files/pi_stcnn/separate/touchstone_files" # !!!
+    save_dir="out_files/pi_stcnn/total/touchstone_files" if not separate_portions else "out_files/pi_stcnn/separate/touchstone_files"
 )
 # """
