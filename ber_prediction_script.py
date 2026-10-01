@@ -2,15 +2,10 @@ from prediction.optuna_tuner import run_optuna
 
 import torch
 from torch import nn
-from load_set import create_dataloader, load_csv_dataset, create_arrays
-from classification.classifier import DeepBERClassifier
-from classification.test_classifier_config import test_classifier_configuration
+from load_set import create_dataloader, create_arrays
 from prediction.predictor import DeepBERPredictor
 from prediction.test_predictor_config import test_predictor_configuration, ber_vs_length_test
-from classification.ber_to_class import ber_to_class
 import numpy as np
-from classification.optuna_tuner import run_optuna_classifier
-from sklearn.utils.class_weight import compute_class_weight
 
 torch.manual_seed(42)
 
@@ -36,10 +31,11 @@ x_array, y_array, _, _, thresholds, feature_columns = create_arrays(
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
 batch_size = 16
+logBER = True
 prediction_dataloader = create_dataloader(
             x_array,
             y_array,
-            logBER=True,
+            logBER=logBER,
             batch_size=batch_size,
             seed=42,
             ber_interval=thresholds,
@@ -50,7 +46,7 @@ predictor = DeepBERPredictor(
         input_size=len(feature_columns),  
         hidden=[128, 32, 48],
         activation_fn=nn.GELU(),
-        logBER=True,
+        logBER=logBER,
         batch_norm=False,
         dropout=0.244,
     ).to(device)
