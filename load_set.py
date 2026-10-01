@@ -337,6 +337,7 @@ def create_dataloader(x_array, y_array, batch_size=64, seed=42, ber_interval=Non
 		if max_ber is not None:
 			mask &= y_array <= float(max_ber)
 
+		mask = mask.ravel()
 		x_array = x_array[mask]
 		y_array = y_array[mask]
 
