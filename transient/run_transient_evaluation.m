@@ -227,9 +227,14 @@ function [prbs_data, step_metrics, eye_metrics, ber_data] = run_transient_evalua
     );
 
     % BER Calculation
-    stat_ber_pred = get_ber(V_in_prbs, eval_prbs_pred, bit_rate, num_bits);
-    stat_ber_actual = get_ber(V_in_prbs, V_out_main_prbs_actual, bit_rate, num_bits);
+    [stat_ber_pred, ~] = get_ber(V_in_prbs, eval_prbs_pred, bit_rate, num_bits);
+    [stat_ber_actual, ~] = get_ber(V_in_prbs, V_out_main_prbs_actual, bit_rate, num_bits);
     ber_data = struct('pred', stat_ber_pred, 'act', stat_ber_actual, 'error', abs(stat_ber_pred - stat_ber_actual));
+
+    fprintf("[transient evaluation] >> BER:\n");
+    fprintf("[transient evaluation] \t- Predicted BER: %.4e\n", stat_ber_pred);
+    fprintf("[transient evaluation] \t- Actual BER: %.4e\n", stat_ber_actual);
+    fprintf("[transient evaluation] \t- Absolute BER Error: %.4e\n", abs(stat_ber_pred - stat_ber_actual));
 
     fprintf("[transient evaluation] Average RMSE Step Stimulus: Main=%.4f V, NEXT1=%.4f V, FEXT1=%.4f V, NEXT2=%.4f V, FEXT2=%.4f V\n", ... 
         step_metrics.avg_rmse_main, step_metrics.avg_rmse_next1, step_metrics.avg_rmse_fext1, step_metrics.avg_rmse_next2, step_metrics.avg_rmse_fext2);
