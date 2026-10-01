@@ -13,15 +13,17 @@ max_geoms = 46;
 filename_s_params = "out_files/pi_stcnn/touchstone_files_total";
 filename_amplitude = ""; %"out_files/amplitude_prediction/export4transient/amplitude_predictions.mat";
 
-run_step_and_prbs_eye = true;
+run_step_and_prbs_eye = false;
 run_pda = false;
-show_transient_plots = false;
+show_transient_plots = true;
 
 single_channel = true;
-bit_rate = 4e9;
+bit_rate = 16e9;
 
 run_fsv = false;
 show_fsv_plots = false;
+
+run_tdr = true;
 
 show_statistics_plots = true;
 
@@ -73,11 +75,6 @@ if run_fsv
 end
 
 for geom_idx = start_geom:(start_geom + max_geoms - 1)
-    if geom_idx == 24
-        fprintf('Skipping geometry %d due to known issues with S-parameter data.\n', geom_idx);
-        continue;
-    end
-
     geometry_title = sprintf('Geometry %d', geom_idx);
 
     % Load s-Parameters and amplitude correction data
@@ -162,6 +159,10 @@ for geom_idx = start_geom:(start_geom + max_geoms - 1)
         global_FDM_all = [global_FDM_all; FDM_mat(:)];
         global_GDM_all = [global_GDM_all; GDM_mat(:)];
     end
+
+    if run_tdr
+        run_tdr_evaluation(filename_preds, filename_actuals, geometry_title, show_transient_plots);
+    end
 end
 
 fprintf('\n\n');
@@ -183,7 +184,7 @@ if run_step_and_prbs_eye || run_pda
                             global_pda_EW_act, global_pda_Verdict_pred, global_pda_Verdict_act, show_statistics_plots);
     
     if ~isempty(global_ber_pred) && ~isempty(global_ber_act)
-        run_ber_stat_analysis(global_ber_pred, global_ber_act, show_statistics_plots, false);
+        run_ber_stat_analysis(global_ber_pred, global_ber_act, show_statistics_plots, true);
     end
 end
 
