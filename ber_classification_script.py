@@ -11,7 +11,6 @@ torch.manual_seed(42)
 
 # ============================================= Initializing Dataset ============================================= #
 bin_classification = True
-logBER = False
 
 ber_og_csv_names = ["ber_og_database.csv"]
 wrst_case_csv_names = ["wrst_case_ber_database1.csv", "wrst_case_ber_database2.csv", "wrst_case_ber_database3.csv"]
@@ -35,6 +34,7 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 
 num_classes = 2 if bin_classification else 3
 
+logBER = False
 lower_thres, upper_thres = -5.5, -2.5
 
 class_weights = compute_class_weight(

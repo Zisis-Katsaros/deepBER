@@ -309,20 +309,22 @@ def load_csv_dataset(csv_names: list[str], target_columns="BER", subfolder: str 
 
 
 def create_dataloader(x_array, y_array, batch_size=64, seed=42, ber_interval=None, logBER=False, standard_scale=False, split_method="random"):
-	# Creates dataloader
-	#
-	# Args:
-	# - x_array: 2D array of features
-	# - y_array: 1D array of labels
-	# - batch_size: Batch size for dataloader
-	# - seed: Random seed for reproducibility
-	# - ber_interval: Tuple (min_ber, max_ber) to filter samples by BER range
-	# - logBER: If true labels are log10(BER)
-	# - standard_scale: If true standard scaling is applied to features
-	# - split_method: "random" or "lhs" for splitting the dataset
-	# Returns:
-	# - dataloader: [train_data, val_data, test_data] 
-
+	"""	
+	# create_dataloader()
+	## Creates dataloader for BER prediction or classification
+	
+	## Args:
+	- x_array: 2D array of features
+	- y_array: 1D array of labels
+	- batch_size: Batch size for dataloader
+	- seed: Random seed for reproducibility
+	- ber_interval: Tuple (min_ber, max_ber) to filter samples by BER range
+	- logBER: If true labels are log10(BER)
+	- standard_scale: If true standard scaling is applied to features
+	- split_method: "random" or "lhs" for splitting the dataset
+	## Returns:
+	- dataloader: [train_data, val_data, test_data] 
+	"""
 	if ber_interval is not None:
 		if len(ber_interval) != 2:
 			raise ValueError("ber_interval must be [min_ber, max_ber].")

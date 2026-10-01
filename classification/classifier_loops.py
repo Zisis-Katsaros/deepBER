@@ -11,19 +11,21 @@ def loader_to_numpy(data_loader):
     return features, labels
 
 def train_classifier_loop(model, data, optimizer, criterion, device):
-    # Loop used for training the model for one epoch
-    #
-    # Args:
-    # - model: The neural network model to be trained
-    # - data: Training data
-    # - optimizer: Optimization algorithm 
-    # - criterion: Loss function 
-    # - device: Device to run the training on (CPU or GPU)
-    # Returns:
-    # - avg_loss: Average loss over the epoch
-    # - avg_acc: Average accuracy over the epoch
-    # - avg_f1: Average F1 score over the epoch
-
+    """
+    # train_classifier_loop()
+    ## Loop used for training the model for one epoch
+    
+    ## Args:
+    - model: The neural network model to be trained
+    - data: Training data
+    - optimizer: Optimization algorithm 
+    - criterion: Loss function 
+    - device: Device to run the training on (CPU or GPU)
+    ## Returns:
+    - avg_loss: Average loss over the epoch
+    - avg_acc: Average accuracy over the epoch
+    - avg_f1: Average F1 score over the epoch
+    """
     model.train() # model in training mode
 
     total_loss = 0.0
@@ -58,20 +60,22 @@ def train_classifier_loop(model, data, optimizer, criterion, device):
     return avg_loss, avg_acc, avg_f1 # return loss, accuracy and F1 score
 
 def test_classifier_loop(model, data, criterion, device):
-    # Loop used for evaluating the model
-    # 
-    # Args:
-    # - model: The neural network model to be evaluated
-    # - data: Validation or Test data
-    # - criterion: Loss function
-    # - device: Device to run the evaluation on (CPU or GPU)
-    # Returns:
-    # - avg_loss: Average loss over the evaluation
-    # - avg_acc: Average accuracy over the evaluation
-    # - avg_f1: Average F1 score over the evaluation
-    # - all_preds: All predictions made by the model
-    # - all_labels: All true labels corresponding to the predictions
-
+    """
+    # test_classifier_loop()
+    ## Loop used for evaluating the model
+    
+    ## Args:
+    - model: The neural network model to be evaluated
+    - data: Validation or Test data
+    - criterion: Loss function
+    - device: Device to run the evaluation on (CPU or GPU)
+    ## Returns:
+    - avg_loss: Average loss over the evaluation
+    - avg_acc: Average accuracy over the evaluation
+    - avg_f1: Average F1 score over the evaluation
+    - all_preds: All predictions made by the model
+    - all_labels: All true labels corresponding to the predictions
+    """
     model.eval() # model in evaluation mode
 
     total_loss = 0.0
