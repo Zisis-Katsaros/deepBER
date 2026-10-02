@@ -249,7 +249,7 @@ def test_predictor_configuration(title: str, device: torch.device, model, datalo
 def test_predictor_configuration_pistcnn(title: str, device: torch.device, model, dataloader: list[torch.utils.data.DataLoader], 
                                        learning_rate: float, batch_size: int, criterion: torch.nn.Module,
                                        optimizer: torch.optim.Optimizer, scheduler=None, epochs: int = 30, 
-                                       phase1_patience: int = 10, early_stopping: bool = False, patience: int = 5, y_scale_params: tuple = None, 
+                                       early_stopping: bool = False, patience: int = 5, y_scale_params: tuple = None, 
                                        training_curves: bool = False, predicted_vs_actual: bool = False, 
                                        test_out_dir: str = '.', close_figures: bool = True, max_figures: int = 2, max_time_hours: float = 5.5):
     """ 
@@ -337,13 +337,11 @@ def test_predictor_configuration_pistcnn(title: str, device: torch.device, model
     start_time = time.time()
     max_time_seconds = max_time_hours * 3600
 
-    phase = 2 # phase = 1
     non_improving_epochs = 0
     best_val_loss = float("inf")
-    bypass_pel = False
     for epoch in range(epochs):    
-        train_loss, train_mae = train_pred_loop_pistcnn(model, train_data, optimizer, criterion, device, bypass_pel)
-        val_loss, val_mae, *_ = test_pred_loop_pistcnn(model, val_data, criterion, device, bypass_pel)
+        train_loss, train_mae = train_pred_loop_pistcnn(model, train_data, optimizer, criterion, device)
+        val_loss, val_mae, *_ = test_pred_loop_pistcnn(model, val_data, criterion, device)
 
         if scheduler is not None:
             if isinstance(scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
@@ -363,23 +361,11 @@ def test_predictor_configuration_pistcnn(title: str, device: torch.device, model
         else:
             non_improving_epochs += 1
 
-        if phase == 1:
-            if non_improving_epochs >= phase1_patience:
-                print(f"Phase 1 converged at epoch {best_model_epoch}. Switching to Phase 2 (PEL ON).")
-                model.load_state_dict(torch.load(model_save_path, map_location=device))
-                optimizer.state.clear()
-                bypass_pel = False
-                phase = 2
-                non_improving_epochs = 0
-                best_val_loss = float("inf")
-        else:
-            if early_stopping and non_improving_epochs >= patience:
-                print(f"Early stopping at epoch {epoch+1}. Best model at epoch {best_model_epoch}")
-                model.load_state_dict(torch.load(model_save_path, map_location=device))
-                os.remove(optimizer_save_path)
-                if scheduler is not None:
-                    os.remove(scheduler_save_path)
-                break
+        
+        if early_stopping and non_improving_epochs >= patience:
+            print(f"Early stopping at epoch {epoch+1}. Best model at epoch {best_model_epoch}")
+            model.load_state_dict(torch.load(model_save_path, map_location=device))
+            break
 
         train_losses.append(train_loss)
         val_losses.append(val_loss)
@@ -387,7 +373,7 @@ def test_predictor_configuration_pistcnn(title: str, device: torch.device, model
         val_maes.append(val_mae)
 
         if True: # (epoch + 1) % 5 == 0 or epoch == 0 or epoch == epochs - 1:
-            print(f"Epoch {epoch+1} | PEL Bypassed: {bypass_pel}")
+            print(f"Epoch {epoch+1}")
             print(f" - Train Loss: {train_loss:.6f}, Train MAE: {train_mae:.6f}")
             print(f" - Val Loss:   {val_loss:.6f}, Val MAE:   {val_mae:.6f}\n")
 

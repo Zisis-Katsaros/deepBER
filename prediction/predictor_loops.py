@@ -234,7 +234,7 @@ def test_pred_loop(model, data: torch.utils.data.DataLoader, criterion: torch.nn
 
 
 def train_pred_loop_pistcnn(model, data: torch.utils.data.DataLoader, optimizer: torch.optim.Optimizer, criterion: torch.nn.Module, device: torch.device, 
-                            bypass_pel: bool):
+                            bypass_pel: bool = False):
     """
     # train_pred_loop()
     ## Loop used for training the model for one epoch adjusted for PI-STCNN and PEL bypassing
