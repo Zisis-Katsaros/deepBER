@@ -72,7 +72,7 @@ function run_transient_evaluation(start_geom, max_geoms, s_param_folder_name, ru
             amplitude_correction_data = struct();
         end
 
-        if run_step_and_prbs_eye
+        if run_step_and_prbs_eye % Step and PRBS Eye Evaluation ======================================================================================================================
             [prbs_data, step_metrics, eye_metrics, ber_data] = run_step_prbs_evaluation(filename_preds, filename_actuals, amplitude_correction_data, geometry_title, ... 
                                                     show_transient_plots, single_channel, bit_rate);
             step_avg_rmse = step_avg_rmse + step_metrics.avg_rmse_main;
@@ -92,7 +92,7 @@ function run_transient_evaluation(start_geom, max_geoms, s_param_folder_name, ru
             global_ber_act  = [global_ber_act,  ber_data.act];
         end
 
-        if run_pda
+        if run_pda % PDA Evaluation ===================================================================================================================================================
             [pda_data, pda_metrics] = run_pda_evaluation(filename_preds, filename_actuals, amplitude_correction_data, geometry_title, show_transient_plots, ...
                                     single_channel, bit_rate);
             pda_avg_eye_height_rmse = pda_avg_eye_height_rmse + pda_metrics.avg_eye_height_rmse;
@@ -110,7 +110,7 @@ function run_transient_evaluation(start_geom, max_geoms, s_param_folder_name, ru
             global_pda_Verdict_act  = [global_pda_Verdict_act,  pda_data.Pass_act(valid_idx)];
         end
 
-        if run_fsv
+        if run_fsv % FSV Evaluation ===================================================================================================================================================
             [geom_ADMc, geom_FDMc, geom_GDMc, ADM_mat, FDM_mat, GDM_mat] = run_fsv_evaluation(filename_preds, filename_actuals, geom_idx, show_fsv_plots);
 
             geom_array_idx = geom_idx - start_geom + 1;
@@ -124,11 +124,11 @@ function run_transient_evaluation(start_geom, max_geoms, s_param_folder_name, ru
             global_GDM_all = [global_GDM_all; GDM_mat(:)];
         end
 
-        if run_tdr
+        if run_tdr % TDR Evaluation ===================================================================================================================================================
             run_tdr_evaluation(filename_preds, filename_actuals, geometry_title, show_transient_plots);
         end
 
-        if run_quality_check
+        if run_quality_check % Quality Check =========================================================================================================================================
             % The function natively accepts Touchstone file paths. It returns [Causality, Reciprocity, Passivity] metrics.
             [cqm_pred, ~, pqm_pred] = ieee370QualityCheckFrequencyDomain(filename_preds);
             causality_scores(geom_idx) = cqm_pred;
