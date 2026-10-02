@@ -109,7 +109,7 @@ for geom_idx = start_geom:(start_geom + max_geoms - 1)
     end
     
     if run_step_and_prbs_eye
-    [prbs_data, step_metrics, eye_metrics, ber_data] = run_transient_evaluation(filename_preds, filename_actuals, amplitude_correction_data, geometry_title, ... 
+    [prbs_data, step_metrics, eye_metrics, ber_data] = run_step_prbs_evaluation(filename_preds, filename_actuals, amplitude_correction_data, geometry_title, ... 
                                             show_transient_plots, single_channel, bit_rate);
         step_avg_rmse = step_avg_rmse + step_metrics.avg_rmse_main;
         eye_height_avg_rmse = eye_height_avg_rmse + eye_metrics.avg_rmse_eye_height;
