@@ -10,24 +10,8 @@ from visualization import plot_confusion_matrix
 
 
 
-def test_classifier_configuration(
-    title,
-    model,
-    dataloader,
-    lower_thres=10**(-5.5),
-    upper_thres=10**(-2.5),
-    weight=False,
-    device=None,
-    learning_rate=1e-3,
-    batch_size=None,
-    criterion=None,
-    optimizer=None,
-    epochs=30,
-    early_stopping=False,
-    patience=5,
-    confusion_matrix=False,
-    class_names=None, 
-):
+def test_classifier_configuration(title, model, dataloader, lower_thres=10**(-5.5), upper_thres=10**(-2.5), weight=False, device=None, learning_rate=1e-3, batch_size=None, 
+                                  criterion=None, optimizer=None, epochs=30, early_stopping=False, patience=5, confusion_matrix=False, class_names=None):
     train_data, val_data, test_data = dataloader
 
     if isinstance(model, torch.nn.Module):

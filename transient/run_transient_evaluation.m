@@ -1,248 +1,180 @@
-function [prbs_data, step_metrics, eye_metrics, ber_data] = run_transient_evaluation(filename_preds, filename_actuals, amplitude_correction_data, title, show_plots, single_channel, ... 
-        bit_rate, xtalk_type, fs, t_step, rise_time, delay, Vhi, num_bits, precision)
-        %{
-        Compares the transient responses of the predicted to the actual S-parameters. This evaluation includes two tests: a lo->hi step stimulus and a PRBS stimulus.
-        %}
+function run_transient_evaluation(start_geom, max_geoms, s_param_folder_name, run_step_and_prbs_eye, run_pda, run_fsv, run_tdr, run_quality_check, show_transient_plots, ... 
+                                    show_statistics_plots, show_fsv_plots, bit_rate, single_channel, amplitude_correction_filename)
+    % Transient evaluation wrapper function
     arguments
-        filename_preds (1,1) string
-        filename_actuals (1,1) string
-        amplitude_correction_data (1,1) struct = []
-        title (1,1) string = "Transient Evaluation"
-        show_plots (1,1) logical = true
-        single_channel (1,1) logical = false
-        bit_rate (1,1) double {mustBePositive} = 32e9; 
-        xtalk_type (1,1) string {mustBeMember(xtalk_type, ["none", "worst-case", "realistic"])} = "realistic"
-        fs (1,1) double = 1e12
-        t_step (1,1) double = 2e-9
-        rise_time (1,1) double {mustBePositive} = 15e-12;
-        delay (1,1) double {mustBeNonnegative} = 100e-12; 
-        Vhi (1,1) double {mustBePositive} = 0.625; 
-        num_bits (1,1) double {mustBeInteger, mustBePositive} = 1000;
-        precision = -40;
+        start_geom (1,1) {mustBeInteger, mustBePositive}
+        max_geoms (1,1) {mustBeInteger, mustBePositive}
+        s_param_folder_name (1,:) char
+        run_step_and_prbs_eye (1,1) logical
+        run_pda (1,1) logical
+        run_fsv (1,1) logical
+        run_tdr (1,1) logical
+        run_quality_check (1,1) logical
+        show_transient_plots (1,1) logical
+        show_statistics_plots (1,1) logical
+        show_fsv_plots (1,1) logical
+        bit_rate (1,1) double {mustBePositive}
+        single_channel (1,1) logical = true
+        amplitude_correction_filename (1,:) char = ""
     end
 
-    if ~isempty(amplitude_correction_data) && isfield(amplitude_correction_data, 'V_out_pred')
-        V_out_pred_val = amplitude_correction_data.V_out_pred * Vhi; 
-        V_out_target_val = amplitude_correction_data.V_out_target * Vhi; 
+    if amplitude_correction_filename ~= ""
+        amplitude_correction_data_all_geoms = load(amplitude_correction_filename, 'Geom_Index', 'V_out_pred', 'V_out_target');    
     else
-        V_out_pred_val = [];
-        V_out_target_val = [];
+        amplitude_correction_data_all_geoms = [];
     end
 
-    samples_per_bit = round(fs / bit_rate);
-    fs = samples_per_bit * bit_rate; 
+    % Initialize metrics and lists for global statistics
 
-    Ts = 1/fs; 
-    t = (0:Ts:t_step)';
+    % Step and PRBS Eye
+    step_avg_rmse = 0;
+    eye_height_avg_rmse = 0;
+    eye_width_avg_rmse = 0;
+    eye_height_avg_mape = 0;
+    eye_width_avg_mape = 0;
+    global_prbs_EH_pred = []; global_prbs_EH_act = [];
+    global_prbs_EW_pred = []; global_prbs_EW_act = [];
+    global_ber_pred = []; global_ber_act = [];
 
-    V_in_step = lo2hi_step_stimulus(t, rise_time, delay, Vhi);
-    V_in_prbs = prbs_stimulus(num_bits, bit_rate, rise_time, Ts);
-    
-    if single_channel
-        start_port = 5; end_port = 5;
-    else
-        start_port = 1; end_port = 9;
+    % PDA
+    pda_avg_eye_height_rmse = 0;
+    pda_avg_eye_width_rmse = 0;
+    pda_avg_verdict_error_percentage = 0;
+    pda_avg_eye_height_mape = 0;
+    pda_avg_eye_width_mape = 0;
+    global_pda_EH_pred = []; global_pda_EH_act = [];
+    global_pda_EW_pred = []; global_pda_EW_act = [];
+    global_pda_Verdict_pred = []; global_pda_Verdict_act = [];
+
+    % FSV
+    global_ADMc_geoms = zeros(max_geoms, 6);
+    global_FDMc_geoms = zeros(max_geoms, 6);
+    global_GDMc_geoms = zeros(max_geoms, 6);
+    global_ADM_all = [];
+    global_FDM_all = [];
+    global_GDM_all = [];
+
+    % Quality Check
+    causality_scores = zeros(max_geoms, 1);
+    passivity_scores = zeros(max_geoms, 1);
+
+    for geom_idx = start_geom:(start_geom + max_geoms - 1)
+        geometry_title = sprintf('Geometry %d', geom_idx);
+
+        % Load s-Parameters and amplitude correction data
+        filename_preds = string(s_param_folder_name) + "/preds/geom" + geom_idx + "_pred.s18p";
+        filename_actuals = string(s_param_folder_name) + "/actuals/geom" + geom_idx + "_actual.s18p";
+   
+        if ~isempty(amplitude_correction_data_all_geoms)
+            amplitude_correction_data = struct('V_out_pred', amplitude_correction_data_all_geoms.V_out_pred(geom_idx), ... 
+                'V_out_target', amplitude_correction_data_all_geoms.V_out_target(geom_idx));
+        else
+            amplitude_correction_data = struct();
+        end
+
+        if run_step_and_prbs_eye % Step and PRBS Eye Evaluation ======================================================================================================================
+            [prbs_data, step_metrics, eye_metrics, ber_data] = run_step_prbs_evaluation(filename_preds, filename_actuals, amplitude_correction_data, geometry_title, ... 
+                                                    show_transient_plots, single_channel, bit_rate);
+            step_avg_rmse = step_avg_rmse + step_metrics.avg_rmse_main;
+            eye_height_avg_rmse = eye_height_avg_rmse + eye_metrics.avg_rmse_eye_height;
+            eye_width_avg_rmse = eye_width_avg_rmse + eye_metrics.avg_rmse_eye_width;
+            eye_height_avg_mape = eye_height_avg_mape + eye_metrics.avg_mape_eye_height;
+            eye_width_avg_mape = eye_width_avg_mape + eye_metrics.avg_mape_eye_width;
+
+            % Filter out NaNs 
+            valid_idx = ~isnan(prbs_data.EH_pred);
+            global_prbs_EH_pred = [global_prbs_EH_pred, prbs_data.EH_pred(valid_idx)];
+            global_prbs_EH_act  = [global_prbs_EH_act,  prbs_data.EH_act(valid_idx)];
+            global_prbs_EW_pred = [global_prbs_EW_pred, prbs_data.EW_pred(valid_idx)];
+            global_prbs_EW_act  = [global_prbs_EW_act,  prbs_data.EW_act(valid_idx)];
+
+            global_ber_pred = [global_ber_pred, ber_data.pred];
+            global_ber_act  = [global_ber_act,  ber_data.act];
+        end
+
+        if run_pda % PDA Evaluation ===================================================================================================================================================
+            [pda_data, pda_metrics] = run_pda_evaluation(filename_preds, filename_actuals, amplitude_correction_data, geometry_title, show_transient_plots, ...
+                                    single_channel, bit_rate);
+            pda_avg_eye_height_rmse = pda_avg_eye_height_rmse + pda_metrics.avg_eye_height_rmse;
+            pda_avg_eye_width_rmse = pda_avg_eye_width_rmse + pda_metrics.avg_eye_width_rmse;
+            pda_avg_verdict_error_percentage = pda_avg_verdict_error_percentage + pda_metrics.verdict_error_percentage;
+            pda_avg_eye_height_mape = pda_avg_eye_height_mape + pda_metrics.avg_eh_mape;
+            pda_avg_eye_width_mape = pda_avg_eye_width_mape + pda_metrics.avg_ew_mape;
+
+            valid_idx = ~isnan(pda_data.Pass_pred);
+            global_pda_EH_pred = [global_pda_EH_pred, pda_data.EH_pred(valid_idx)];
+            global_pda_EH_act  = [global_pda_EH_act,  pda_data.EH_act(valid_idx)];
+            global_pda_EW_pred = [global_pda_EW_pred, pda_data.EW_pred(valid_idx)];
+            global_pda_EW_act  = [global_pda_EW_act,  pda_data.EW_act(valid_idx)];
+            global_pda_Verdict_pred = [global_pda_Verdict_pred, pda_data.Pass_pred(valid_idx)];
+            global_pda_Verdict_act  = [global_pda_Verdict_act,  pda_data.Pass_act(valid_idx)];
+        end
+
+        if run_fsv % FSV Evaluation ===================================================================================================================================================
+            [geom_ADMc, geom_FDMc, geom_GDMc, ADM_mat, FDM_mat, GDM_mat] = run_fsv_evaluation(filename_preds, filename_actuals, geom_idx, show_fsv_plots);
+
+            geom_array_idx = geom_idx - start_geom + 1;
+            global_ADMc_geoms(geom_array_idx, :) = geom_ADMc;
+            global_FDMc_geoms(geom_array_idx, :) = geom_FDMc;
+            global_GDMc_geoms(geom_array_idx, :) = geom_GDMc;
+
+            % Flatten the NxN matrices and append to the global arrays
+            global_ADM_all = [global_ADM_all; ADM_mat(:)];
+            global_FDM_all = [global_FDM_all; FDM_mat(:)];
+            global_GDM_all = [global_GDM_all; GDM_mat(:)];
+        end
+
+        if run_tdr % TDR Evaluation ===================================================================================================================================================
+            run_tdr_evaluation(filename_preds, filename_actuals, geometry_title, show_transient_plots);
+        end
+
+        if run_quality_check % Quality Check =========================================================================================================================================
+            % The function natively accepts Touchstone file paths. It returns [Causality, Reciprocity, Passivity] metrics.
+            [cqm_pred, ~, pqm_pred] = ieee370QualityCheckFrequencyDomain(filename_preds);
+            causality_scores(geom_idx) = cqm_pred;
+            passivity_scores(geom_idx) = pqm_pred;
+        end
     end
 
-    num_ports = 9;
-    rmse_step = struct('main', nan(1, num_ports), 'next1', nan(1, num_ports), 'fext1', nan(1, num_ports), 'next2', nan(1, num_ports), 'fext2', nan(1, num_ports));
-    rmse_eye = struct('rt', nan(1, num_ports), 'ft', nan(1, num_ports), 'height', nan(1, num_ports), 'width', nan(1, num_ports), 'jitter', nan(1, num_ports), 'amp', nan(1, num_ports));
-    mape_eye = struct('height', nan(1, num_ports), 'width', nan(1, num_ports));
-    prbs_data = struct('EH_pred', nan(1, num_ports), 'EH_act', nan(1, num_ports), 'EW_pred', nan(1, num_ports), 'EW_act', nan(1, num_ports));
+    fprintf('\n\n');
+    if run_quality_check
+        num_good_causality = sum(causality_scores >= 80);
+        num_acceptable_causality = sum(causality_scores >= 50 & causality_scores < 80);
+        num_inconcusive_causality = sum(causality_scores >= 20 & causality_scores < 50);
+        num_poor_causality = sum(causality_scores < 20);
 
-    fprintf("[transient evaluation] Beginning %s\n", title);
-    for port = start_port:end_port
-        fprintf("[transient evaluation] \tEvaluating port %d...\n", port);
-        
-        tx = port; rx = tx + 9;
-        next1 = tx - 1; next2 = tx + 1;
-        fext1 = rx - 1; fext2 = rx + 1;
-
-        if port == 1
-            next1 = tx; fext1 = rx;      
-        elseif port == 9
-            next2 = tx; fext2 = rx;
-        end
-        
-        % S-parameters to Impulse Response Conversion
-        [fit_main_pred, fit_next1_pred, fit_fext1_pred, fit_next2_pred, fit_fext2_pred] = s_params2impulse_response(filename_preds, tx, rx, next1, fext1, next2, fext2, precision, bit_rate);
-        [fit_main_actual, fit_next1_actual, fit_fext1_actual, fit_next2_actual, fit_fext2_actual] = s_params2impulse_response(filename_actuals, tx, rx, next1, fext1, next2, fext2, precision, bit_rate);
-        
-        % timeresp(model, V_in, Ts);
-        % Predicted step response
-        V_out_main_step_pred = timeresp(fit_main_pred, V_in_step, Ts);
-        V_out_next1_step_pred = timeresp(fit_next1_pred, V_in_step, Ts);
-        V_out_fext1_step_pred = timeresp(fit_fext1_pred, V_in_step, Ts);
-        V_out_next2_step_pred = timeresp(fit_next2_pred, V_in_step, Ts);
-        V_out_fext2_step_pred = timeresp(fit_fext2_pred, V_in_step, Ts);
-        
-        if ~isempty(V_out_pred_val)
-            corr_factor = V_out_pred_val / V_out_main_step_pred(end);
-            V_out_main_step_pred_adj = V_out_main_step_pred * corr_factor;
-            eval_step_pred = V_out_main_step_pred_adj;
-        else
-            V_out_main_step_pred_adj = [];
-            eval_step_pred = V_out_main_step_pred;
-        end
-
-        % Actual step response
-        V_out_main_step_actual = timeresp(fit_main_actual, V_in_step, Ts);
-        V_out_next1_step_actual = timeresp(fit_next1_actual, V_in_step, Ts);
-        V_out_fext1_step_actual = timeresp(fit_fext1_actual, V_in_step, Ts);
-        V_out_next2_step_actual = timeresp(fit_next2_actual, V_in_step, Ts);
-        V_out_fext2_step_actual = timeresp(fit_fext2_actual, V_in_step, Ts);
-
-        if port == 1
-            V_out_next1_step_pred = []; V_out_fext1_step_pred = [];
-            V_out_next1_step_actual = []; V_out_fext1_step_actual = [];
-        elseif port == 9
-            V_out_next2_step_pred = []; V_out_fext2_step_pred = [];
-            V_out_next2_step_actual = []; V_out_fext2_step_actual = [];
-        end
-
-        rmse_step.main(port) = rmse(eval_step_pred, V_out_main_step_actual);
-        if port ~= 1
-            rmse_step.next1(port) = rmse(V_out_next1_step_pred, V_out_next1_step_actual);
-            rmse_step.fext1(port) = rmse(V_out_fext1_step_pred, V_out_fext1_step_actual);
-        end
-        if port ~= 9
-            rmse_step.next2(port) = rmse(V_out_next2_step_pred, V_out_next2_step_actual);
-            rmse_step.fext2(port) = rmse(V_out_fext2_step_pred, V_out_fext2_step_actual);
-        end
-
-        fprintf("[transient evaluation] \t>> 0->1 Step stimulus:\n");
-        fprintf("[transient evaluation] \t- RMSE (Main): %.4f V\n", rmse_step.main(port));
-        if port ~= 1
-            fprintf("[transient evaluation] \t- RMSE (NEXT1): %.4f V\n", rmse_step.next1(port));
-            fprintf("[transient evaluation] \t- RMSE (FEXT1): %.4f V\n", rmse_step.fext1(port));
-        end 
-        if port ~= 9
-            fprintf("[transient evaluation] \t- RMSE (NEXT2): %.4f V\n", rmse_step.next2(port));
-            fprintf("[transient evaluation] \t- RMSE (FEXT2): %.4f V\n", rmse_step.fext2(port));
-        end
-        
-        if show_plots
-            plot_step_response_pred_vs_act(t, V_in_step, V_out_main_step_pred, V_out_main_step_actual, ...
-                V_out_next1_step_pred, V_out_next1_step_actual, V_out_fext1_step_pred, V_out_fext1_step_actual, ...
-                V_out_next2_step_pred, V_out_next2_step_actual, V_out_fext2_step_pred, V_out_fext2_step_actual, ...
-                sprintf('%s - Step Response Prediction Vs Actual (Port %d)', title, port), V_out_main_step_pred_adj, V_out_target_val);
-        end
-
-        % PRBS responses
-        if xtalk_type == "none"
-            V_out_main_prbs_pred = timeresp(fit_main_pred, V_in_prbs, Ts);
-            V_out_main_prbs_actual = timeresp(fit_main_actual, V_in_prbs, Ts);
-        else
-            % Gather available crosstalk channels based on port location
-            xtalk_fits_pred = {};
-            xtalk_fits_actual = {};
-            
-            if port ~= 1
-                xtalk_fits_pred(end+1:end+2) = {fit_next1_pred, fit_fext1_pred};
-                xtalk_fits_actual(end+1:end+2) = {fit_next1_actual, fit_fext1_actual};
-            end
-            if port ~= 9
-                xtalk_fits_pred(end+1:end+2) = {fit_next2_pred, fit_fext2_pred};
-                xtalk_fits_actual(end+1:end+2) = {fit_next2_actual, fit_fext2_actual};
-            end
-            % Apply worst-case dynamic crosstalk
-            V_out_main_prbs_pred = apply_xtalk(fit_main_pred, xtalk_fits_pred, V_in_prbs, Vhi, Ts, samples_per_bit, xtalk_type);
-            V_out_main_prbs_actual = apply_xtalk(fit_main_actual, xtalk_fits_actual, V_in_prbs, Vhi, Ts, samples_per_bit, xtalk_type);
-        end
-
-        if ~isempty(V_out_pred_val)
-            V_out_main_prbs_pred_adj = V_out_main_prbs_pred * corr_factor;
-            eval_prbs_pred = V_out_main_prbs_pred_adj;
-        else
-            V_out_main_prbs_pred_adj = [];
-            eval_prbs_pred = V_out_main_prbs_pred;
-        end
-
-        % Eye dynamic alignment
-        [aligned_start, aligned_end] = get_eye_alignment(num_bits, samples_per_bit, V_out_main_prbs_actual);
-        eye_matrix_Vout_pred = reshape(V_out_main_prbs_pred(aligned_start:aligned_end), samples_per_bit * 2, []);
-        eye_matrix_Vout_actual = reshape(V_out_main_prbs_actual(aligned_start:aligned_end), samples_per_bit * 2, []);
-
-        if ~isempty(V_out_main_prbs_pred_adj)
-            eye_matrix_Vout_pred_adj = reshape(V_out_main_prbs_pred_adj(aligned_start:aligned_end), samples_per_bit * 2, []);
-            eval_eye_matrix = eye_matrix_Vout_pred_adj;
-        else
-            eye_matrix_Vout_pred_adj = [];
-            eval_eye_matrix = eye_matrix_Vout_pred;
-        end
-        
-        [rmse_eye.rt(port), rmse_eye.ft(port), rmse_eye.height(port), rmse_eye.jitter(port), rmse_eye.amp(port), rmse_eye.width(port), mape_eye.height(port), mape_eye.width(port), ...
-         prbs_data.EH_pred(port), prbs_data.EH_act(port), prbs_data.EW_pred(port), prbs_data.EW_act(port)] = ...
-            eye_metrics_pred_vs_act(eval_prbs_pred, V_out_main_prbs_actual, eval_eye_matrix, eye_matrix_Vout_actual, fs, bit_rate);
-        
-        fprintf("[transient evaluation] \t>> PRBS stimulus:\n");
-        fprintf("[transient evaluation] \t- RMSE Rise Time: %.4f s\n", rmse_eye.rt(port));
-        fprintf("[transient evaluation] \t- RMSE Fall Time: %.4f s\n", rmse_eye.ft(port));
-        fprintf("[transient evaluation] \t- RMSE Eye Height: %.4f V\n", rmse_eye.height(port));
-        fprintf("[transient evaluation] \t- RMSE Eye Width: %.4f s\n", rmse_eye.width(port));
-        fprintf("[transient evaluation] \t- RMSE Eye Jitter: %.4f s\n", rmse_eye.jitter(port));
-        fprintf("[transient evaluation] \t- RMSE Eye Amplitude: %.4f V\n", rmse_eye.amp(port));
-        fprintf("[transient evaluation] \t- MAPE Eye Height: %.2f%%\n", mape_eye.height(port));
-        fprintf("[transient evaluation] \t- MAPE Eye Width: %.2f%%\n", mape_eye.width(port));
-    
-        if show_plots
-            % Isolate a 1.5 UI window explicitly (from 0.25 UI to 1.75 UI). 
-            % Since we dynamically aligned the matrix above, the eye will be mathematically fixed dead-center.
-            plot_start = round(0.25 * samples_per_bit) + 1;
-            plot_end = round(1.75 * samples_per_bit);
-            plot_idx = plot_start:plot_end;
-            
-            t_eye_plot = linspace(0.25, 1.75, length(plot_idx));
-            
-            if isempty(eye_matrix_Vout_pred_adj)
-                eval_plot_adj = [];
-            else
-                eval_plot_adj = eye_matrix_Vout_pred_adj(plot_idx, :);
-            end
-
-            plot_eye_pred_vs_act(t_eye_plot, eye_matrix_Vout_pred(plot_idx, :), ...
-                eye_matrix_Vout_actual(plot_idx, :), ...
-                sprintf('%s - Receiver Eye Diagram', title), ...
-                eval_plot_adj); 
-        end   
+        num_good_passivity = sum(passivity_scores >= 99.9);
+        num_acceptable_passivity = sum(passivity_scores >= 99 & passivity_scores < 99.9);
+        num_inconcusive_passivity = sum(passivity_scores >= 80 & passivity_scores < 99.9);
+        num_poor_passivity = sum(passivity_scores < 80);
+        fprintf('Quality Check:\n');
+        fprintf('\tCausality\n');
+        fprintf('\t\tGood: %d [%.2f%%]\n', num_good_causality, num_good_causality / length(causality_scores) * 100);
+        fprintf('\t\tAcceptable: %d [%.2f%%]\n', num_acceptable_causality, num_acceptable_causality / length(causality_scores) * 100);
+        fprintf('\t\tInconclusive: %d [%.2f%%]\n', num_inconcusive_causality, num_inconcusive_causality / length(causality_scores) * 100);
+        fprintf('\t\tPoor: %d [%.2f%%]\n', num_poor_causality, num_poor_causality / length(causality_scores) * 100);
+        fprintf('\tPassivity\n');
+        fprintf('\t\tGood: %d [%.2f%%]\n', num_good_passivity, num_good_passivity / length(passivity_scores) * 100);
+        fprintf('\t\tAcceptable: %d [%.2f%%]\n', num_acceptable_passivity, num_acceptable_passivity / length(passivity_scores) * 100);
+        fprintf('\t\tInconclusive: %d [%.2f%%]\n', num_inconcusive_passivity, num_inconcusive_passivity / length(passivity_scores) * 100);
+        fprintf('\t\tPoor: %d [%.2f%%]\n', num_poor_passivity, num_poor_passivity / length(passivity_scores) * 100);
     end
 
-    step_metrics = struct( ...
-        'avg_rmse_main', mean(rmse_step.main, 'omitnan'), 'min_rmse_main', min(rmse_step.main, [], 'omitnan'), 'max_rmse_main', max(rmse_step.main, [], 'omitnan'), ...
-        'avg_rmse_next1', mean(rmse_step.next1, 'omitnan'), 'min_rmse_next1', min(rmse_step.next1, [], 'omitnan'), 'max_rmse_next1', max(rmse_step.next1, [], 'omitnan'), ...
-        'avg_rmse_fext1', mean(rmse_step.fext1, 'omitnan'), 'min_rmse_fext1', min(rmse_step.fext1, [], 'omitnan'), 'max_rmse_fext1', max(rmse_step.fext1, [], 'omitnan'), ...
-        'avg_rmse_next2', mean(rmse_step.next2, 'omitnan'), 'min_rmse_next2', min(rmse_step.next2, [], 'omitnan'), 'max_rmse_next2', max(rmse_step.next2, [], 'omitnan'), ...
-        'avg_rmse_fext2', mean(rmse_step.fext2, 'omitnan'), 'min_rmse_fext2', min(rmse_step.fext2, [], 'omitnan'), 'max_rmse_fext2', max(rmse_step.fext2, [], 'omitnan') ...
-    );
+    if run_step_and_prbs_eye || run_pda
+        run_error_stat_analysis(global_prbs_EH_pred, global_prbs_EH_act, global_prbs_EW_pred, global_prbs_EW_act, global_pda_EH_pred, global_pda_EH_act, global_pda_EW_pred, ... 
+                                global_pda_EW_act, global_pda_Verdict_pred, global_pda_Verdict_act, show_statistics_plots);
+        
+        if ~isempty(global_ber_pred) && ~isempty(global_ber_act)
+            run_ber_stat_analysis(global_ber_pred, global_ber_act, show_statistics_plots, true);
+        end
+    end
 
-    eye_metrics = struct( ...
-        'avg_rmse_rt', mean(rmse_eye.rt, 'omitnan'), 'min_rmse_rt', min(rmse_eye.rt, [], 'omitnan'), 'max_rmse_rt', max(rmse_eye.rt, [], 'omitnan'), ...
-        'avg_rmse_ft', mean(rmse_eye.ft, 'omitnan'), 'min_rmse_ft', min(rmse_eye.ft, [], 'omitnan'), 'max_rmse_ft', max(rmse_eye.ft, [], 'omitnan'), ...
-        'avg_rmse_eye_height', mean(rmse_eye.height, 'omitnan'), 'min_rmse_eye_height', min(rmse_eye.height, [], 'omitnan'), 'max_rmse_eye_height', max(rmse_eye.height, [], 'omitnan'), ...
-        'avg_rmse_eye_width', mean(rmse_eye.width, 'omitnan'), 'min_rmse_eye_width', min(rmse_eye.width, [], 'omitnan'), 'max_rmse_eye_width', max(rmse_eye.width, [], 'omitnan'), ...
-        'avg_rmse_eye_jitter', mean(rmse_eye.jitter, 'omitnan'), 'min_rmse_eye_jitter', min(rmse_eye.jitter, [], 'omitnan'), 'max_rmse_eye_jitter', max(rmse_eye.jitter, [], 'omitnan'), ...
-        'avg_rmse_eye_amp', mean(rmse_eye.amp, 'omitnan'), 'min_rmse_eye_amp', min(rmse_eye.amp, [], 'omitnan'), 'max_rmse_eye_amp', max(rmse_eye.amp, [], 'omitnan'), ...
-        'avg_mape_eye_height', mean(mape_eye.height, 'omitnan'), 'min_mape_eye_height', min(mape_eye.height, [], 'omitnan'), 'max_mape_eye_height', max(mape_eye.height, [], 'omitnan'), ...
-        'avg_mape_eye_width', mean(mape_eye.width, 'omitnan'), 'min_mape_eye_width', min(mape_eye.width, [], 'omitnan'), 'max_mape_eye_width', max(mape_eye.width, [], 'omitnan') ...
-    );
-
-    % BER Calculation
-    stat_ber_pred = get_ber(V_in_prbs, eval_prbs_pred, bit_rate, num_bits);
-    stat_ber_actual = get_ber(V_in_prbs, V_out_main_prbs_actual, bit_rate, num_bits);
-    ber_data = struct('pred', stat_ber_pred, 'act', stat_ber_actual, 'error', abs(stat_ber_pred - stat_ber_actual));
-
-    fprintf("[transient evaluation] Average RMSE Step Stimulus: Main=%.4f V, NEXT1=%.4f V, FEXT1=%.4f V, NEXT2=%.4f V, FEXT2=%.4f V\n", ... 
-        step_metrics.avg_rmse_main, step_metrics.avg_rmse_next1, step_metrics.avg_rmse_fext1, step_metrics.avg_rmse_next2, step_metrics.avg_rmse_fext2);
-    fprintf("[transient evaluation] Min RMSE Step Stimulus: Main=%.4f V, NEXT1=%.4f V, FEXT1=%.4f V, NEXT2=%.4f V, FEXT2=%.4f V\n", ...
-        step_metrics.min_rmse_main, step_metrics.min_rmse_next1, step_metrics.min_rmse_fext1, step_metrics.min_rmse_next2, step_metrics.min_rmse_fext2);
-    fprintf("[transient evaluation] Max RMSE Step Stimulus: Main=%.4f V, NEXT1=%.4f V, FEXT1=%.4f V, NEXT2=%.4f V, FEXT2=%.4f V\n", ...
-        step_metrics.max_rmse_main, step_metrics.max_rmse_next1, step_metrics.max_rmse_fext1, step_metrics.max_rmse_next2, step_metrics.max_rmse_fext2);
-
-    fprintf("[transient evaluation] Average RMSE Eye Metrics: Rise Time=%.4f s, Fall Time=%.4f s, Eye Height=%.4f V, Eye Width=%.4f s, Eye Jitter=%.4f s, Eye Amplitude=%.4f V\n", ...
-        eye_metrics.avg_rmse_rt, eye_metrics.avg_rmse_ft, eye_metrics.avg_rmse_eye_height, eye_metrics.avg_rmse_eye_width, eye_metrics.avg_rmse_eye_jitter, eye_metrics.avg_rmse_eye_amp);
-    fprintf("[transient evaluation] Min RMSE Eye Metrics: Rise Time=%.4f s, Fall Time=%.4f s, Eye Height=%.4f V, Eye Width=%.4f s, Eye Jitter=%.4f s, Eye Amplitude=%.4f V\n", ...
-        eye_metrics.min_rmse_rt, eye_metrics.min_rmse_ft, eye_metrics.min_rmse_eye_height, eye_metrics.min_rmse_eye_width, eye_metrics.min_rmse_eye_jitter, eye_metrics.min_rmse_eye_amp);
-    fprintf("[transient evaluation] Max RMSE Eye Metrics: Rise Time=%.4f s, Fall Time=%.4f s, Eye Height=%.4f V, Eye Width=%.4f s, Eye Jitter=%.4f s, Eye Amplitude=%.4f V\n", ...
-        eye_metrics.max_rmse_rt, eye_metrics.max_rmse_ft, eye_metrics.max_rmse_eye_height, eye_metrics.max_rmse_eye_width, eye_metrics.max_rmse_eye_jitter, eye_metrics.max_rmse_eye_amp);
-    fprintf("[transient evaluation] Average MAPE: Eye Height=%.2f%%, Eye Width=%.2f%%\n", eye_metrics.avg_mape_eye_height, eye_metrics.avg_mape_eye_width);
+    if run_fsv
+        run_fsv_stat_analysis(global_ADM_all, global_FDM_all, global_GDM_all, global_ADMc_geoms, global_FDMc_geoms, global_GDMc_geoms, start_geom, max_geoms);  
+    end
 end
+
+
+    
+    
+    

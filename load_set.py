@@ -3,7 +3,7 @@ from pathlib import Path
 import numpy as np
 from numpy.typing import NDArray
 import torch
-from torch.utils.data import DataLoader, TensorDataset, RandomSampler
+from torch.utils.data import DataLoader, TensorDataset
 from dataset_manipulation import extend_features, exclude_columns
 from classification.ber_to_class import ber_to_class
 from prediction.parameter_computations import s2generalized_abcd
@@ -11,68 +11,57 @@ from dataset_splitting import split_dataset, latin_hypercube_order, get_grouping
 from typing import Literal, List, Tuple, Union
 from scipy.spatial import cKDTree
 
-def create_arrays(csv_names, target_columns, thresholds, test_names, manipulate_features = None,  
-				  binary_classification = False, sample_percentage=1.0, seed=42, sampling_method="random"):
-	# Creates arrays for each test dataset
-	#
-	# Args:
-	# - csv_names: List of lists of CSV file names for each test
-	# - target_columns: List of target column names for each test
-	# - thresholds: List of tuples (lower_thres, upper_thres) for filtering samples by BER range for each test
-	# - test_names: List of test names for printing results
-	# - manipulate_features: List of booleans indicating whether to apply feature manipulation for each test
-	# - sampling_method: "random" or "lhs" for subsampling the loaded dataset
-	# Returns:
-	# - test_info_dict: Dictionary with test names as keys and tuples (x_array, y_array, y_array_log, y_classes, thresholds, 
-	# 					feature_columns) as values
-	
-	if manipulate_features is None:
-		manipulate_features = [True] * len(csv_names)
-	elif len(manipulate_features) != len(csv_names):
-		raise ValueError("Length of manipulate_features must match length of csv_names.")
-	
-	test_info_dict = {}
-	for idx, csv_batch in enumerate(csv_names):
-		x_array, y_array, feature_columns = load_csv_dataset(csv_batch, target_columns=target_columns[idx])
+def create_arrays(csv_names: list[str], target_columns: list[str], thresholds: tuple[float, float], manipulate_features: bool = True, binary_classification: bool = False, 
+                  sample_percentage: float = 1.0, seed: int = 42, sampling_method: Literal["random", "lhs"] = "random", subfolder: str = None):
+    """
+    # create_arrays()
+    ## Creates features and labels arrays from given csv file(s) for a single dataset
+    
+    ## Args:
+    - csv_names: List of CSV file names as they appear inside csv_files/{subfolder}
+    - target_columns: List of target column names
+    - thresholds: Tuple (lower_thres, upper_thres) for filtering samples by BER range
+    - manipulate_features: Whether to apply feature manipulation
+    - binary_classification: Whether to use binary classification for BER
+    - sample_percentage: Percentage of the dataset to sample (0.0, 1.0]
+    - seed: Random seed for reproducibility
+    - sampling_method: "random" or "lhs" for subsampling the loaded dataset
+    - subfolder: Subfolder in csv_files/ where the datasets are located
+    
+    ## Returns:
+    - Tuple (x_array, y_array, y_array_log, y_classes, thresholds, feature_columns)
+    """
+    if not 0.0 < sample_percentage <= 1.0:
+        raise ValueError("sample_percentage must be within the interval (0.0, 1.0].")
 
-		eps = 10**-15 # To avoid log(0)
-		y_array_log = np.log10(np.clip(y_array, eps, None)).astype(np.float32)
+    # Extract inputs, labels and feature names from csv files
+    x_array, y_array, feature_columns = load_csv_dataset(csv_names, target_columns=target_columns, subfolder=subfolder)
 
-		class_lower_thres = np.log10(np.clip(thresholds[idx][0], eps, None)).astype(np.float32)
-		class_upper_thres = np.log10(np.clip(thresholds[idx][1], eps, None)).astype(np.float32)
+    eps = 10**-15 # To avoid log(0)
+    y_array_log = np.log10(np.clip(y_array, eps, None)).astype(np.float32)
 
-		y_classes = ber_to_class(y_array_log, class_lower_thres, class_upper_thres, logBER=False, 
-						   binary_classification=binary_classification)
-		
-		if manipulate_features[idx]:
-			# add derived features
-			x_array, feature_columns = extend_features(x_array, feature_columns, "width", "space", "/", "width_space_ratio")
-			x_array, feature_columns = extend_features(x_array, feature_columns, "width", "metal_thickness", "*", "cross_sectional_area")
-			x_array, feature_columns = extend_features(x_array, feature_columns, "gnd_width", "width", "/", "gnd_width_width_ratio")
-			x_array, feature_columns = exclude_columns(x_array, feature_columns, columns_to_exclude=["delay"])
+    class_lower_thres = np.log10(np.clip(thresholds[0], eps, None)).astype(np.float32)
+    class_upper_thres = np.log10(np.clip(thresholds[1], eps, None)).astype(np.float32)
 
-		if not 0.0 < sample_percentage <= 1.0:
-			raise ValueError("sample_percentage must be within the interval (0.0, 1.0].")
+    y_classes = ber_to_class(y_array_log, class_lower_thres, class_upper_thres, logBER=False, 
+                             binary_classification=binary_classification)
+    
+    if manipulate_features:
+        # add derived features
+        x_array, feature_columns = extend_features(x_array, feature_columns, "width", "space", "/", "width_space_ratio")
+        x_array, feature_columns = extend_features(x_array, feature_columns, "width", "metal_thickness", "*", "cross_sectional_area")
+        x_array, feature_columns = extend_features(x_array, feature_columns, "gnd_width", "width", "/", "gnd_width_width_ratio")
+        x_array, feature_columns = exclude_columns(x_array, feature_columns, columns_to_exclude=["delay"])
 
-		total_size = len(y_array)
-		sample_size = int(total_size * sample_percentage)
-		sample_size = min(total_size, max(1, sample_size))
+    # Subsample dataset if required, matching the logic of create_param_prediction_arrays
+    if sample_percentage < 1.0:
+        x_array, selected_row_indices = split_dataset(x_array, sample_percentage=sample_percentage, sampling_method=sampling_method, seed=seed)
+        
+        y_array = y_array[selected_row_indices]
+        y_array_log = y_array_log[selected_row_indices]
+        y_classes = y_classes[selected_row_indices]
 
-		if sampling_method == "random":
-			generator = torch.Generator().manual_seed(seed)
-			sample_indices = torch.randperm(total_size, generator=generator)[:sample_size].numpy()
-		elif sampling_method == "lhs":
-			sample_indices = latin_hypercube_order(x_array, sample_size, seed=seed)
-		else:
-			raise ValueError("sampling_method must be 'random' or 'lhs'.")
-
-		x_array = x_array[sample_indices]
-		y_array = y_array[sample_indices]
-		y_array_log = y_array_log[sample_indices]
-		y_classes = y_classes[sample_indices]
-
-		test_info_dict[test_names[idx]] = (x_array, y_array, y_array_log, y_classes, thresholds[idx], feature_columns)
-	return test_info_dict
+    return x_array, y_array, y_array_log, y_classes, thresholds, feature_columns
 
 
 def create_param_prediction_arrays(csv_names: list[str], expected_ports:int = 18, target_columns: list[str] = [], 
@@ -320,20 +309,22 @@ def load_csv_dataset(csv_names: list[str], target_columns="BER", subfolder: str 
 
 
 def create_dataloader(x_array, y_array, batch_size=64, seed=42, ber_interval=None, logBER=False, standard_scale=False, split_method="random"):
-	# Creates dataloader
-	#
-	# Args:
-	# - x_array: 2D array of features
-	# - y_array: 1D array of labels
-	# - batch_size: Batch size for dataloader
-	# - seed: Random seed for reproducibility
-	# - ber_interval: Tuple (min_ber, max_ber) to filter samples by BER range
-	# - logBER: If true labels are log10(BER)
-	# - standard_scale: If true standard scaling is applied to features
-	# - split_method: "random" or "lhs" for splitting the dataset
-	# Returns:
-	# - dataloader: [train_data, val_data, test_data] 
-
+	"""	
+	# create_dataloader()
+	## Creates dataloader for BER prediction or classification
+	
+	## Args:
+	- x_array: 2D array of features
+	- y_array: 1D array of labels
+	- batch_size: Batch size for dataloader
+	- seed: Random seed for reproducibility
+	- ber_interval: Tuple (min_ber, max_ber) to filter samples by BER range
+	- logBER: If true labels are log10(BER)
+	- standard_scale: If true standard scaling is applied to features
+	- split_method: "random" or "lhs" for splitting the dataset
+	## Returns:
+	- dataloader: [train_data, val_data, test_data] 
+	"""
 	if ber_interval is not None:
 		if len(ber_interval) != 2:
 			raise ValueError("ber_interval must be [min_ber, max_ber].")
@@ -346,6 +337,7 @@ def create_dataloader(x_array, y_array, batch_size=64, seed=42, ber_interval=Non
 		if max_ber is not None:
 			mask &= y_array <= float(max_ber)
 
+		mask = mask.ravel()
 		x_array = x_array[mask]
 		y_array = y_array[mask]
 

@@ -23,7 +23,8 @@ s_dict = pred_arrays_dict["s_dict"]
 feature_columns = pred_arrays_dict["feature_columns"]
 
 s_non_causal_dict = {}
-processed_elements = [key for idx, key in enumerate(s_dict.keys()) if idx < -1 and key != "all"]
+first_unprocessed_element_idx = -1 # For continuing training on HPC server if 6hr time limit is reached on the first run. Set to -1 to start from scratch
+processed_elements = [key for idx, key in enumerate(s_dict.keys()) if idx < first_unprocessed_element_idx and key != "all"]
 elements = list(key for key in s_dict.keys() if key != "all") 
 for element in elements:   
     if element in processed_elements:
