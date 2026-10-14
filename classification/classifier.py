@@ -17,8 +17,7 @@ def xgb_classifier(n_estimators=1000, max_depth=3, learning_rate=0.01, gamma=1.5
     )
 
 class DeepBERClassifier(nn.Module):
-    def __init__(self, input_size, num_classes, hidden, activation_fn=nn.ReLU(), 
-                 logBER=False, batch_norm=False, dropout=0.0):
+    def __init__(self, input_size, num_classes, hidden, activation_fn=nn.ReLU(), batch_norm=False, dropout=0.0):
         # Modular MLP architecture 
         #
         # Args:
@@ -26,7 +25,6 @@ class DeepBERClassifier(nn.Module):
         # - num_classes: Number of output classes
         # - hidden: List of hidden layer sizes
         # - activation_fn: Activation function for each of the hidden layers
-        # - logBER: If true model predicts log10(BER)
         # - batch_norm: If true batch normalization is applied after each hidden layer
         # - dropout: Dropout rate
         
