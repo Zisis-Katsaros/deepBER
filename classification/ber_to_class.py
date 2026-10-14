@@ -12,8 +12,8 @@ def ber_to_class(ber_values, lower_thres, upper_thres, logBER=False, binary_clas
     labels = np.ones_like(ber_values, dtype=np.int64)
     
     if binary_classification:
-        labels[ber_values < lower_thres] = 0
-        labels[ber_values >= lower_thres] = 1
+        labels[ber_values <= lower_thres] = 0
+        labels[ber_values > lower_thres] = 1
     else:
         labels[ber_values < lower_thres] = 0
         labels[ber_values > upper_thres] = 2
