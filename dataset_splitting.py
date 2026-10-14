@@ -3,20 +3,20 @@ from numpy.typing import NDArray
 from typing import Literal
 import torch
 
-def get_grouping(x_array: NDArray, n_non_unique_feats: int = 7, round_decimals: int = 5):
+def get_grouping(x_array: NDArray, frequency_idx: int = 7, round_decimals: int = 5):
 	"""
 	# get_grouping()
 	## For a given x_array containing mixed-up grouped samples, gets how samples are grouped and each set of unique features
 
 	## Args:
 	- x_array: 2D array of mixed-up grouped samples
-	- n_non_unique_feats: Number of non unique features, it is assumed that these are the frist n features
+	- frequency_idx: Index of the frequency column in x_array
 	- round_decimal: Rounding will occur after this many digits after decimal point, if None no rounding will occur
 	## Returns:
 	- grouping_indices: List of lists, each containing the indices of samples belonging to the same group
 	- unique_feats: 2D array of unique features, each row is a unique set of features
 	"""
-	geometries = x_array[:, :n_non_unique_feats]
+	geometries = x_array[:, [i for i in range(x_array.shape[1]) if i != frequency_idx]]  # Exclude frequency column
 
 	if round_decimals is not None:
 		geometries = np.round(geometries, decimals=round_decimals)

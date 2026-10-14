@@ -453,7 +453,7 @@ def test_predictor_configuration_pistcnn(title: str, device: torch.device, model
 
 
 def single_geometry_test(title: str, device: torch.device, model, test_data: torch.utils.data.DataLoader, x_scale_params, y_scale_params, max_geoms: int =None, 
-                         pki: bool =False, n_non_unique_feats: int =7, visualization: bool = False, save_dir=None, close_figures: bool =True):
+                         pki: bool =False, frequency_idx: int =7, visualization: bool = False, max_figures: int =3, save_dir=None, close_figures: bool =True):
     model.eval()
     
     # Create output directory
@@ -490,9 +490,9 @@ def single_geometry_test(title: str, device: torch.device, model, test_data: tor
     preds_unscaled = preds_array * y_scale_params[1] + y_scale_params[0]
     
     # Group data by unique geometric parameters
-    grouping_indices, _ = get_grouping(x_unscaled, n_non_unique_feats=n_non_unique_feats)
+    grouping_indices, _ = get_grouping(x_unscaled, frequency_idx=frequency_idx)
     
-    freq_idx = n_non_unique_feats 
+    freq_idx = frequency_idx 
     num_outputs = y_array.shape[1]
 
     geometries = []
@@ -509,7 +509,7 @@ def single_geometry_test(title: str, device: torch.device, model, test_data: tor
         group_preds = preds_unscaled[indices]
         
         # Extract Frequency 
-        geom_features = group_x[0, :n_non_unique_feats]
+        geom_features = group_x[0, [i for i in range(group_x.shape[1]) if i != freq_idx]]  # Exclude frequency index
         freq_array = group_x[:, freq_idx]
         sort_idx = np.argsort(freq_array)
         
@@ -543,7 +543,7 @@ def single_geometry_test(title: str, device: torch.device, model, test_data: tor
                 else:
                     plot_save_path_re, plot_save_path_im = None, None
 
-                if visualization:
+                if visualization and i < max_figures:
                     # Plot Real part
                     plot_preds_vs_act_freq(
                         true_labels=np.real(y_true_col),
@@ -575,7 +575,7 @@ def single_geometry_test(title: str, device: torch.device, model, test_data: tor
                 else:
                     plot_save_path = None
                 
-                if visualization:
+                if visualization and i < max_figures:
                     plot_preds_vs_act_freq(
                         true_labels=y_true_col,
                         predictions=y_pred_col,
