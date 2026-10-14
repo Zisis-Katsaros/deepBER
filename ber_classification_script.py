@@ -34,7 +34,7 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 
 num_classes = 2 if bin_classification else 3
 
-logBER = False
+
 lower_thres, upper_thres = -5.5, -2.5
 
 class_weights = compute_class_weight(
@@ -44,10 +44,10 @@ class_weights = compute_class_weight(
 )
 criterion = torch.nn.CrossEntropyLoss(weight=torch.tensor(class_weights, dtype=torch.float32, device=device))
 
-lr = 0.00379
+lr = 0.0001
 weight_decay = 5.045e-5
 
-num_of_runs = 5
+num_of_runs = 1
 total_acc = 0.0
 total_f1 = 0.0
 for k in range (num_of_runs):
@@ -57,19 +57,19 @@ for k in range (num_of_runs):
     classifier = DeepBERClassifier(
         input_size=len(feature_columns),
         num_classes=num_classes,
-        hidden=[64, 32, 64, 48],
+        hidden=[48, 64, 64, 48], # [64, 32, 64, 48],
         activation_fn=nn.GELU(),
-        logBER=logBER,
         batch_norm=False,
-        dropout=0.241,
+        dropout=0.05,
     )
     optimizer = torch.optim.Adam(classifier.parameters(), lr=lr, weight_decay=weight_decay)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=3)
 
     classifier_dataloader = create_dataloader(
     x_array,
     y_classes,
-    logBER=logBER,
-    batch_size=16,
+    logBER=False,
+    batch_size=8,
     seed=seed,
     standard_scale=True,
     split_method="lhs"
@@ -87,10 +87,12 @@ for k in range (num_of_runs):
         learning_rate=lr,
         criterion=criterion,
         optimizer=optimizer,
+        scheduler=scheduler,
         epochs=60,
         early_stopping=True,
         patience=10,
-        confusion_matrix=False,
+        training_curves=True,
+        confusion_matrix=True,
     )
 
     total_acc += test_acc
