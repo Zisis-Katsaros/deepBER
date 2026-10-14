@@ -6,6 +6,7 @@ from load_set import create_dataloader, create_arrays
 from prediction.predictor import DeepBERPredictor
 from prediction.test_predictor_config import test_predictor_configuration, ber_vs_length_test
 import numpy as np
+from rmse import RMSELoss
 
 torch.manual_seed(42)
 
@@ -30,7 +31,7 @@ x_array, y_array, _, _, thresholds, feature_columns = create_arrays(
 # =================================================== Training and Testing ================================================== #
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
-batch_size = 16
+batch_size = 8
 logBER = True
 prediction_dataloader = create_dataloader(
             x_array,
@@ -44,17 +45,17 @@ prediction_dataloader = create_dataloader(
 
 predictor = DeepBERPredictor(
         input_size=len(feature_columns),  
-        hidden=[128, 32, 48],
+        hidden=[64, 96, 96, 64],
         activation_fn=nn.GELU(),
         logBER=logBER,
         batch_norm=False,
-        dropout=0.244,
+        dropout=0.05,
     ).to(device)
 
-learning_rate = 0.0058
-criterion = nn.MSELoss()
+learning_rate = 0.0001
+criterion = RMSELoss()
 optimizer = torch.optim.Adam(predictor.parameters(), lr=learning_rate)
-# scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=3)
+scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=3)
 # scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=39)
 
 test_predictor_configuration(
@@ -66,12 +67,14 @@ test_predictor_configuration(
     batch_size=batch_size,
     criterion=criterion,
     optimizer=optimizer,
-    # scheduler=None,
+    scheduler=scheduler,
     epochs=240,
     early_stopping=True,
     patience=10,
     training_curves=True,
     predicted_vs_actual=True,
+    test_out_dir=f"out_files/ber_prediction",
+    close_figures=False,
     # error_distribution=True,
     # error_vs_feature=feature_columns,
     # feature_columns=feature_columns

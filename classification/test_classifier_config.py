@@ -6,12 +6,12 @@ from sklearn.metrics import f1_score
 
 from classification.ber_to_class import ber_to_class
 from classification.classifier_loops import train_classifier_loop, test_classifier_loop, train_xgb_loop, test_xgb_loop
-from visualization import plot_confusion_matrix
+from visualization import plot_confusion_matrix, plot_training_curves
 
 
 
 def test_classifier_configuration(title, model, dataloader, lower_thres=10**(-5.5), upper_thres=10**(-2.5), weight=False, device=None, learning_rate=1e-3, batch_size=None, 
-                                  criterion=None, optimizer=None, epochs=30, early_stopping=False, patience=5, confusion_matrix=False, class_names=None):
+                                  criterion=None, optimizer=None, scheduler=None, epochs=30, early_stopping=False, patience=5, training_curves=False, confusion_matrix=False, class_names=None):
     train_data, val_data, test_data = dataloader
 
     if isinstance(model, torch.nn.Module):
@@ -68,6 +68,13 @@ def test_classifier_configuration(title, model, dataloader, lower_thres=10**(-5.
             train_loss, train_acc, train_f1 = train_classifier_loop(model, train_data, optimizer, criterion, device)
             val_loss, val_acc, val_f1, _, _ = test_classifier_loop(model, val_data, criterion, device)
 
+            # Step scheduler
+            if scheduler is not None:
+                try:    
+                    scheduler.step(val_loss)
+                except TypeError:
+                    scheduler.step()
+
             train_losses.append(train_loss)
             val_losses.append(val_loss)
             train_accs.append(train_acc)
@@ -102,6 +109,9 @@ def test_classifier_configuration(title, model, dataloader, lower_thres=10**(-5.
 
         trained_model = model
 
+        if training_curves:
+                plot_training_curves(train_losses, val_losses, train_accs, val_accs, title=title, save_path=None, close_figure=False)
+
     else:
         trained_model = train_xgb_loop(
             model,
@@ -128,7 +138,10 @@ def test_classifier_configuration(title, model, dataloader, lower_thres=10**(-5.
 
     if confusion_matrix:
         if class_names is None:
-            class_names = ["Feasible", "Uncertain", "Infeasible"]
+            if np.unique(test_labels).size == 2:
+                class_names = ["Feasible", "Infeasible"]
+            else:
+                class_names = ["Feasible", "Uncertain", "Infeasible"]
         plot_confusion_matrix(test_labels, test_preds, title=title, class_names=class_names)
 
     return trained_model, test_acc, test_f1

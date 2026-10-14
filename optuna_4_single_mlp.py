@@ -16,11 +16,16 @@ from visualization import plot_preds_vs_act_freq
 torch.manual_seed(42)
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
-pred_arrays_dict = torch.load("csv_files/s_params/pt/pred_arrays_dict.pt", weights_only=False)
+pred_arrays_dict = torch.load("csv_files/s_params/pt/pred_arrays_dict_total.pt", weights_only=False)
 
 x_array = pred_arrays_dict["x_array"].astype(np.float32)
 s_dict = pred_arrays_dict["s_dict"]
 feature_columns = pred_arrays_dict["feature_columns"]
+
+geoms_tested = 44
+labels_dict_per_geom = np.array([{} for _ in range(geoms_tested)], dtype=dict)
+preds_dict_per_geom = np.array([{} for _ in range(geoms_tested)], dtype=dict)
+freq_arrays_per_geom = [None for _ in range(geoms_tested)]
 
 s_non_causal_dict = {}
 first_unprocessed_element_idx = -1 # For continuing training on HPC server if 6hr time limit is reached on the first run. Set to -1 to start from scratch
@@ -31,156 +36,115 @@ for element in elements:
         continue
     print(f"Training and testing for {element}\n")
 
-    y_array = s_dict[element].real
-    out_size = y_array.shape[1] if y_array.ndim > 1 else 1
+    for part in ["Re", "Im"]:
+        y_array = s_dict[element].real if part == "Re" else s_dict[element].imag
+        out_size = y_array.shape[1] if y_array.ndim > 1 else 1
 
-    dataloader, x_scale_params, y_scale_params, _ = create_param_dataloader(
-                    x_array,
-                    y_array,
-                    batch_size=128,
-                    seed=42,
-                    standard_scale=True,
-                    split_method="lhs"
-                    )
+        dataloader, x_scale_params, y_scale_params, *_ = create_param_dataloader(
+                        x_array,
+                        y_array,
+                        batch_size=128,
+                        seed=42,
+                        standard_scale=True,
+                        split_method="lhs"
+                        )
     
-    predictor = DeepBER_Param_Predictor(
-        input_size=x_array.shape[1],
-        hidden=[32, 48, 64, 48, 32],
-        activation_fn=nn.GELU(),
-        output_size=out_size,
-        dropout=0.04
-        ).to(device)
+        predictor = DeepBER_Param_Predictor(
+            input_size=x_array.shape[1],
+            hidden=[32, 48, 64, 48, 32],
+            activation_fn=nn.GELU(),
+            output_size=out_size,
+            dropout=0.04
+            ).to(device)
     
-    criterion = RMSELoss()
-    learning_rate = 0.000446
-    optimizer = torch.optim.Adam(predictor.parameters(), lr=learning_rate)
-    scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=5)
+        criterion = RMSELoss()
+        learning_rate = 0.000446
+        optimizer = torch.optim.Adam(predictor.parameters(), lr=learning_rate)
+        scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=5)
 
-    test_predictor_configuration(
-    title=f"{element}",
-    device=device,
-    model=predictor,
-    dataloader=dataloader,
-    learning_rate=learning_rate,
-    batch_size=128,
-    criterion=criterion,
-    optimizer=optimizer,
-    scheduler=scheduler,
-    epochs=300,
-    early_stopping=True,
-    patience=10,
-    y_scale_params=y_scale_params,
-    training_curves=True,
-    predicted_vs_actual=True,
-    test_out_dir = f"out_files/single_mlp",
-    close_figures=True
-    )
+        test_predictor_configuration(
+        title=f"{part}({element})",
+        device=device,
+        model=predictor,
+        dataloader=dataloader,
+        learning_rate=learning_rate,
+        batch_size=128,
+        criterion=criterion,
+        optimizer=optimizer,
+        scheduler=scheduler,
+        epochs=300,
+        early_stopping=True,
+        patience=10,
+        y_scale_params=y_scale_params,
+        training_curves=True,
+        predicted_vs_actual=True,
+        test_out_dir = f"out_files/single_mlp",
+        close_figures=True
+        )
 
-# Extrapolation, Causality Enforcement and Exporting for Transient Simulation
+# Forward
 for element in elements:
-    y_array = s_dict[element].real
-    out_size = y_array.shape[1] if y_array.ndim > 1 else 1
+    for part in ["Re", "Im"]:
+        y_array = s_dict[element].real if part == "Re" else s_dict[element].imag
+        out_size = y_array.shape[1] if y_array.ndim > 1 else 1
 
-    dataloader, x_scale_params, y_scale_params, _ = create_param_dataloader(
-                    x_array,
-                    y_array,
-                    batch_size=128,
-                    seed=42,
-                    standard_scale=True,
-                    split_method="lhs"
-                    )
+        dataloader, x_scale_params, y_scale_params, *_ = create_param_dataloader(
+                        x_array,
+                        y_array,
+                        batch_size=128,
+                        seed=42,
+                        standard_scale=True,
+                        split_method="lhs"
+                        )
     
-    test_data, x_extrap, x_test_original = add_samples_for_extrapolation(
-        test_data=dataloader[2],
-        M=2,
-        feature_columns=feature_columns,
-        x_scale_params=x_scale_params,
-        n_non_unique_feats=7
-    )
 
-    predictor = DeepBER_Param_Predictor(
-        input_size=x_array.shape[1],
-        hidden=[32, 48, 64, 48, 32],
-        activation_fn=nn.GELU(),
-        output_size=out_size,
-        dropout=0.04
-        ).to(device)
-    predictor.load_state_dict(torch.load(f"out_files/single_mlp/weights/best_model_{element}.pth", map_location=device))
-    
-    all_preds = []
-    # Forward pass with extrapolated test data
-    predictor.eval()
-    with torch.no_grad(): # disable gradient calculation
-        for inputs in test_data:
-            inputs = inputs[0].to(device)
-            outputs = predictor(inputs)
-            
-            all_preds.append(outputs.cpu().numpy())
-    final_preds = np.concatenate(all_preds, axis=0)
-    final_preds_unscaled = final_preds * y_scale_params[1] + y_scale_params[0]
-    s_non_causal_dict[element] = final_preds_unscaled
+        predictor = DeepBER_Param_Predictor(
+            input_size=x_array.shape[1],
+            hidden=[32, 48, 64, 48, 32],
+            activation_fn=nn.GELU(),
+            output_size=out_size,
+            dropout=0.04
+            ).to(device)
+        predictor.load_state_dict(torch.load(f"out_files/single_mlp/weights/best_model_{part}({element}).pth", map_location=device))
 
-unique_geoms, new_feature_columns, s_non_causal = organize_dataset_for_pi_stcnn(x_extrap, s_non_causal_dict, feature_columns, only_real=True)
-
-K=2
-s_causal = s_param_imag_part_hilbert_construction(s_non_causal, num_og_freq=601, K=K)
-
-if K>1:
-    s_causal = s_causal[:, :, ::K]  # Downsample to match original frequency points
-
-test_preds = np.concatenate([s_causal.real, s_causal.imag], axis=1).astype(np.float32)
-
-# Convert labels to 3D array
-test_indices = []
-for test_row in x_test_original:
-    test_row = test_row * x_scale_params[1] + x_scale_params[0]  # Unscale the test row
-    match_idx = np.where(np.all(np.isclose(x_array, test_row, atol=1e-6), axis=1))[0]
-    if len(match_idx) > 0:
-        test_indices.append(match_idx[0]) # grab first match
-test_mask = np.array(test_indices)
-s_dict_test = {key: s_dict[key][test_mask] for key in s_dict.keys() if key != "all"}
-_, _, test_targets = organize_dataset_for_pi_stcnn(x_array=x_test_original, s_dict=s_dict_test, feature_columns=feature_columns, freq_round_decimals=6)
-
-# Convert to per geometry dictionary
-labels_dict_per_geom, preds_dict_per_geom = convert_stcnn_outputs_to_dicts(test_targets=test_targets, test_preds=test_preds, num_ports=18)
-
-# Visualize predictions vs actuals for each S-parameter element
-freq_array = np.linspace(0, 30, 601)
-max_geoms = 2
-for element in elements:
-    for geometry_idx in range(len(labels_dict_per_geom)):
-        if geometry_idx >= max_geoms:
-            break
-
-        label_array_real = labels_dict_per_geom[geometry_idx][element].real
-        label_array_imag = labels_dict_per_geom[geometry_idx][element].imag
-
-        pred_array_real = preds_dict_per_geom[geometry_idx][element].real
-        pred_array_imag = preds_dict_per_geom[geometry_idx][element].imag
-
-        plot_preds_vs_act_freq(
-                    label_array_real, 
-                    pred_array_real, 
-                    freq_array, 
-                    title= f"Geometry {geometry_idx}: Re({element})",
-                    save_path=f"out_files/single_mlp/{element}/geom{geometry_idx}_Re_{element}.png",
-                    close_figure=True
+        if part == "Re":
+            geometries, labels_per_geom_real, preds_per_geom_real, freq_arrays = single_geometry_test(
+                    title=f"{part}({element})",
+                    device=device,
+                    model=predictor,
+                    test_data = dataloader[2],
+                    x_scale_params=x_scale_params,
+                    y_scale_params=y_scale_params,
+                    max_geoms=geoms_tested,
+                    visualization=True,
+                    save_dir = f"out_files/single_mlp/pred_vs_act_plots/{part}({element})",
+                    close_figures=True
                 )
-        plot_preds_vs_act_freq(
-                    label_array_imag, 
-                    pred_array_imag, 
-                    freq_array, 
-                    title= f"Geometry {geometry_idx}: Im({element})",
-                    save_path=f"out_files/single_mlp/{element}/geom{geometry_idx}_Im_{element}.png",
-                    close_figure=True
+        else:
+            geometries, labels_per_geom_imag, preds_per_geom_imag, freq_arrays = single_geometry_test(
+                    title=f"{part}({element})",
+                    device=device,
+                    model=predictor,
+                    test_data = dataloader[2],
+                    x_scale_params=x_scale_params,
+                    y_scale_params=y_scale_params,
+                    max_geoms=geoms_tested,
+                    save_dir = f"out_files/single_mlp/pred_vs_act_plots/{part}({element})",
+                    close_figures=True
                 )
+    labels_per_geom = np.stack([labels_per_geom_real, labels_per_geom_imag], axis=2)
+    preds_per_geom = np.stack([preds_per_geom_real, preds_per_geom_imag], axis=2)
+ 
+    for geom_idx, (label_array, pred_array, geom_freq_array) in enumerate(zip(labels_per_geom, preds_per_geom, freq_arrays)):
+            labels_dict_per_geom[geom_idx][element] = label_array[:, 0] + 1j * label_array[:, 1]
+            preds_dict_per_geom[geom_idx][element] = pred_array[:, 0] + 1j * pred_array[:, 1]
+            if freq_arrays_per_geom[geom_idx] is None:
+                freq_arrays_per_geom[geom_idx] = geom_freq_array
 
-# Duplicate the frequency array for every unique geometry in the batch
-freq_arrays_per_geom = [freq_array for _ in range(len(unique_geoms))]
-
+feature_columns_no_freq = [col for col in feature_columns if col != "frequency_ghz"]
 export_files_for_transient(
-    geometries=unique_geoms, 
-    feature_names=new_feature_columns, 
+    geometries=np.array(geometries), 
+    feature_names=feature_columns_no_freq, 
     labels_dict_per_geom=labels_dict_per_geom, 
     preds_dict_per_geom=preds_dict_per_geom, 
     freq_arrays_per_geom=freq_arrays_per_geom, 

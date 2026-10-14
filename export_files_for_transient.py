@@ -53,7 +53,7 @@ def create_geometry_mapping_file(geometries: list[np.ndarray], feature_names: li
                 for col_idx, feat_name in enumerate(current_features):
                     # Only add the value if it hasn't been set yet (avoids overwriting identical shared parameters)
                     if feat_name not in row_dict:
-                        row_dict[feat_name] = geom_array[i][col_idx]
+                        row_dict[feat_name] = geom_array[i][col_idx] if geom_array.ndim > 1 else geom_array[col_idx]
             
             # Map the dictionary values back to the combined header order
             row_values = [row_dict[feat] for feat in combined_feature_names]
