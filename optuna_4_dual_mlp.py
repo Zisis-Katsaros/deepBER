@@ -17,23 +17,11 @@ seed = 42
 torch.manual_seed(seed)
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
-pred_arrays_dict = torch.load("csv_files/s_params/pt/pred_arrays_dict.pt", weights_only=False)
+pred_arrays_dict = torch.load("csv_files/s_params/pt/pred_arrays_dict_total.pt", weights_only=False)
 
 x_array = pred_arrays_dict["x_array"].astype(np.float32)
 s_dict = pred_arrays_dict["s_dict"]
 feature_columns = pred_arrays_dict["feature_columns"]
-
-x_array, s_dict = cut_dataset_at_specified_freq(x_array, s_dict, feature_columns, cutoff_freq_ghz=20.0)
-
-split = False
-# Split the dataset into two parts: one for s-parameter (per-element) prediction and one for post-prediction physics enforcing
-if split:
-    x_array_pred, pred_row_indices = split_dataset(x_array, sample_percentage=0.5, sampling_method="lhs", seed=seed)
-    s_dict_pred = {key: s_dict[key][pred_row_indices] for key in s_dict.keys()}
-
-    physics_row_indices = [idx for idx in range(x_array.shape[0]) if idx not in pred_row_indices]
-    x_array_physics = x_array[physics_row_indices]
-    s_dict_physics = {key: s_dict[key][physics_row_indices] for key in s_dict.keys()}
 
 """
 hidden_map = {
@@ -53,21 +41,18 @@ labels_dict_per_geom = np.array([{} for _ in range(geoms_tested)], dtype=dict)
 preds_dict_per_geom = np.array([{} for _ in range(geoms_tested)], dtype=dict)
 freq_arrays_per_geom = [None for _ in range(geoms_tested)]
 
-processed_elements = [key for idx, key in enumerate(s_dict.keys()) if idx < 99 and key != "all"] 
+processed_elements = [key for idx, key in enumerate(s_dict.keys()) if idx < -1 and key != "all"] 
 elements = list(key for key in s_dict.keys() if key != "all")
 for element in elements:
     if element in processed_elements:
         continue
     print(f"Training and testing for {element}\n")
 
-    if split:
-        y_array = np.stack([s_dict_pred[element].real, s_dict_pred[element].imag], axis=1)
-    else: 
-        y_array = np.stack([s_dict[element].real, s_dict[element].imag], axis=1)
+    y_array = np.stack([s_dict[element].real, s_dict[element].imag], axis=1)
     out_size = y_array.shape[1] if y_array.ndim > 1 else 1
 
     dataloader, x_scale_params, y_scale_params, *_ = create_param_dataloader(
-                    x_array_pred if split else x_array,
+                    x_array,
                     y_array,
                     batch_size=128,
                     seed=42,
@@ -141,7 +126,8 @@ for element in elements:
         x_scale_params=x_scale_params,
         y_scale_params=y_scale_params,
         max_geoms=geoms_tested,
-        save_dir = f"out_files/dual_mlp/weights/best_model_{element}",
+        visualization=True,
+        save_dir = f"out_files/dual_mlp/pred_vs_act_plots/{element}",
         close_figures=True
     )
 
@@ -151,4 +137,11 @@ for element in elements:
         if freq_arrays_per_geom[geom_idx] is None:
             freq_arrays_per_geom[geom_idx] = geom_freq_array
 
-export_files_for_transient(geometries, feature_columns, labels_dict_per_geom, preds_dict_per_geom, freq_arrays_per_geom, save_dir=f"out_files/dual_mlp/touchstone")
+feature_columns_no_freq = [col for col in feature_columns if col != "frequency_ghz"]
+export_files_for_transient(np.array(geometries), 
+                            feature_columns_no_freq, 
+                            labels_dict_per_geom, 
+                            preds_dict_per_geom, 
+                            freq_arrays_per_geom, 
+                            save_dir=f"out_files/dual_mlp/touchstone"
+                            )
