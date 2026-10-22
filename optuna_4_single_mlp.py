@@ -107,31 +107,25 @@ for element in elements:
             ).to(device)
         predictor.load_state_dict(torch.load(f"out_files/single_mlp/weights/best_model_{part}({element}).pth", map_location=device))
 
+
+        geometries, labels_per_geom, preds_per_geom, freq_arrays = single_geometry_test(
+                title=f"{part}({element})",
+                device=device,
+                model=predictor,
+                test_data = dataloader[2],
+                x_scale_params=x_scale_params,
+                y_scale_params=y_scale_params,
+                max_geoms=geoms_tested,
+                visualization=True,
+                max_figures=46,
+                save_dir = f"out_files/single_mlp/pred_vs_act_plots/{part}({element})",
+                close_figures=True
+            )
         if part == "Re":
-            geometries, labels_per_geom_real, preds_per_geom_real, freq_arrays = single_geometry_test(
-                    title=f"{part}({element})",
-                    device=device,
-                    model=predictor,
-                    test_data = dataloader[2],
-                    x_scale_params=x_scale_params,
-                    y_scale_params=y_scale_params,
-                    max_geoms=geoms_tested,
-                    visualization=True,
-                    save_dir = f"out_files/single_mlp/pred_vs_act_plots/{part}({element})",
-                    close_figures=True
-                )
+            labels_per_geom_real, preds_per_geom_real = labels_per_geom, preds_per_geom
         else:
-            geometries, labels_per_geom_imag, preds_per_geom_imag, freq_arrays = single_geometry_test(
-                    title=f"{part}({element})",
-                    device=device,
-                    model=predictor,
-                    test_data = dataloader[2],
-                    x_scale_params=x_scale_params,
-                    y_scale_params=y_scale_params,
-                    max_geoms=geoms_tested,
-                    save_dir = f"out_files/single_mlp/pred_vs_act_plots/{part}({element})",
-                    close_figures=True
-                )
+            labels_per_geom_imag, preds_per_geom_imag = labels_per_geom, preds_per_geom
+
     labels_per_geom = np.stack([labels_per_geom_real, labels_per_geom_imag], axis=2)
     preds_per_geom = np.stack([preds_per_geom_real, preds_per_geom_imag], axis=2)
  

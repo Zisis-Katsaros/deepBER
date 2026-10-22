@@ -127,6 +127,7 @@ for element in elements:
         y_scale_params=y_scale_params,
         max_geoms=geoms_tested,
         visualization=True,
+        max_figures=46,
         save_dir = f"out_files/dual_mlp/pred_vs_act_plots/{element}",
         close_figures=True
     )
@@ -138,10 +139,11 @@ for element in elements:
             freq_arrays_per_geom[geom_idx] = geom_freq_array
 
 feature_columns_no_freq = [col for col in feature_columns if col != "frequency_ghz"]
-export_files_for_transient(np.array(geometries), 
-                            feature_columns_no_freq, 
-                            labels_dict_per_geom, 
-                            preds_dict_per_geom, 
-                            freq_arrays_per_geom, 
-                            save_dir=f"out_files/dual_mlp/touchstone"
-                            )
+export_files_for_transient(
+    geometries=np.array(geometries), 
+    feature_names=feature_columns_no_freq, 
+    labels_dict_per_geom=labels_dict_per_geom, 
+    preds_dict_per_geom=preds_dict_per_geom, 
+    freq_arrays_per_geom=freq_arrays_per_geom,
+    save_dir=f"out_files/dual_mlp/touchstone"
+    )
