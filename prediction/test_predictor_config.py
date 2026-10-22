@@ -552,7 +552,7 @@ def single_geometry_test(title: str, device: torch.device, model, test_data: tor
                         pki=pki_real,
                         title=f"{title} | Geom {i+1} [Real]" if num_outputs == 1 else f"{title} | Geom {i+1} Out{out_idx+1} [Real]",
                         save_path=plot_save_path_re,
-                        close_figures=close_figures
+                        close_figure=close_figures
                     ) 
                     # Plot Imaginary part
                     plot_preds_vs_act_freq(

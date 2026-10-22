@@ -136,28 +136,12 @@ function run_transient_evaluation(start_geom, max_geoms, s_param_folder_name, ru
         end
     end
 
-    fprintf('\n\n');
     if run_quality_check
-        num_good_causality = sum(causality_scores >= 80);
-        num_acceptable_causality = sum(causality_scores >= 50 & causality_scores < 80);
-        num_inconcusive_causality = sum(causality_scores >= 20 & causality_scores < 50);
-        num_poor_causality = sum(causality_scores < 20);
+        plot_quality_score_bar_diagram(causality_scores, 'causality');
+        plot_quality_score_bar_diagram(passivity_scores, 'passivity');
 
-        num_good_passivity = sum(passivity_scores >= 99.9);
-        num_acceptable_passivity = sum(passivity_scores >= 99 & passivity_scores < 99.9);
-        num_inconcusive_passivity = sum(passivity_scores >= 80 & passivity_scores < 99.9);
-        num_poor_passivity = sum(passivity_scores < 80);
-        fprintf('Quality Check:\n');
-        fprintf('\tCausality\n');
-        fprintf('\t\tGood: %d [%.2f%%]\n', num_good_causality, num_good_causality / length(causality_scores) * 100);
-        fprintf('\t\tAcceptable: %d [%.2f%%]\n', num_acceptable_causality, num_acceptable_causality / length(causality_scores) * 100);
-        fprintf('\t\tInconclusive: %d [%.2f%%]\n', num_inconcusive_causality, num_inconcusive_causality / length(causality_scores) * 100);
-        fprintf('\t\tPoor: %d [%.2f%%]\n', num_poor_causality, num_poor_causality / length(causality_scores) * 100);
-        fprintf('\tPassivity\n');
-        fprintf('\t\tGood: %d [%.2f%%]\n', num_good_passivity, num_good_passivity / length(passivity_scores) * 100);
-        fprintf('\t\tAcceptable: %d [%.2f%%]\n', num_acceptable_passivity, num_acceptable_passivity / length(passivity_scores) * 100);
-        fprintf('\t\tInconclusive: %d [%.2f%%]\n', num_inconcusive_passivity, num_inconcusive_passivity / length(passivity_scores) * 100);
-        fprintf('\t\tPoor: %d [%.2f%%]\n', num_poor_passivity, num_poor_passivity / length(passivity_scores) * 100);
+        fprintf('Causality Score: [%.2f, %.2f]\n', min(causality_scores), max(causality_scores));
+        fprintf('Passivity Score: [%.2f, %.2f]\n', min(passivity_scores), max(passivity_scores));
     end
 
     if run_step_and_prbs_eye || run_pda
@@ -165,7 +149,7 @@ function run_transient_evaluation(start_geom, max_geoms, s_param_folder_name, ru
                                 global_pda_EW_act, global_pda_Verdict_pred, global_pda_Verdict_act, show_statistics_plots);
         
         if ~isempty(global_ber_pred) && ~isempty(global_ber_act)
-            run_ber_stat_analysis(global_ber_pred, global_ber_act, show_statistics_plots, true);
+            run_ber_stat_analysis(global_ber_pred, global_ber_act, show_statistics_plots, false);
         end
     end
 
