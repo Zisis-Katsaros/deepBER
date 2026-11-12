@@ -24,7 +24,6 @@ function run_ber_stat_analysis(all_ber_preds, all_ber_acts, show_plots, error_fr
     if log_ber
         preds = log10(preds);
         acts = log10(acts);
-        error_free_threshold = log10(error_free_threshold); % Fixed typo
     end
 
     % Compute overall statistics
@@ -61,6 +60,6 @@ function run_ber_stat_analysis(all_ber_preds, all_ber_acts, show_plots, error_fr
     disp(stats_table);
 
     if show_plots
-        plot_continuous_errors(all_ber_preds, all_ber_acts, 'Bit Error Rate (BER)');
+        plot_continuous_errors(preds, acts, 'Bit Error Rate (BER)');
     end
 end

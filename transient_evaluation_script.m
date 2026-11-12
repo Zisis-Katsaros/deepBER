@@ -9,7 +9,7 @@ addpath('transient/fsv_statistical_analysis');
 
 % Configure Simulation Parameters
 start_geom = 1;
-max_geoms = 44;
+max_geoms = 10;
 filename_s_params = "out_files/pi_stcnn/touchstone_files_total";
 filename_amplitude = ""; %"out_files/amplitude_prediction/export4transient/amplitude_predictions.mat";
 
@@ -24,7 +24,7 @@ show_statistics_plots = false;
 show_fsv_plots = true;
 
 single_channel = true;
-bit_rate = 12e9;
+bit_rate = 4e9;
 
 run_transient_evaluation(start_geom, max_geoms, filename_s_params, run_step_and_prbs_eye, run_pda, run_fsv, run_tdr, run_quality_check, show_transient_plots, ...
                         show_statistics_plots, show_fsv_plots, bit_rate, single_channel, filename_amplitude);
