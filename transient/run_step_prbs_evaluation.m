@@ -56,24 +56,21 @@ function [prbs_data, step_metrics, eye_metrics, ber_data] = run_step_prbs_evalua
         
         tx = port; rx = tx + 9;
         next1 = tx - 1; next2 = tx + 1;
-        fext1 = rx - 1; fext2 = rx + 1;
 
         if port == 1
-            next1 = tx; fext1 = rx;      
+            next1 = tx;     
         elseif port == 9
-            next2 = tx; fext2 = rx;
+            next2 = tx;
         end
         
         % S-parameters to Impulse Response Conversion
-        [fit_main_pred, fit_next1_pred, fit_fext1_pred, fit_next2_pred, fit_fext2_pred] = s_params2impulse_response(filename_preds, tx, rx, next1, fext1, next2, fext2, precision, bit_rate);
-        [fit_main_actual, fit_next1_actual, fit_fext1_actual, fit_next2_actual, fit_fext2_actual] = s_params2impulse_response(filename_actuals, tx, rx, next1, fext1, next2, fext2, precision, bit_rate);
+        [fit_main_pred, fit_fext1_pred, fit_fext2_pred] = s_params2impulse_response(filename_preds, tx, rx, next1, next2, precision, bit_rate);
+        [fit_main_actual, fit_fext1_actual, fit_fext2_actual] = s_params2impulse_response(filename_actuals, tx, rx, next1, next2, precision, bit_rate);
         
         % timeresp(model, V_in, Ts);
         % Predicted step response
         V_out_main_step_pred = timeresp(fit_main_pred, V_in_step, Ts);
-        V_out_next1_step_pred = timeresp(fit_next1_pred, V_in_step, Ts);
         V_out_fext1_step_pred = timeresp(fit_fext1_pred, V_in_step, Ts);
-        V_out_next2_step_pred = timeresp(fit_next2_pred, V_in_step, Ts);
         V_out_fext2_step_pred = timeresp(fit_fext2_pred, V_in_step, Ts);
         
         if ~isempty(V_out_pred_val)
@@ -87,26 +84,22 @@ function [prbs_data, step_metrics, eye_metrics, ber_data] = run_step_prbs_evalua
 
         % Actual step response
         V_out_main_step_actual = timeresp(fit_main_actual, V_in_step, Ts);
-        V_out_next1_step_actual = timeresp(fit_next1_actual, V_in_step, Ts);
         V_out_fext1_step_actual = timeresp(fit_fext1_actual, V_in_step, Ts);
-        V_out_next2_step_actual = timeresp(fit_next2_actual, V_in_step, Ts);
         V_out_fext2_step_actual = timeresp(fit_fext2_actual, V_in_step, Ts);
 
         if port == 1
-            V_out_next1_step_pred = []; V_out_fext1_step_pred = [];
-            V_out_next1_step_actual = []; V_out_fext1_step_actual = [];
+            V_out_fext1_step_pred = [];
+            V_out_fext1_step_actual = [];
         elseif port == 9
-            V_out_next2_step_pred = []; V_out_fext2_step_pred = [];
-            V_out_next2_step_actual = []; V_out_fext2_step_actual = [];
+            V_out_fext2_step_pred = [];
+            V_out_fext2_step_actual = [];
         end
 
         rmse_step.main(port) = rmse(eval_step_pred, V_out_main_step_actual);
         if port ~= 1
-            rmse_step.next1(port) = rmse(V_out_next1_step_pred, V_out_next1_step_actual);
             rmse_step.fext1(port) = rmse(V_out_fext1_step_pred, V_out_fext1_step_actual);
         end
         if port ~= 9
-            rmse_step.next2(port) = rmse(V_out_next2_step_pred, V_out_next2_step_actual);
             rmse_step.fext2(port) = rmse(V_out_fext2_step_pred, V_out_fext2_step_actual);
         end
 
@@ -122,9 +115,8 @@ function [prbs_data, step_metrics, eye_metrics, ber_data] = run_step_prbs_evalua
         end
         
         if show_plots
-            plot_step_response_pred_vs_act(t, V_in_step, V_out_main_step_pred, V_out_main_step_actual, ...
-                V_out_next1_step_pred, V_out_next1_step_actual, V_out_fext1_step_pred, V_out_fext1_step_actual, ...
-                V_out_next2_step_pred, V_out_next2_step_actual, V_out_fext2_step_pred, V_out_fext2_step_actual, ...
+            plot_step_response_pred_vs_act(t, V_in_step, V_out_main_step_pred, V_out_main_step_actual, V_out_fext1_step_pred, V_out_fext1_step_actual, ...
+                V_out_fext2_step_pred, V_out_fext2_step_actual, ...
                 sprintf('%s - Step Response Prediction Vs Actual (Port %d)', title, port), V_out_main_step_pred_adj, V_out_target_val);
         end
 
@@ -138,12 +130,12 @@ function [prbs_data, step_metrics, eye_metrics, ber_data] = run_step_prbs_evalua
             xtalk_fits_actual = {};
             
             if port ~= 1
-                xtalk_fits_pred(end+1:end+2) = {fit_next1_pred, fit_fext1_pred};
-                xtalk_fits_actual(end+1:end+2) = {fit_next1_actual, fit_fext1_actual};
+                xtalk_fits_pred(end+1:end+2) = {fit_fext1_pred};
+                xtalk_fits_actual(end+1:end+2) = {fit_fext1_actual};
             end
             if port ~= 9
-                xtalk_fits_pred(end+1:end+2) = {fit_next2_pred, fit_fext2_pred};
-                xtalk_fits_actual(end+1:end+2) = {fit_next2_actual, fit_fext2_actual};
+                xtalk_fits_pred(end+1:end+2) = {fit_fext2_pred};
+                xtalk_fits_actual(end+1:end+2) = {fit_fext2_actual};
             end
             % Apply worst-case dynamic crosstalk
             V_out_main_prbs_pred = apply_xtalk(fit_main_pred, xtalk_fits_pred, V_in_prbs, Vhi, Ts, samples_per_bit, xtalk_type);

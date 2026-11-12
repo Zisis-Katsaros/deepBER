@@ -15,9 +15,11 @@ function [s1, s0, metrics] = perform_pda(fit_main, xtalk_fits, Ts, bit_rate, Vhi
     
     % Get Unit Pulse Responses
     y_main = timeresp(fit_main, V_pulse, Ts) * alpha_correction;
-    
-    % Fold the response into a matrix of 1 UI columns
-    y_main_fold = reshape(y_main, samples_per_bit, num_bits);
+
+    [y_main_aligned, shift_samples] = align_unit_response(y_main, samples_per_bit);
+
+    % Fold the aligned response into a matrix of 1 UI columns
+    y_main_fold = reshape(y_main_aligned, samples_per_bit, num_bits);
     
     % Isolate the Main Cursor (the bit interval with the max peak)
     [~, cursor_idx] = max(max(y_main_fold));
@@ -37,7 +39,8 @@ function [s1, s0, metrics] = perform_pda(fit_main, xtalk_fits, Ts, bit_rate, Vhi
     for k = 1:length(xtalk_fits)
         if ~isempty(xtalk_fits{k})
             y_xtalk = timeresp(xtalk_fits{k}, V_pulse, Ts) * alpha_correction;
-            y_xtalk_fold = reshape(y_xtalk, samples_per_bit, num_bits);
+            y_xtalk_aligned = circshift(y_xtalk, shift_samples);
+            y_xtalk_fold = reshape(y_xtalk_aligned, samples_per_bit, num_bits);
             
             % Summing min(0, xtalk) naturally bounds the scenario where the adjacent 
             % line switches in the direction needed to ruin the main signal.
@@ -57,7 +60,8 @@ function [s1, s0, metrics] = perform_pda(fit_main, xtalk_fits, Ts, bit_rate, Vhi
     
     % Calculate Eye Width and Jitter at V_ref
     if metrics.eye_height > 0
-        Vref = (max(s1) + min(s0)) / 2;
+        [~, idx_eh] = max(s1 - s0); 
+        Vref = (s1(idx_eh) + s0(idx_eh)) / 2;
         
         % The margin to Vref bounds the valid eye opening
         % Positive margin means the eye is open, negative means closed

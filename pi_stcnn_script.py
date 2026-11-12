@@ -257,13 +257,13 @@ else:
         labels_s_dict_shielded = labels_dict_list_shielded[geom_idx]
         labels_s_dict_unshielded = labels_dict_list_unshielded[geom_idx]
 
-        labels_s_dict_total = combine_shielded_and_unshielded_portions(labels_s_dict_shielded, labels_s_dict_unshielded)
+        labels_s_dict_total, _ = combine_shielded_and_unshielded_portions(labels_s_dict_shielded, labels_s_dict_unshielded)
         labels_dict_list_total.append(labels_s_dict_total)
 
         preds_s_dict_shielded = preds_dict_list_shielded[geom_idx]
         preds_s_dict_unshielded = preds_dict_list_unshielded[geom_idx]
 
-        preds_s_dict_total = combine_shielded_and_unshielded_portions(preds_s_dict_shielded, preds_s_dict_unshielded)
+        preds_s_dict_total, _ = combine_shielded_and_unshielded_portions(preds_s_dict_shielded, preds_s_dict_unshielded)
         preds_dict_list_total.append(preds_s_dict_total)
         
 # ============================================= Export for Transient ============================================= #

@@ -393,7 +393,7 @@ def combine_shielded_and_unshielded_portions(s_dict_shielded, s_dict_unshielded,
 
     # Convert the total S-parameter matrix back to a dictionary
     s_dict_total = trans_param_mat2dict(s_mat_total, "S")
-    return s_dict_total
+    return s_dict_total, s_mat_total
     
 
 

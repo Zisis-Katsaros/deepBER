@@ -1,10 +1,9 @@
-function [stat_ber, best_Q] = get_ber(V_in, V_out, bit_rate, num_bits, error_free_threshold)
+function [stat_ber, best_Q] = get_ber(V_in, V_out, bit_rate, num_bits)
     arguments
         V_in (:,1) double
         V_out (:,1) double
         bit_rate (1,1) double {mustBePositive}
         num_bits (1,1) double {mustBePositive}
-        error_free_threshold (1,1) double {mustBeNonnegative} = 0
     end
     bit_period = 1 / bit_rate;
     num_samples = length(V_out);
@@ -66,9 +65,5 @@ function [stat_ber, best_Q] = get_ber(V_in, V_out, bit_rate, num_bits, error_fre
     else
         % Calculate optimal statistical BER
         stat_ber = 0.5 * erfc(best_Q / sqrt(2));
-
-        if stat_ber < error_free_threshold
-            stat_ber = error_free_threshold; % Set to threshold if below, considered error-free
-        end
     end
 end

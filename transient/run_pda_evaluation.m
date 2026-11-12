@@ -20,10 +20,10 @@ function [pda_data, pda_metrics] = run_pda_evaluation(filename_preds, filename_a
     % UCIe Specification Mask based on transmission rate
     if bit_rate <= 16e9
         mask_height = 40e-3; % 40 mV
-        mask_width = 47e-12; % 47 ps
+        mask_width = 0.75 * 1 / bit_rate; % 0.75 UI
     else
         mask_height = 40e-3; % 40 mV
-        mask_width = 20e-12; % 20 ps
+        mask_width = 0.65 * 1 / bit_rate; % 0.65 UI
     end
 
     fprintf('\n======================================================\n');
@@ -62,24 +62,23 @@ function [pda_data, pda_metrics] = run_pda_evaluation(filename_preds, filename_a
         % Map ports (Main, NEXT, FEXT)
         tx = port; rx = tx + 9;
         next1 = tx - 1; next2 = tx + 1;
-        fext1 = rx - 1; fext2 = rx + 1;
         
         if port == 1
-            next1 = []; fext1 = [];
+            next1 = []; 
         elseif port == 9
-            next2 = []; fext2 = [];
+            next2 = [];
         end
 
         % Extract VTF rational models 
-        [fit_main_pred, fit_next1_pred, fit_fext1_pred, fit_next2_pred, fit_fext2_pred] = ...
-            s_params2vtf_models(filename_preds, tx, rx, next1, fext1, next2, fext2, bit_rate);
+        [fit_main_pred, fit_fext1_pred, fit_fext2_pred] = ...
+            s_params2vtf_models(filename_preds, tx, rx, next1, next2, bit_rate);
             
-        [fit_main_act, fit_next1_act, fit_fext1_act, fit_next2_act, fit_fext2_act] = ...
-            s_params2vtf_models(filename_actuals, tx, rx, next1, fext1, next2, fext2, bit_rate);
+        [fit_main_act, fit_fext1_act, fit_fext2_act] = ...
+            s_params2vtf_models(filename_actuals, tx, rx, next1, next2, bit_rate);
 
         % Group crosstalk models into cell arrays
-        xtalk_fits_pred = {fit_next1_pred, fit_fext1_pred, fit_next2_pred, fit_fext2_pred};
-        xtalk_fits_act = {fit_next1_act, fit_fext1_act, fit_next2_act, fit_fext2_act};
+        xtalk_fits_pred = {fit_fext1_pred, fit_fext2_pred};
+        xtalk_fits_act = {fit_fext1_act, fit_fext2_act};
         
         % Calculate Alpha Correction (by simulating a 5ns step response for steady state)
         if ~isempty(amplitude_correction_data) && isfield(amplitude_correction_data, 'V_out_pred')

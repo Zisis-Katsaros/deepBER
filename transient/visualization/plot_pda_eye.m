@@ -21,21 +21,6 @@ function plot_pda_eye(Ts, s1_pred_raw, s0_pred_raw, metrics_pred_raw, s1_act, s0
         return;
     end
 
-    % Visually Center the Eye based on the Actual Signal
-    [~, max_idx] = max(s1_act - s0_act);
-    center_target = round(length(s1_act) / 2);
-    shift_amount = center_target - max_idx;
-
-    s1_act_shift = circshift(s1_act, shift_amount);
-    s0_act_shift = circshift(s0_act, shift_amount);
-    s1_pred_raw_shift = circshift(s1_pred_raw, shift_amount);
-    s0_pred_raw_shift = circshift(s0_pred_raw, shift_amount);
-    
-    if ~isempty(s1_pred_adj)
-        s1_pred_adj_shift = circshift(s1_pred_adj, shift_amount);
-        s0_pred_adj_shift = circshift(s0_pred_adj, shift_amount);
-    end
-
     % Create time vector in picoseconds (ps)
     t_ps = (0:(length(s1_act)-1)) * Ts * 1e12; 
 
@@ -46,19 +31,19 @@ function plot_pda_eye(Ts, s1_pred_raw, s0_pred_raw, metrics_pred_raw, s1_act, s0
     grid(ax, 'on');
 
     % Plot Actual Bounds (Solid Red lines)
-    plot(ax, t_ps, s1_act_shift, 'r-', 'LineWidth', 2, 'DisplayName', 'Actual s_1 (Worst 1)');
-    plot(ax, t_ps, s0_act_shift, 'r-', 'LineWidth', 2, 'DisplayName', 'Actual s_0 (Worst 0)');
+    plot(ax, t_ps, s1_act, 'r-', 'LineWidth', 2, 'DisplayName', 'Actual s_1 (Worst 1)');
+    plot(ax, t_ps, s0_act, 'r-', 'LineWidth', 2, 'DisplayName', 'Actual s_0 (Worst 0)');
     
     % Plot Predicted Bounds
     if ~isempty(s1_pred_adj)
-        plot(ax, t_ps, s1_pred_raw_shift, ':', 'Color', [0.4, 0.4, 1.0], 'LineWidth', 1.5, 'DisplayName', 'Predicted Raw s_1');
-        plot(ax, t_ps, s0_pred_raw_shift, ':', 'Color', [0.4, 0.4, 1.0], 'LineWidth', 1.5, 'DisplayName', 'Predicted Raw s_0');
+        plot(ax, t_ps, s1_pred_raw, ':', 'Color', [0.4, 0.4, 1.0], 'LineWidth', 1.5, 'DisplayName', 'Predicted Raw s_1');
+        plot(ax, t_ps, s0_pred_raw, ':', 'Color', [0.4, 0.4, 1.0], 'LineWidth', 1.5, 'DisplayName', 'Predicted Raw s_0');
         
-        plot(ax, t_ps, s1_pred_adj_shift, '--', 'Color', [0, 0.5, 0], 'LineWidth', 1.5, 'DisplayName', 'Predicted Adj s_1');
-        plot(ax, t_ps, s0_pred_adj_shift, '--', 'Color', [0, 0.5, 0], 'LineWidth', 1.5, 'DisplayName', 'Predicted Adj s_0');
+        plot(ax, t_ps, s1_pred_adj, '--', 'Color', [0, 0.5, 0], 'LineWidth', 1.5, 'DisplayName', 'Predicted Adj s_1');
+        plot(ax, t_ps, s0_pred_adj, '--', 'Color', [0, 0.5, 0], 'LineWidth', 1.5, 'DisplayName', 'Predicted Adj s_0');
     else
-        plot(ax, t_ps, s1_pred_raw_shift, 'b--', 'LineWidth', 1.5, 'DisplayName', 'Predicted s_1 (Worst 1)');
-        plot(ax, t_ps, s0_pred_raw_shift, 'b--', 'LineWidth', 1.5, 'DisplayName', 'Predicted s_0 (Worst 0)');
+        plot(ax, t_ps, s1_pred_raw, 'b--', 'LineWidth', 1.5, 'DisplayName', 'Predicted s_1 (Worst 1)');
+        plot(ax, t_ps, s0_pred_raw, 'b--', 'LineWidth', 1.5, 'DisplayName', 'Predicted s_0 (Worst 0)');
     end
 
     % Draw the UCIe Masks 
@@ -66,8 +51,7 @@ function plot_pda_eye(Ts, s1_pred_raw, s0_pred_raw, metrics_pred_raw, s1_act, s0
     half_h = mask_height / 2;
 
     % --- Actual Mask (Red) ---
-    act_shift_idx = mod(metrics_act.mask_center_idx + shift_amount - 1, length(t_ps)) + 1;
-    act_center_time = t_ps(act_shift_idx);
+    act_center_time = t_ps(metrics_act.mask_center_idx);
     act_cv = metrics_act.mask_center_v;
     patch(ax, [act_center_time - half_w_ps, act_center_time + half_w_ps, act_center_time + half_w_ps, act_center_time - half_w_ps], ...
           [act_cv - half_h, act_cv - half_h, act_cv + half_h, act_cv + half_h], ...
@@ -75,8 +59,7 @@ function plot_pda_eye(Ts, s1_pred_raw, s0_pred_raw, metrics_pred_raw, s1_act, s0
           'DisplayName', sprintf('Actual Mask (%dmV x %dps)', round(mask_height*1e3), round(mask_width*1e12)));
 
     % --- Predicted Raw Mask (Blue/Dotted) ---
-    pred_raw_shift_idx = mod(metrics_pred_raw.mask_center_idx + shift_amount - 1, length(t_ps)) + 1;
-    pred_raw_center_time = t_ps(pred_raw_shift_idx);
+    pred_raw_center_time = t_ps(metrics_pred_raw.mask_center_idx);
     pred_raw_cv = metrics_pred_raw.mask_center_v;
     patch(ax, [pred_raw_center_time - half_w_ps, pred_raw_center_time + half_w_ps, pred_raw_center_time + half_w_ps, pred_raw_center_time - half_w_ps], ...
           [pred_raw_cv - half_h, pred_raw_cv - half_h, pred_raw_cv + half_h, pred_raw_cv + half_h], ...
@@ -85,8 +68,7 @@ function plot_pda_eye(Ts, s1_pred_raw, s0_pred_raw, metrics_pred_raw, s1_act, s0
 
     % --- Predicted Adj Mask (Green/Dashed) ---
     if ~isempty(metrics_pred_adj)
-        pred_adj_shift_idx = mod(metrics_pred_adj.mask_center_idx + shift_amount - 1, length(t_ps)) + 1;
-        pred_adj_center_time = t_ps(pred_adj_shift_idx);
+        pred_adj_center_time = t_ps(metrics_pred_adj.mask_center_idx);
         pred_adj_cv = metrics_pred_adj.mask_center_v;
         patch(ax, [pred_adj_center_time - half_w_ps, pred_adj_center_time + half_w_ps, pred_adj_center_time + half_w_ps, pred_adj_center_time - half_w_ps], ...
               [pred_adj_cv - half_h, pred_adj_cv - half_h, pred_adj_cv + half_h, pred_adj_cv + half_h], ...

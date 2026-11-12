@@ -131,8 +131,9 @@ function run_transient_evaluation(start_geom, max_geoms, s_param_folder_name, ru
         if run_quality_check % Quality Check =========================================================================================================================================
             % The function natively accepts Touchstone file paths. It returns [Causality, Reciprocity, Passivity] metrics.
             [cqm_pred, ~, pqm_pred] = ieee370QualityCheckFrequencyDomain(filename_preds);
-            causality_scores(geom_idx) = cqm_pred;
-            passivity_scores(geom_idx) = pqm_pred;
+            quality_score_idx = geom_idx - start_geom + 1;
+            causality_scores(quality_score_idx) = cqm_pred;
+            passivity_scores(quality_score_idx) = pqm_pred;
         end
     end
 
@@ -149,7 +150,7 @@ function run_transient_evaluation(start_geom, max_geoms, s_param_folder_name, ru
                                 global_pda_EW_act, global_pda_Verdict_pred, global_pda_Verdict_act, show_statistics_plots);
         
         if ~isempty(global_ber_pred) && ~isempty(global_ber_act)
-            run_ber_stat_analysis(global_ber_pred, global_ber_act, show_statistics_plots, false);
+            run_ber_stat_analysis(global_ber_pred, global_ber_act, show_statistics_plots, 1e-27, true);
         end
     end
 
